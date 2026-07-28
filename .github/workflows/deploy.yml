@@ -1,0 +1,44 @@
+name: Deploy to Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-deploy-main
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull project settings and env
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy prebuilt output
+        run: |
+          timeout 300 vercel deploy --prebuilt --prod --logs \
+            --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tee deploy.log
+          status=${PIPESTATUS[0]}
+          url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' deploy.log | tail -1)
+          echo "exit=$status url=${url:-none}"
+          echo "### ${url:-deploy failed} (exit $status)" >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

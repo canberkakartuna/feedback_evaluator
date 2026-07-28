@@ -1,0 +1,73 @@
+.cs-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  padding: 2rem 1.5rem;
+  background:
+    radial-gradient(
+      60rem 40rem at 50% -10%,
+      rgba(108, 140, 255, 0.14),
+      transparent 70%
+    ),
+    #0f1115;
+  color: #e7e9ee;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.cs-card {
+  width: min(100%, 34rem);
+  padding: 3rem 2.25rem;
+  border: 1px solid #232733;
+  border-radius: 18px;
+  background: rgba(21, 24, 34, 0.85);
+  text-align: center;
+}
+
+.cs-badge {
+  display: inline-block;
+  margin: 0 0 1.75rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid rgba(108, 140, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(108, 140, 255, 0.1);
+  color: #a8bcff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cs-title {
+  margin: 0 0 0.85rem;
+  font-size: clamp(1.9rem, 6vw, 2.75rem);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+.cs-tagline {
+  margin: 0;
+  color: #9aa1b1;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.cs-rule {
+  height: 1px;
+  margin: 2rem auto;
+  background: linear-gradient(90deg, transparent, #2a2f3d, transparent);
+}
+
+.cs-note {
+  margin: 0;
+  color: #6f7688;
+  font-size: 0.9rem;
+}
+
+.cs-footer {
+  color: #565c6b;
+  font-size: 0.8rem;
+}
