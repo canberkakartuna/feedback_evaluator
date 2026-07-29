@@ -1,5 +1,10 @@
-/* Three panes on a desk: index, page, tutor. */
+/* Three panes on a desk: index, page, tutor. Either side pane can collapse
+   to a rail, so the page can take the whole desk. Track widths live in
+   custom properties, which is what the collapse toggles animate. */
 
+/* Each collapse state spells out its own tracks. Verbose, but it keeps every
+   state the same shape — three lengths, one flexible middle — which is what
+   lets grid-template-columns interpolate on the way between them. */
 .ws {
   display: grid;
   grid-template-columns: 304px minmax(0, 1fr) 384px;
@@ -25,6 +30,7 @@
   border-left: 1px solid var(--edge);
 }
 
+.ws-list-inner,
 .ws-tutor-inner {
   display: flex;
   flex: 1;
@@ -39,18 +45,38 @@
   display: none;
 }
 
-/* ── Collapsed: the tutor keeps a rail so it stays findable ─── */
+/* ── Collapsed panes keep a rail, so they stay findable ─────── */
 
-@media (min-width: 1180px) {
-  .ws[data-collapsed='true'] {
-    grid-template-columns: 304px minmax(0, 1fr) 52px;
-  }
-
-  .ws[data-collapsed='true'] .ws-tutor-inner {
+/* The question list collapses wherever it is docked. */
+@media (min-width: 760px) {
+  .ws[data-list='collapsed'] .ws-list-inner {
     display: none;
   }
 
-  .ws[data-collapsed='true'] .ws-rail {
+  .ws[data-list='collapsed'] .ws-list .ws-rail {
+    display: flex;
+  }
+}
+
+/* The tutor only collapses where it is docked; narrower, it is a drawer. */
+@media (min-width: 1180px) {
+  .ws[data-list='collapsed'] {
+    grid-template-columns: 52px minmax(0, 1fr) 384px;
+  }
+
+  .ws[data-tutor='collapsed'] {
+    grid-template-columns: 304px minmax(0, 1fr) 52px;
+  }
+
+  .ws[data-list='collapsed'][data-tutor='collapsed'] {
+    grid-template-columns: 52px minmax(0, 1fr) 52px;
+  }
+
+  .ws[data-tutor='collapsed'] .ws-tutor-inner {
+    display: none;
+  }
+
+  .ws[data-tutor='collapsed'] .ws-tutor .ws-rail {
     display: flex;
   }
 }
@@ -71,13 +97,19 @@
   color: var(--pen);
 }
 
-.ws-rail-label {
+.ws-rail-label,
+.ws-rail-count {
   writing-mode: vertical-rl;
   font-family: var(--f-mono);
   font-size: var(--t-11);
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.ws-rail-count {
+  letter-spacing: 0.06em;
+  color: var(--graphite-faint);
 }
 
 .ws-rail-dot {
@@ -88,11 +120,17 @@
 
 /* ── Tablet: the tutor becomes a drawer ─────────────────────── */
 
-@media (max-width: 1179px) {
+@media (min-width: 760px) and (max-width: 1179px) {
   .ws {
     grid-template-columns: 268px minmax(0, 1fr);
   }
 
+  .ws[data-list='collapsed'] {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1179px) {
   .ws-tutor {
     position: fixed;
     inset: 0 0 0 auto;
@@ -103,7 +141,7 @@
     transition: transform 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
 
-  .ws[data-tutor='open'] .ws-tutor {
+  .ws[data-drawer='open'] .ws-tutor {
     transform: none;
   }
 
@@ -120,7 +158,7 @@
     transition: opacity 0.26s ease;
   }
 
-  .ws[data-tutor='open'] .ws-scrim {
+  .ws[data-drawer='open'] .ws-scrim {
     opacity: 1;
     pointer-events: auto;
   }

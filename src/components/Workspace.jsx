@@ -49,6 +49,7 @@ export default function Workspace() {
   const [mobileView, setMobileView] = useState('problem')
   const [tutorOpen, setTutorOpen] = useState(false)
   const [tutorCollapsed, setTutorCollapsed] = useState(false)
+  const [listCollapsed, setListCollapsed] = useState(false)
   const [pendingIds, setPendingIds] = useState([])
 
   const timers = useRef([])
@@ -285,17 +286,44 @@ export default function Workspace() {
     <div
       className="ws"
       data-view={mobileView}
-      data-tutor={tutorOpen ? 'open' : 'closed'}
-      data-collapsed={tutorCollapsed}
+      data-drawer={tutorOpen ? 'open' : 'closed'}
+      data-tutor={tutorCollapsed ? 'collapsed' : 'expanded'}
+      data-list={listCollapsed ? 'collapsed' : 'expanded'}
     >
       <aside className="ws-pane ws-list" aria-label="Question set">
-        <QuestionList
-          course={course}
-          progress={progress}
-          activeId={activeId}
-          tally={tally}
-          onSelect={selectQuestion}
-        />
+        <button
+          type="button"
+          className="ws-rail"
+          aria-expanded={false}
+          onClick={() => setListCollapsed(false)}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M3 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            <path
+              d="M6.5 3.5 10 7l-3.5 3.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="ws-rail-label">Questions</span>
+          <span className="ws-rail-count mono">
+            {tally.mastered}/{questions.length}
+          </span>
+          <span className="sr-only">Show questions</span>
+        </button>
+
+        <div className="ws-list-inner">
+          <QuestionList
+            course={course}
+            progress={progress}
+            activeId={activeId}
+            tally={tally}
+            onSelect={selectQuestion}
+            onCollapse={() => setListCollapsed(true)}
+          />
+        </div>
       </aside>
 
       <main className="ws-pane ws-problem">

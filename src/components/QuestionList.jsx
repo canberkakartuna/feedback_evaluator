@@ -2,14 +2,37 @@ import StatusMark from './StatusMark'
 import { STATUS } from '../lib/status'
 import './QuestionList.css'
 
-export default function QuestionList({ course, progress, activeId, tally, onSelect }) {
+export default function QuestionList({ course, progress, activeId, tally, onSelect, onCollapse }) {
   const total = course.groups.reduce((sum, group) => sum + group.questions.length, 0)
 
   return (
     <>
       <header className="ql-head">
-        <p className="eyebrow">{course.subtitle}</p>
-        <h1 className="ql-title">{course.title}</h1>
+        <div className="ql-head-top">
+          <div className="ql-head-name">
+            <p className="eyebrow">{course.subtitle}</p>
+            <h1 className="ql-title">{course.title}</h1>
+          </div>
+
+          <button
+            type="button"
+            className="ql-collapse"
+            aria-label="Hide questions"
+            title="Hide questions"
+            onClick={onCollapse}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M9.5 3.5 6 7l3.5 3.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path d="M3 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
 
         <p className="ql-count">
           <span className="mono">

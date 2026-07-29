@@ -4,6 +4,40 @@
   border-bottom: 1px solid var(--edge);
 }
 
+.ql-head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.ql-head-name {
+  min-width: 0;
+}
+
+/* Only offered where the list is docked; on mobile the tab bar does this. */
+.ql-collapse {
+  display: none;
+  flex: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 4px 7px;
+  line-height: 0;
+  color: var(--graphite);
+}
+
+.ql-collapse:hover {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+@media (min-width: 760px) {
+  .ql-collapse {
+    display: block;
+  }
+}
+
 .ql-title {
   margin: 6px 0 0;
   font-family: var(--f-display);
