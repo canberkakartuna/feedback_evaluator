@@ -80,6 +80,52 @@ timestamps, not states worth a request each.
 
 Server time is authoritative; a client-supplied `at` is kept as `clientAt`.
 
+## Deploying to Vercel
+
+Vercel runs Express natively on the Node.js runtime, so the whole API is one
+function. `api/[...path].js` default-exports the app; the catch-all filename
+means every `/api/*` request arrives with its original URL, so Express routes
+normally and no rewrite is needed. `vercel.json` sets the Vite build and caps
+the function at 60s.
+
+```bash
+vercel            # preview
+vercel --prod
+```
+
+Set in project settings: `RESEARCH_TOKEN`, and later `MONGODB_URI`.
+
+### It deploys, but do not point students at it yet
+
+Two things in this codebase assume one long-lived process. Both are the pieces
+deliberately deferred, and `GET /api/health` reports `ready: false` until they
+are dealt with:
+
+**1. The in-memory store is per-instance.** Fluid Compute reuses warm instances,
+but there is no affinity and instances recycle, so a session created on one is
+invisible on another. Demonstrated with two instances of the app:
+
+```
+session created on instance A : ses_86f5094e629e49089487
+  read back from instance A   : 200 found
+  read back from instance B   : 404 NOT FOUND
+```
+
+Students would be logged out at random. **MongoDB is a prerequisite, not a
+follow-up.**
+
+**2. Uploads go to a disk that does not persist.** Only the temp directory is
+writable, it is per-instance, and it is cleared. `config.uploadDir` points there
+automatically when `VERCEL` is set so nothing crashes, but a photo uploaded on
+one request may be gone on the next. Replace the `fs` calls in
+`routes/uploads.js` with Vercel Blob (`npm i @vercel/blob`, private store) or
+GridFS once Mongo is in, and keep serving bytes through `/api/uploads/:id` so
+the client contract does not change.
+
+Also worth knowing: `messages.seq` is a module-level counter, so two instances
+will hand out the same sequence numbers. Mongo needs to own ordering — see
+below.
+
 ## Moving to MongoDB
 
 `store/memory.js` is already async and already grouped by collection —

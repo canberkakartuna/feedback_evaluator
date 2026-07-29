@@ -59,12 +59,41 @@ export function createApp({ store = createStore() } = {}) {
 
   const deps = { resolveQuestion }
 
+  /**
+   * `ok` means this instance is answering. `ready` means it is safe to point
+   * students at — which on a serverless host it is not until the store and the
+   * upload target are both external. A deploy check should gate on `ready`.
+   */
   app.get('/api/health', (req, res) => {
+    const warnings = []
+
+    if (store.kind === 'memory') {
+      warnings.push(
+        config.serverless
+          ? 'In-memory store on a serverless host: every instance has its own copy and loses it on recycle, so sessions will disappear at random. Configure MongoDB before real use.'
+          : 'In-memory store: everything is lost when the process restarts.',
+      )
+    }
+
+    if (config.serverless) {
+      warnings.push(
+        'Uploads are being written to the instance temp directory and will not survive. Move them to Vercel Blob or GridFS.',
+      )
+    }
+
+    if (!config.researchToken) {
+      warnings.push('RESEARCH_TOKEN is unset, so researcher endpoints are disabled.')
+    }
+
     res.json({
       ok: true,
+      ready: warnings.length === 0,
       store: store.kind,
+      persistent: store.kind !== 'memory',
+      serverless: config.serverless,
       researchEnabled: Boolean(config.researchToken),
       uptime: Math.round(process.uptime()),
+      warnings,
     })
   })
 
