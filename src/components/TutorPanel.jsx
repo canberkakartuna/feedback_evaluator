@@ -8,7 +8,16 @@ const ACTIONS = [
   { id: 'review', label: 'Check my reasoning' },
 ]
 
-export default function TutorPanel({ question, state, pending, open, onSend, onQuickAction, onClose }) {
+export default function TutorPanel({
+  question,
+  state,
+  pending,
+  open,
+  onSend,
+  onQuickAction,
+  onClose,
+  onCollapse,
+}) {
   const [draft, setDraft] = useState('')
   const thread = useRef(null)
   const closeButton = useRef(null)
@@ -39,9 +48,30 @@ export default function TutorPanel({ question, state, pending, open, onSend, onQ
             Working on <span className="mono">{question.code}</span>
           </p>
         </div>
-        <button type="button" className="tp-close" ref={closeButton} onClick={onClose}>
-          Close
-        </button>
+        <div className="tp-head-actions">
+          <button
+            type="button"
+            className="tp-collapse"
+            aria-label="Hide tutor"
+            title="Hide tutor"
+            onClick={onCollapse}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path
+                d="M3 3.5 6.5 7 3 10.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path d="M11 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+
+          <button type="button" className="tp-close" ref={closeButton} onClick={onClose}>
+            Close
+          </button>
+        </div>
       </header>
 
       <div className="tp-thread" ref={thread} aria-live="polite" aria-atomic="false">

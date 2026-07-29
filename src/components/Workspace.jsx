@@ -1,34 +1,46 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { course, fallbackReplies, questions, seedState } from '../data/course'
-import { evaluateAnswer, wordCount } from '../lib/evaluate'
+import { answerKey, evaluateAnswer, wordCount } from '../lib/evaluate'
+import { useMediaQuery } from '../lib/useMediaQuery'
 import QuestionList from './QuestionList'
 import QuestionPanel from './QuestionPanel'
 import TutorPanel from './TutorPanel'
 import './Workspace.css'
 
 const REPLY_DELAY = 900
-const MIN_WORDS = 8
+const DOCKED_TUTOR = '(min-width: 1180px)'
 
 function initProgress() {
   const map = {}
 
   for (const question of questions) {
     const seed = seedState[question.id]
-    const draft = seed?.draft ?? ''
-    const marked = Boolean(seed) && seed.status !== 'draft'
 
-    map[question.id] = {
+    const state = {
       status: seed?.status ?? 'new',
-      draft,
-      feedback: marked ? evaluateAnswer(question, draft) : null,
-      feedbackFor: marked ? draft : null,
+      draft: seed?.draft ?? '',
+      attachments: seed?.attachments ? [...seed.attachments] : [],
+      feedback: null,
+      feedbackFor: null,
       hintsUsed: 0,
       unread: false,
       messages: [{ id: `${question.id}-opening`, from: 'tutor', text: question.tutor.opening }],
     }
+
+    if (seed && seed.status !== 'draft') {
+      state.feedback = evaluateAnswer(question, state.draft, state.attachments.length)
+      state.feedbackFor = answerKey(state)
+    }
+
+    map[question.id] = state
   }
 
   return map
+}
+
+/** Seeded attachments are data URIs; only blob: URLs need revoking. */
+function releaseUrl(url) {
+  if (url.startsWith('blob:')) URL.revokeObjectURL(url)
 }
 
 export default function Workspace() {
@@ -36,24 +48,40 @@ export default function Workspace() {
   const [activeId, setActiveId] = useState('bio-102')
   const [mobileView, setMobileView] = useState('problem')
   const [tutorOpen, setTutorOpen] = useState(false)
+  const [tutorCollapsed, setTutorCollapsed] = useState(false)
   const [pendingIds, setPendingIds] = useState([])
 
   const timers = useRef([])
   const seq = useRef(0)
   const nextId = () => `m${(seq.current += 1)}`
 
-  useEffect(() => () => timers.current.forEach(clearTimeout), [])
+  const tutorIsDocked = useMediaQuery(DOCKED_TUTOR)
 
   const index = questions.findIndex((q) => q.id === activeId)
   const active = questions[index]
   const activeState = progress[activeId]
-  const tutorVisible = mobileView === 'tutor' || tutorOpen
+
+  const tutorVisible = tutorIsDocked ? !tutorCollapsed : mobileView === 'tutor' || tutorOpen
 
   const tally = useMemo(() => {
     const counts = { new: 0, draft: 0, revise: 0, mastered: 0 }
     for (const question of questions) counts[progress[question.id].status] += 1
     return counts
   }, [progress])
+
+  /* Release every object URL and pending timer when the workspace goes away. */
+  const latest = useRef(progress)
+  latest.current = progress
+
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout)
+      for (const state of Object.values(latest.current)) {
+        for (const file of state.attachments) releaseUrl(file.url)
+      }
+    },
+    [],
+  )
 
   /* ── state helpers ───────────────────────────────────────── */
 
@@ -101,17 +129,52 @@ export default function Workspace() {
 
   const setDraft = useCallback((text) => patch(activeId, { draft: text }), [activeId, patch])
 
+  const attach = useCallback(
+    (files) => {
+      if (!files.length) return
+
+      patch(activeId, {
+        attachments: [
+          ...progress[activeId].attachments,
+          ...files.map((file) => ({
+            id: `f${(seq.current += 1)}`,
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            url: URL.createObjectURL(file),
+          })),
+        ],
+      })
+    },
+    [activeId, patch, progress],
+  )
+
+  const detach = useCallback(
+    (fileId) => {
+      const { attachments } = progress[activeId]
+      const target = attachments.find((file) => file.id === fileId)
+      if (target) releaseUrl(target.url)
+
+      patch(activeId, { attachments: attachments.filter((file) => file.id !== fileId) })
+    },
+    [activeId, patch, progress],
+  )
+
   const checkAnswer = useCallback(() => {
-    const feedback = evaluateAnswer(active, activeState.draft)
-    const tooShort = feedback.words < MIN_WORDS
+    const attachmentCount = activeState.attachments.length
+    const feedback = evaluateAnswer(active, activeState.draft, attachmentCount)
 
     patch(active.id, {
       feedback,
-      feedbackFor: activeState.draft,
-      status: tooShort ? activeState.status : feedback.verdict,
+      feedbackFor: answerKey(activeState),
+      status: feedback.markable
+        ? feedback.verdict
+        : attachmentCount
+          ? 'draft'
+          : activeState.status,
     })
 
-    if (!tooShort) {
+    if (feedback.markable) {
       append(active.id, {
         id: nextId(),
         from: 'tutor',
@@ -166,10 +229,18 @@ export default function Workspace() {
         reply = { label: 'Worked example', text: tutor.example }
       } else {
         ask = 'Check my reasoning.'
-        reply =
-          wordCount(state.draft) < 4
-            ? { text: 'There is nothing in your answer box yet. Write a sentence or two and I will read it back to you.' }
-            : { label: 'Watch for this', text: tutor.misconception }
+
+        if (wordCount(state.draft) >= 4) {
+          reply = { label: 'Watch for this', text: tutor.misconception }
+        } else if (state.attachments.length) {
+          reply = {
+            text: 'I can see your working is attached. Write the explanation out as well — the marks are given for the reasoning in words, and I can only check what you write.',
+          }
+        } else {
+          reply = {
+            text: 'There is nothing in your answer box yet. Write a sentence or two and I will read it back to you.',
+          }
+        }
       }
 
       append(active.id, { id: nextId(), from: 'student', text: ask })
@@ -178,11 +249,16 @@ export default function Workspace() {
     [active, append, patch, progress, respond],
   )
 
-  const askForHint = useCallback(() => {
+  const revealTutor = useCallback(() => {
+    setTutorCollapsed(false)
     setTutorOpen(true)
     setMobileView('tutor')
+  }, [])
+
+  const askForHint = useCallback(() => {
+    revealTutor()
     quickAction('hint')
-  }, [quickAction])
+  }, [quickAction, revealTutor])
 
   /* ── panel plumbing ──────────────────────────────────────── */
 
@@ -206,7 +282,12 @@ export default function Workspace() {
   ]
 
   return (
-    <div className="ws" data-view={mobileView} data-tutor={tutorOpen ? 'open' : 'closed'}>
+    <div
+      className="ws"
+      data-view={mobileView}
+      data-tutor={tutorOpen ? 'open' : 'closed'}
+      data-collapsed={tutorCollapsed}
+    >
       <aside className="ws-pane ws-list" aria-label="Question set">
         <QuestionList
           course={course}
@@ -225,10 +306,12 @@ export default function Workspace() {
           previous={questions[index - 1]}
           next={questions[index + 1]}
           onDraftChange={setDraft}
+          onAttach={attach}
+          onDetach={detach}
           onCheck={checkAnswer}
           onAskHint={askForHint}
           onStep={step}
-          onOpenTutor={() => setTutorOpen(true)}
+          onOpenTutor={revealTutor}
         />
       </main>
 
@@ -241,15 +324,41 @@ export default function Workspace() {
       />
 
       <aside className="ws-pane ws-tutor" aria-label="AI tutor">
-        <TutorPanel
-          question={active}
-          state={activeState}
-          pending={pendingIds.includes(activeId)}
-          open={tutorOpen}
-          onSend={send}
-          onQuickAction={quickAction}
-          onClose={() => setTutorOpen(false)}
-        />
+        <button
+          type="button"
+          className="ws-rail"
+          aria-expanded={false}
+          onClick={() => setTutorCollapsed(false)}
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path
+              d="M8 3.5 4.5 7 8 10.5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path d="M11 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+          <span className="ws-rail-label">Tutor</span>
+          {unreadCount > 0 ? <span className="ws-rail-dot" aria-hidden="true" /> : null}
+          <span className="sr-only">
+            Show tutor{unreadCount > 0 ? ', new reply waiting' : ''}
+          </span>
+        </button>
+
+        <div className="ws-tutor-inner">
+          <TutorPanel
+            question={active}
+            state={activeState}
+            pending={pendingIds.includes(activeId)}
+            open={tutorOpen}
+            onSend={send}
+            onQuickAction={quickAction}
+            onClose={() => setTutorOpen(false)}
+            onCollapse={() => setTutorCollapsed(true)}
+          />
+        </div>
       </aside>
 
       <nav className="ws-tabs" aria-label="Switch panel">

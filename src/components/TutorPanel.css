@@ -19,12 +19,19 @@
   color: var(--ink);
 }
 
-.tp-close {
+.tp-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.tp-close,
+.tp-collapse {
   display: none;
   border: 1px solid var(--edge);
   border-radius: var(--r-1);
   background: var(--paper-raise);
-  padding: 4px 10px;
   font-family: var(--f-mono);
   font-size: var(--t-11);
   letter-spacing: 0.06em;
@@ -32,8 +39,30 @@
   color: var(--graphite);
 }
 
+.tp-close {
+  padding: 4px 10px;
+}
+
+.tp-collapse {
+  padding: 4px 7px;
+  line-height: 0;
+}
+
+.tp-close:hover,
+.tp-collapse:hover {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+/* Drawer range gets Close; docked range gets Hide. */
 @media (min-width: 760px) and (max-width: 1179px) {
   .tp-close {
+    display: block;
+  }
+}
+
+@media (min-width: 1180px) {
+  .tp-collapse {
     display: block;
   }
 }

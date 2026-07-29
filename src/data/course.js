@@ -5,13 +5,36 @@
  * file for a fetch later should not touch the components:
  *
  *   group    { id, title, blurb, questions[] }
- *   question { id, code, kind, points, prompt, stimulus?, rubric[], tutor }
+ *   question { id, code, kind, points, prompt, stimulus?, workingExpected?,
+ *              rubric[], tutor }
  *   rubric   { id, label, points, keywords[], coach }
  *   tutor    { opening, hints[], concept, example, misconception }
  *
  * `keywords` exists only to let the placeholder evaluator react to what
  * the student actually typed. The real scoring happens server-side.
+ *
+ * `workingExpected` marks questions whose answer is normally worked out on
+ * paper — a calculation, a diagram, a Punnett square. Those prompt for a
+ * photo of the working rather than treating the attachment as an extra.
  */
+
+/** Stands in for a photo of hand-drawn working, so the demo has one on load. */
+const punnettSketch = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="180" viewBox="0 0 240 180">
+    <rect width="240" height="180" fill="#fffdf3"/>
+    <g stroke="#28405e" stroke-width="2" fill="none" stroke-linecap="round">
+      <path d="M70 50h100M70 100h100M70 150h100"/>
+      <path d="M70 50v100M120 50v100M170 50v100"/>
+    </g>
+    <g font-family="Georgia, serif" font-size="21" fill="#28405e">
+      <text x="88" y="42">B</text><text x="140" y="42">b</text>
+      <text x="50" y="84">B</text><text x="50" y="134">b</text>
+      <text x="80" y="86">BB</text><text x="130" y="86">Bb</text>
+      <text x="80" y="136">Bb</text><text x="130" y="136">bb</text>
+    </g>
+    <text x="70" y="174" font-family="Georgia, serif" font-size="15" fill="#28405e">3 brown : 1 blue</text>
+  </svg>`,
+)}`
 
 export const course = {
   title: 'Cells, Energy & Inheritance',
@@ -449,6 +472,7 @@ export const course = {
           code: 'BIO-303',
           kind: 'Read the data',
           points: 4,
+          workingExpected: true,
           prompt:
             'An oxygen probe sits in a sealed tube of pondweed. The lamp is off for the first hour and on for the second. Use the readings to explain what the plant is doing in each hour, and explain why the hour-two figure is not the rate of photosynthesis.',
           stimulus: {
@@ -521,6 +545,7 @@ export const course = {
           code: 'BIO-401',
           kind: 'Genetics',
           points: 4,
+          workingExpected: true,
           prompt:
             'Two brown-eyed parents have a blue-eyed child. Brown (B) is dominant to blue (b). Explain how this is possible, show the cross, and state the probability that their next child has blue eyes.',
           rubric: [
@@ -713,6 +738,19 @@ export const seedState = {
       'It is active transport because the graph levels off at the end and adding cyanide makes uptake much smaller.',
   },
   'bio-201': { status: 'draft', draft: 'Higher pH changes the shape of the enzyme so it stops working as well.' },
+  'bio-401': {
+    status: 'draft',
+    draft: 'Both parents must be Bb. My cross is in the photo.',
+    attachments: [
+      {
+        id: 'seed-punnett',
+        name: 'punnett-square.svg',
+        size: 21_400,
+        type: 'image/svg+xml',
+        url: punnettSketch,
+      },
+    ],
+  },
 }
 
 /** Replies for free-text messages, so the composer feels alive without an API. */

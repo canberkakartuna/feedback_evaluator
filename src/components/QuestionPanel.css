@@ -1,13 +1,26 @@
+/* One measure for the whole pane, so the bar, the page and the pager stay on
+   the same left edge when the tutor collapses and the pane gets wider.
+   The offset matches the page's margin rule (1px border + its padding). */
+.qp-measure {
+  width: 100%;
+  max-width: 660px;
+  margin: 0 auto;
+  padding-left: calc(var(--s-5) + 1px);
+}
+
 /* ── bar ────────────────────────────────────────────────────── */
 
 .qp-bar {
+  flex: none;
+  border-bottom: 1px solid var(--edge);
+  padding: var(--s-4) var(--s-5) var(--s-3);
+}
+
+.qp-bar-inner {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--s-4);
-  flex: none;
-  border-bottom: 1px solid var(--edge);
-  padding: var(--s-4) var(--s-5) var(--s-3);
 }
 
 .qp-bar-line {
@@ -89,6 +102,7 @@
 
 /* The margin rule of an exercise book, down the left of the page. */
 .qp-sheet {
+  width: 100%;
   max-width: 660px;
   margin: 0 auto;
   border-left: 1px solid color-mix(in srgb, var(--margin) 34%, transparent);
@@ -200,6 +214,142 @@
   outline-offset: 1px;
 }
 
+/* ── uploaded working ──────────────────────────────────────── */
+
+.qp-upload {
+  margin-top: var(--s-4);
+}
+
+.qp-upload-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+
+.qp-upload-why {
+  font-size: var(--t-12);
+  color: var(--stamp);
+}
+
+/* A torn-out square of the same grid: dashed, so it reads as a slot. */
+.qp-drop {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px dashed color-mix(in srgb, var(--graphite) 45%, transparent);
+  border-radius: var(--r-1);
+  background: color-mix(in srgb, var(--paper-sunk) 45%, transparent);
+  padding: var(--s-3) var(--s-4);
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.qp-drop:hover,
+.qp-drop[data-dragging] {
+  border-color: var(--pen);
+  background: var(--pen-soft);
+}
+
+.qp-drop:has(input:focus-visible) {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+}
+
+.qp-drop-main {
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--pen);
+}
+
+.qp-drop-sub {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.qp-drop-error {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-12);
+  color: var(--margin);
+}
+
+.qp-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.qp-file {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: var(--s-3);
+  align-items: center;
+  border: 1px solid var(--edge);
+  background: var(--paper-raise);
+  padding: var(--s-2);
+}
+
+.qp-file-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  background: var(--paper-sunk);
+  font-size: var(--t-11);
+  color: var(--graphite);
+  text-decoration: none;
+}
+
+.qp-file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qp-file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.qp-file-name {
+  overflow: hidden;
+  font-size: var(--t-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qp-file-size {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.qp-file-remove {
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+.qp-file-remove:hover {
+  color: var(--margin);
+}
+
 /* ── actions ────────────────────────────────────────────────── */
 
 .qp-actions {
@@ -308,6 +458,15 @@
   line-height: 1.55;
 }
 
+.qp-feedback-note {
+  margin: var(--s-3) 0 0;
+  border-left: 2px solid var(--edge);
+  padding-left: var(--s-3);
+  font-size: var(--t-12);
+  line-height: 1.5;
+  color: var(--graphite);
+}
+
 .qp-rubric {
   margin: var(--s-4) 0 0;
   padding: 0;
@@ -362,12 +521,15 @@
 /* ── nav ────────────────────────────────────────────────────── */
 
 .qp-nav {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s-3);
   flex: none;
   border-top: 1px solid var(--edge);
   padding: var(--s-3) var(--s-5);
+}
+
+.qp-nav-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
 }
 
 .qp-step {
@@ -428,7 +590,8 @@
     padding: var(--s-5) var(--s-4) var(--s-6);
   }
 
-  .qp-sheet {
+  .qp-sheet,
+  .qp-measure {
     padding-left: var(--s-4);
   }
 
