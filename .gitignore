@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# API uploads (local disk until GridFS/object storage)
+server/.uploads

@@ -1,0 +1,116 @@
+import express from 'express'
+import { config } from './config.js'
+import { createStore } from './store/index.js'
+import { findQuestion, publicCourse, topics } from './services/course.js'
+import { ownTutor } from '../shared/course.js'
+import { sessionRoutes } from './routes/sessions.js'
+import { answerRoutes } from './routes/answers.js'
+import { tutorRoutes } from './routes/tutor.js'
+import { uploadFileRoutes, uploadRoutes } from './routes/uploads.js'
+import { eventRoutes, ownQuestionRoutes, promptRoutes } from './routes/misc.js'
+import { researchRoutes } from './routes/research.js'
+import { ApiError, notFound } from './lib/http.js'
+
+export function createApp({ store = createStore() } = {}) {
+  const app = express()
+
+  app.disable('x-powered-by')
+
+  // Base64 attachments arrive inside JSON, so the limit allows for the ~4/3
+  // expansion on top of the raw file limit.
+  app.use(express.json({ limit: Math.ceil((config.maxUploadBytes * 4) / 3) + 1024 * 1024 }))
+
+  app.use((req, res, next) => {
+    const origin = req.get('origin')
+    if (origin && config.origins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Vary', 'Origin')
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Research-Token')
+    }
+    if (req.method === 'OPTIONS') {
+      res.sendStatus(204)
+      return
+    }
+    next()
+  })
+
+  /**
+   * Every student route is scoped to a session and a question, so resolving
+   * both — and refusing anything that does not exist — happens once here
+   * rather than at the top of a dozen handlers.
+   */
+  async function resolveQuestion(req) {
+    const session = await store.sessions.findById(req.params.sessionId)
+    if (!session) throw notFound('No such session')
+
+    const questionId = req.params.questionId
+    const known = findQuestion(questionId)
+
+    if (known) return { session, question: known }
+
+    const own = await store.ownQuestions.findById(questionId)
+    if (own && own.sessionId === session.id) {
+      return { session, question: { ...own, rubric: [], tutor: ownTutor } }
+    }
+
+    throw notFound('No such question')
+  }
+
+  const deps = { resolveQuestion }
+
+  app.get('/api/health', (req, res) => {
+    res.json({
+      ok: true,
+      store: store.kind,
+      researchEnabled: Boolean(config.researchToken),
+      uptime: Math.round(process.uptime()),
+    })
+  })
+
+  app.get('/api/course', (req, res, next) => {
+    try {
+      res.json({ course: publicCourse(req.query.topicId ?? 'all'), topics: topics() })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  app.use('/api/sessions', sessionRoutes(store))
+  app.use('/api/sessions', answerRoutes(store, deps))
+  app.use('/api/sessions', tutorRoutes(store, deps))
+  app.use('/api/sessions', uploadRoutes(store, deps))
+  app.use('/api/sessions', ownQuestionRoutes(store))
+  app.use('/api/sessions', eventRoutes(store))
+  app.use('/api/uploads', uploadFileRoutes(store))
+  app.use('/api/prompts', promptRoutes(store))
+  app.use('/api/research', researchRoutes(store))
+
+  app.use((req, res) => {
+    res.status(404).json({ error: { message: `No route for ${req.method} ${req.path}` } })
+  })
+
+  // eslint-disable-next-line no-unused-vars
+  app.use((error, req, res, next) => {
+    if (error instanceof ApiError) {
+      res.status(error.status).json({ error: { message: error.message, details: error.details } })
+      return
+    }
+
+    if (error?.type === 'entity.too.large') {
+      res.status(413).json({ error: { message: 'Request body is too large' } })
+      return
+    }
+
+    if (error instanceof SyntaxError && 'body' in error) {
+      res.status(400).json({ error: { message: 'Body is not valid JSON' } })
+      return
+    }
+
+    console.error('[api] unhandled', error)
+    res.status(500).json({ error: { message: 'Something went wrong on the server' } })
+  })
+
+  app.locals.store = store
+  return app
+}
