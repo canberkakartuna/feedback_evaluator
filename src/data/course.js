@@ -738,9 +738,10 @@ export const seedState = {
       'It is active transport because the graph levels off at the end and adding cyanide makes uptake much smaller.',
   },
   'bio-201': { status: 'draft', draft: 'Higher pH changes the shape of the enzyme so it stops working as well.' },
+  // Answers one way per question, so this one hands in the photo alone.
   'bio-401': {
     status: 'draft',
-    draft: 'Both parents must be Bb. My cross is in the photo.',
+    mode: 'upload',
     attachments: [
       {
         id: 'seed-punnett',

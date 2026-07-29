@@ -86,9 +86,11 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
                         </span>
                         <span className="ql-row-prompt">{question.prompt}</span>
                         <span className="ql-row-state" style={{ color: meta.tone }}>
-                          {state.feedback && state.status !== 'new'
-                            ? `${meta.short} · ${state.feedback.earned}/${state.feedback.total}`
-                            : meta.label}
+                          {state.feedback?.pending
+                            ? 'With your teacher'
+                            : state.feedback?.markable && state.status !== 'new'
+                              ? `${meta.short} · ${state.feedback.earned}/${state.feedback.total}`
+                              : meta.label}
                         </span>
                       </span>
                     </button>

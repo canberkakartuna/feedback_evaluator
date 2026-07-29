@@ -214,37 +214,109 @@
   outline-offset: 1px;
 }
 
-/* ── uploaded working ──────────────────────────────────────── */
+/* ── choosing how to answer ─────────────────────────────────── */
 
-.qp-upload {
-  margin-top: var(--s-4);
+/* One strip, one choice: the segments look like keys on the same instrument,
+   so it reads as picking a method rather than adding another. */
+.qp-modes {
+  display: inline-flex;
+  margin-bottom: var(--s-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  overflow: hidden;
 }
 
-.qp-upload-head {
+.qp-mode {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px var(--s-2);
-  margin: 0 0 var(--s-2);
+  flex-direction: column;
+  gap: 1px;
+  border: 0;
+  background: none;
+  padding: 6px var(--s-4);
+  text-align: left;
+  color: var(--graphite);
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
 }
 
-.qp-upload-why {
+.qp-mode + .qp-mode {
+  border-left: 1px solid var(--edge);
+}
+
+.qp-mode:hover:not([aria-pressed='true']) {
+  background: color-mix(in srgb, var(--pen) 6%, transparent);
+  color: var(--pen);
+}
+
+.qp-mode[aria-pressed='true'] {
+  background: var(--pen);
+  color: var(--paper);
+}
+
+.qp-mode-label {
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+
+.qp-mode-hint {
+  font-size: var(--t-11);
+  opacity: 0.72;
+}
+
+.qp-mode-warn {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-3);
+  border: 1px solid var(--margin);
+  border-radius: var(--r-1);
+  background: var(--margin-soft);
+  padding: var(--s-3) var(--s-4);
+}
+
+.qp-mode-warn-text {
+  margin: 0;
+  font-size: var(--t-13);
+}
+
+.qp-mode-warn-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.qp-mode-nudge {
+  margin: var(--s-2) 0 0;
   font-size: var(--t-12);
   color: var(--stamp);
 }
 
-/* Two ways to hand in working, given equal weight: draw it, or photograph it.
-   Both are slots torn from the same paper, so neither reads as the fallback. */
-.qp-ways {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-2);
+/* ── working handed in as a drawing or a file ───────────────── */
+
+.qp-board,
+.qp-upload {
+  margin-top: 0;
 }
 
+.qp-board-thumb {
+  flex: none;
+  width: 88px;
+  height: 59px;
+  border: 1px solid var(--edge);
+  background: #fffdf7;
+  object-fit: cover;
+}
+
+/* A slot torn from the same paper, for whichever method is chosen. */
 .qp-way {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
   border: 1px dashed color-mix(in srgb, var(--graphite) 45%, transparent);
   border-radius: var(--r-1);
   background: color-mix(in srgb, var(--paper-sunk) 45%, transparent);
@@ -267,6 +339,13 @@
   outline-offset: 2px;
 }
 
+.qp-way-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .qp-way-main {
   font-family: var(--f-display);
   font-size: var(--t-14);
@@ -277,12 +356,6 @@
 .qp-way-sub {
   font-size: var(--t-11);
   color: var(--graphite-faint);
-}
-
-@media (max-width: 900px) {
-  .qp-ways {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 .qp-drop-error {
@@ -405,6 +478,19 @@
   color: var(--paper);
 }
 
+.qp-btn-danger {
+  border-color: var(--margin);
+  background: var(--margin);
+  color: var(--paper);
+}
+
+.qp-btn-danger:hover {
+  border-color: var(--margin);
+  background: var(--margin);
+  color: var(--paper);
+  filter: brightness(0.92);
+}
+
 .qp-stale {
   margin: 0;
   font-size: var(--t-12);
@@ -426,6 +512,16 @@
 
 .qp-feedback[data-verdict='mastered'] {
   border-left-color: var(--pen);
+}
+
+/* Handed in, but not scored here — neither a pass nor a fail. */
+.qp-feedback[data-verdict='pending'] {
+  border-left-color: var(--stamp);
+}
+
+.qp-feedback[data-verdict='pending'] .qp-stamp {
+  border-color: var(--stamp);
+  color: var(--stamp);
 }
 
 .qp-stamp {
@@ -611,6 +707,24 @@
 
   .qp-prompt {
     font-size: var(--t-16);
+  }
+
+  /* Three segments plus their hints do not fit a phone: share the width
+     evenly and drop the hints, since the labels already say enough. */
+  .qp-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .qp-mode {
+    align-items: center;
+    padding: 8px var(--s-2);
+    text-align: center;
+  }
+
+  .qp-mode-hint {
+    display: none;
   }
 
   .qp-feedback {

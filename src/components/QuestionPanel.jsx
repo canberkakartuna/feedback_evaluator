@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import StatusMark from './StatusMark'
 import { STATUS } from '../lib/status'
-import { answerKey, wordCount } from '../lib/evaluate'
+import { answerKey } from '../lib/evaluate'
+import {
+  MODES,
+  boardFile,
+  contentSummary,
+  describeContent,
+  hasContent,
+  modeLabel,
+  uploadedFiles,
+} from '../lib/answer'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
@@ -13,6 +22,7 @@ export default function QuestionPanel({
   previous,
   next,
   onDraftChange,
+  onModeChange,
   onAttach,
   onDetach,
   onSaveBoard,
@@ -25,9 +35,10 @@ export default function QuestionPanel({
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
   const [boardOpen, setBoardOpen] = useState(false)
+  const [pendingMode, setPendingMode] = useState(null)
 
-  const words = wordCount(state.draft)
-  const files = state.attachments
+  const files = uploadedFiles(state)
+  const board = boardFile(state)
   const { feedback } = state
   const stale = Boolean(feedback) && state.feedbackFor !== answerKey(state)
 
@@ -35,12 +46,40 @@ export default function QuestionPanel({
     sheet.current?.scrollTo({ top: 0 })
     setRejected([])
     setBoardOpen(false)
+    setPendingMode(null)
   }, [question.id])
 
   const takeFiles = (fileList) => {
     const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []))
     setRejected(refused)
     if (accepted.length) onAttach(accepted)
+  }
+
+  /** Paste an image straight in — only while Upload is the chosen method. */
+  useEffect(() => {
+    if (state.mode !== 'upload') return
+
+    const onPaste = (event) => {
+      if (event.clipboardData?.files.length) takeFiles(event.clipboardData.files)
+    }
+
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.mode])
+
+  /** Ask before a switch throws work away; switch straight off if empty. */
+  const requestMode = (next) => {
+    if (next === state.mode) return
+    setRejected([])
+
+    if (hasContent(state)) {
+      setPendingMode(next)
+      return
+    }
+
+    setPendingMode(null)
+    onModeChange(next)
   }
 
   return (
@@ -112,52 +151,92 @@ export default function QuestionPanel({
 
           <section className="qp-answer-block">
             <div className="qp-answer-head">
-              <label className="eyebrow" htmlFor="answer">
-                Your answer
-              </label>
-              <span className="qp-words mono">
-                {words} {words === 1 ? 'word' : 'words'}
-                {files.length ? ` · ${files.length} ${files.length === 1 ? 'file' : 'files'}` : ''}
-              </span>
+              <span className="eyebrow">Your answer</span>
+              <span className="qp-words mono">{contentSummary(state)}</span>
             </div>
 
-            <textarea
-              id="answer"
-              className="qp-answer"
-              value={state.draft}
-              spellCheck="true"
-              placeholder="Write your answer here. The tutor marks it against the rubric, not against a model answer."
-              onChange={(event) => onDraftChange(event.target.value)}
-              onPaste={(event) => {
-                if (event.clipboardData.files.length) {
-                  event.preventDefault()
-                  takeFiles(event.clipboardData.files)
-                }
-              }}
-            />
+            {/* One answer per question: choosing a method replaces the others. */}
+            <div className="qp-modes" role="group" aria-label="How to answer">
+              {MODES.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="qp-mode"
+                  aria-pressed={state.mode === option.id}
+                  onClick={() => requestMode(option.id)}
+                >
+                  <span className="qp-mode-label">{option.label}</span>
+                  <span className="qp-mode-hint mono">{option.hint}</span>
+                </button>
+              ))}
+            </div>
 
-            <div className="qp-upload">
-              <p className="qp-upload-head">
-                <span className="eyebrow">Your working</span>
+            {pendingMode ? (
+              <div className="qp-mode-warn" role="alert">
+                <p className="qp-mode-warn-text">
+                  Switching to {modeLabel(pendingMode)} discards {describeContent(state)}.
+                </p>
+                <div className="qp-mode-warn-actions">
+                  <button
+                    type="button"
+                    className="qp-btn qp-btn-danger"
+                    onClick={() => {
+                      onModeChange(pendingMode)
+                      setPendingMode(null)
+                    }}
+                  >
+                    Discard and switch
+                  </button>
+                  <button type="button" className="qp-btn" onClick={() => setPendingMode(null)}>
+                    Keep my answer
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {state.mode === 'write' ? (
+              <>
+                <label className="sr-only" htmlFor="answer">
+                  Your written answer
+                </label>
+                <textarea
+                  id="answer"
+                  className="qp-answer"
+                  value={state.draft}
+                  spellCheck="true"
+                  placeholder="Write your answer here. The tutor marks it against the rubric, not against a model answer."
+                  onChange={(event) => onDraftChange(event.target.value)}
+                />
                 {question.workingExpected ? (
-                  <span className="qp-upload-why">
-                    This one is worked out by hand — draw it, or photograph your paper.
-                  </span>
+                  <p className="qp-mode-nudge">
+                    This one is normally worked out by hand — Draw or Upload usually suits it better.
+                  </p>
                 ) : null}
-              </p>
+              </>
+            ) : null}
 
-              <div className="qp-ways">
+            {state.mode === 'draw' ? (
+              <div className="qp-board">
                 <button type="button" className="qp-way" onClick={() => setBoardOpen(true)}>
-                  <span className="qp-way-main">
-                    {state.strokes.length ? 'Edit your whiteboard' : 'Draw on the whiteboard'}
-                  </span>
-                  <span className="qp-way-sub mono">
-                    {state.strokes.length
-                      ? `${state.strokes.length} ${state.strokes.length === 1 ? 'stroke' : 'strokes'} saved`
-                      : 'Squared paper · pen, eraser, undo'}
+                  {board ? (
+                    <img className="qp-board-thumb" src={board.url} alt="Your whiteboard so far" />
+                  ) : null}
+                  <span className="qp-way-text">
+                    <span className="qp-way-main">
+                      {state.strokes.length ? 'Edit your whiteboard' : 'Draw on the whiteboard'}
+                    </span>
+                    <span className="qp-way-sub mono">
+                      {state.strokes.length
+                        ? `${state.strokes.length} ${state.strokes.length === 1 ? 'stroke' : 'strokes'} · saved as ${board ? formatBytes(board.size) : 'a PNG'}`
+                        : 'Squared paper · pen, eraser, undo'}
+                    </span>
                   </span>
                 </button>
+              </div>
+            ) : null}
 
+            {state.mode === 'upload' ? (
+              <div className="qp-upload">
                 <label
                   className="qp-way"
                   data-dragging={dragging || undefined}
@@ -182,53 +261,57 @@ export default function QuestionPanel({
                       event.target.value = ''
                     }}
                   />
-                  <span className="qp-way-main">Add a photo or a file</span>
-                  <span className="qp-way-sub mono">Or drop one here · JPG, PNG or PDF · 10 MB</span>
+                  <span className="qp-way-text">
+                    <span className="qp-way-main">Add a photo or a file</span>
+                    <span className="qp-way-sub mono">
+                      Drop one here or paste it · JPG, PNG or PDF · 10 MB
+                    </span>
+                  </span>
                 </label>
+
+                {rejected.length ? (
+                  <p className="qp-drop-error" role="alert">
+                    Not added: {rejected.map((file) => `${file.name} ${file.reason}`).join('; ')}.
+                    Fix the file and attach it again.
+                  </p>
+                ) : null}
+
+                {files.length ? (
+                  <ul className="qp-files">
+                    {files.map((file) => (
+                      <li key={file.id} className="qp-file">
+                        <a
+                          className="qp-file-thumb"
+                          href={file.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={`Open ${file.name} in a new tab`}
+                        >
+                          {isImage(file.type) ? (
+                            <img src={file.url} alt="" />
+                          ) : (
+                            <span className="mono">PDF</span>
+                          )}
+                        </a>
+
+                        <span className="qp-file-meta">
+                          <span className="qp-file-name">{file.name}</span>
+                          <span className="qp-file-size mono">{formatBytes(file.size)}</span>
+                        </span>
+
+                        <button
+                          type="button"
+                          className="qp-file-remove"
+                          onClick={() => onDetach(file.id)}
+                        >
+                          Remove<span className="sr-only"> {file.name}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
-
-              {rejected.length ? (
-                <p className="qp-drop-error" role="alert">
-                  Not added: {rejected.map((file) => `${file.name} ${file.reason}`).join('; ')}. Fix
-                  the file and attach it again.
-                </p>
-              ) : null}
-
-              {files.length ? (
-                <ul className="qp-files">
-                  {files.map((file) => (
-                    <li key={file.id} className="qp-file">
-                      <a
-                        className="qp-file-thumb"
-                        href={file.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={`Open ${file.name} in a new tab`}
-                      >
-                        {isImage(file.type) ? (
-                          <img src={file.url} alt="" />
-                        ) : (
-                          <span className="mono">PDF</span>
-                        )}
-                      </a>
-
-                      <span className="qp-file-meta">
-                        <span className="qp-file-name">{file.name}</span>
-                        <span className="qp-file-size mono">{formatBytes(file.size)}</span>
-                      </span>
-
-                      <button
-                        type="button"
-                        className="qp-file-remove"
-                        onClick={() => onDetach(file.id)}
-                      >
-                        Remove<span className="sr-only"> {file.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+            ) : null}
 
             <div className="qp-actions">
               <button type="button" className="qp-btn qp-btn-primary" onClick={onCheck}>
@@ -242,26 +325,28 @@ export default function QuestionPanel({
           </section>
 
           {feedback ? (
-            <section className="qp-feedback" aria-live="polite" data-verdict={feedback.verdict}>
+            <section
+              className="qp-feedback"
+              aria-live="polite"
+              data-verdict={feedback.markable ? feedback.verdict : 'pending'}
+            >
               <div className="qp-stamp">
                 <span className="qp-stamp-score mono">
-                  {feedback.earned}<span className="qp-stamp-slash">/</span>{feedback.total}
+                  {feedback.markable ? feedback.earned : '—'}
+                  <span className="qp-stamp-slash">/</span>
+                  {feedback.total}
                 </span>
                 <span className="qp-stamp-label">
-                  {feedback.markable ? STATUS[feedback.verdict].label : 'Not yet markable'}
+                  {feedback.markable
+                    ? STATUS[feedback.verdict].label
+                    : feedback.pending
+                      ? 'With your teacher'
+                      : 'Nothing to mark'}
                 </span>
               </div>
 
               <div className="qp-feedback-body">
                 <p className="qp-summary">{feedback.summary}</p>
-
-                {feedback.attachments ? (
-                  <p className="qp-feedback-note mono">
-                    {feedback.attachments} attached{' '}
-                    {feedback.attachments === 1 ? 'file goes' : 'files go'} to your teacher with this
-                    answer. The rubric below scores what you wrote.
-                  </p>
-                ) : null}
 
                 <ul className="qp-rubric">
                   {feedback.criteria.map((criterion) => (
@@ -271,7 +356,8 @@ export default function QuestionPanel({
                       </span>
                       <span className="qp-criterion-label">{criterion.label}</span>
                       <span className="qp-criterion-points mono">
-                        {criterion.met ? criterion.points : 0}/{criterion.points}
+                        {feedback.markable ? (criterion.met ? criterion.points : 0) : '—'}/
+                        {criterion.points}
                       </span>
                     </li>
                   ))}

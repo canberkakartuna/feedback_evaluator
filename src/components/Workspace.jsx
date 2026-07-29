@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { course, fallbackReplies, questions, seedState } from '../data/course'
 import { answerKey, evaluateAnswer, wordCount } from '../lib/evaluate'
+import { DEFAULT_MODE, hasContent } from '../lib/answer'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import QuestionList from './QuestionList'
 import QuestionPanel from './QuestionPanel'
@@ -17,6 +18,7 @@ function initProgress() {
     const seed = seedState[question.id]
 
     const state = {
+      mode: seed?.mode ?? DEFAULT_MODE,
       status: seed?.status ?? 'new',
       draft: seed?.draft ?? '',
       attachments: seed?.attachments ? [...seed.attachments] : [],
@@ -29,7 +31,7 @@ function initProgress() {
     }
 
     if (seed && seed.status !== 'draft') {
-      state.feedback = evaluateAnswer(question, state.draft, state.attachments.length)
+      state.feedback = evaluateAnswer(question, state)
       state.feedbackFor = answerKey(state)
     }
 
@@ -131,6 +133,45 @@ export default function Workspace() {
 
   const setDraft = useCallback((text) => patch(activeId, { draft: text }), [activeId, patch])
 
+  /**
+   * Switching answer method discards whatever the old one held, so a question
+   * never carries two answers. The panel confirms first when there is content.
+   */
+  const setMode = useCallback(
+    (mode) => {
+      const state = progress[activeId]
+      if (mode === state.mode) return
+
+      if (!hasContent(state)) {
+        patch(activeId, { mode })
+        return
+      }
+
+      const cleared = { draft: state.draft, strokes: state.strokes, attachments: state.attachments }
+
+      if (state.mode === 'write') {
+        cleared.draft = ''
+      } else if (state.mode === 'draw') {
+        cleared.strokes = []
+        cleared.attachments = state.attachments.filter((item) => {
+          if (item.source !== 'whiteboard') return true
+          releaseUrl(item.url)
+          return false
+        })
+      } else {
+        cleared.attachments = state.attachments.filter((item) => {
+          if (item.source === 'whiteboard') return true
+          releaseUrl(item.url)
+          return false
+        })
+      }
+
+      // The old mark described work that no longer exists.
+      patch(activeId, { mode, ...cleared, feedback: null, feedbackFor: null, status: 'new' })
+    },
+    [activeId, patch, progress],
+  )
+
   const attach = useCallback(
     (files) => {
       if (!files.length) return
@@ -186,17 +227,12 @@ export default function Workspace() {
   )
 
   const checkAnswer = useCallback(() => {
-    const attachmentCount = activeState.attachments.length
-    const feedback = evaluateAnswer(active, activeState.draft, attachmentCount)
+    const feedback = evaluateAnswer(active, activeState)
 
     patch(active.id, {
       feedback,
       feedbackFor: answerKey(activeState),
-      status: feedback.markable
-        ? feedback.verdict
-        : attachmentCount
-          ? 'draft'
-          : activeState.status,
+      status: feedback.markable ? feedback.verdict : feedback.pending ? 'draft' : activeState.status,
     })
 
     if (feedback.markable) {
@@ -208,6 +244,13 @@ export default function Workspace() {
           feedback.verdict === 'mastered'
             ? `Marked ${active.code} — ${feedback.earned} of ${feedback.total}. Full marks, and in the right order.`
             : `Marked ${active.code} — ${feedback.earned} of ${feedback.total}. ${feedback.nextStep}`,
+      })
+    } else if (feedback.pending) {
+      append(active.id, {
+        id: nextId(),
+        from: 'tutor',
+        kind: 'note',
+        text: `${active.code} is with your teacher to mark by hand. I cannot score a drawing or a photo.`,
       })
     }
   }, [active, activeState, append, patch])
@@ -255,15 +298,15 @@ export default function Workspace() {
       } else {
         ask = 'Check my reasoning.'
 
-        if (wordCount(state.draft) >= 4) {
+        if (state.mode === 'write' && wordCount(state.draft) >= 4) {
           reply = { label: 'Watch for this', text: tutor.misconception }
-        } else if (state.attachments.length) {
+        } else if (hasContent(state)) {
           reply = {
-            text: 'I can see your working is attached. Write the explanation out as well — the marks are given for the reasoning in words, and I can only check what you write.',
+            text: 'I cannot read a drawing or a photo yet, so I cannot check that working directly. Talk me through your reasoning here and I will tell you where it goes wrong.',
           }
         } else {
           reply = {
-            text: 'There is nothing in your answer box yet. Write a sentence or two and I will read it back to you.',
+            text: 'There is nothing to check yet. Put something in your answer and I will read it back to you.',
           }
         }
       }
@@ -358,6 +401,7 @@ export default function Workspace() {
           previous={questions[index - 1]}
           next={questions[index + 1]}
           onDraftChange={setDraft}
+          onModeChange={setMode}
           onAttach={attach}
           onDetach={detach}
           onSaveBoard={saveBoard}
