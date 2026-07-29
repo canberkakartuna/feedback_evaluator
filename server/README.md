@@ -11,14 +11,40 @@ Vite proxies `/api` to port 4000, so the client calls `/api/...` with no base UR
 
 ## Environment
 
+Everything is read from **`.env` at the repo root**, in development and in the
+deployment alike. `.env.example` is the template:
+
+```bash
+cp .env.example .env
+node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"  # a token
+```
+
+Three things worth knowing about how it is wired:
+
+- **Real environment variables win.** Anything already set in the process is
+  left alone, so a host-injected value overrides the file with no code change —
+  and the smoke test can set its own values before importing `config.js`.
+- **`.env` is committed**, because that is the only way a serverless deployment
+  reads it. Everything in it is visible to anyone with repository access and
+  stays in git history. `RESEARCH_TOKEN` is rotated by editing the value; the
+  moment `MONGODB_URI` goes in, that is database credentials in git, and the
+  secret lines should move to the host's own environment settings instead.
+- **`vercel.json` names `.env` under `includeFiles`.** Without that the file is
+  not traced into the function bundle and none of this loads once deployed.
+
+Vite reads the same file for `VITE_`-prefixed keys at build time, so the client
+and the API share one config file.
+
 | Variable | Default | Notes |
 | --- | --- | --- |
 | `PORT` | `4000` | |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:5174` | CORS allow-list |
-| `UPLOAD_DIR` | `server/.uploads` | Photos and whiteboard exports |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:5174` | CORS allow-list. The deployment is same-origin and needs no entry. |
+| `UPLOAD_DIR` | `server/.uploads`, or the temp dir when serverless | Photos and whiteboard exports |
 | `MAX_UPLOAD_BYTES` | `10485760` | 10 MB per file |
 | `RESEARCH_TOKEN` | *unset* | **Researcher endpoints return 503 until this is set.** No default on purpose — these read every student's transcript. |
-| `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record |
+| `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
+| `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
+| `MONGODB_URI` | *unset* | Not read yet — `store/mongo.js` does not exist. |
 
 ## What the server owns, and why
 
