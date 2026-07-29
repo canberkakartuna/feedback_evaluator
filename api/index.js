@@ -3,10 +3,15 @@ import { createApp } from '../server/app.js'
 /**
  * Vercel entry point.
  *
- * Vercel runs Express natively on the Node.js runtime, so the whole app is one
- * function. The catch-all filename means every /api/* path lands here with its
- * original URL intact, which is what lets Express keep routing normally — no
- * rewrite needed.
+ * Vercel runs Express natively on the Node.js runtime, so the whole API is one
+ * function. The `/api/(.*)` rewrite in vercel.json points every API path here
+ * while Express still sees the original URL, which is what lets it route
+ * normally.
+ *
+ * A file-based route alone was not enough: `api/[...path].js` matched only one
+ * segment, so everything nested — /api/sessions/:id/..., /api/research/* —
+ * returned Vercel's own 404 without ever reaching Express. The rewrite is what
+ * makes nested paths work.
  *
  * Built once per instance rather than per request: Fluid Compute reuses warm
  * instances, so this is the cheap path. Note the consequence — the in-memory

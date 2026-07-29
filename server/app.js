@@ -36,6 +36,17 @@ export function createApp({ store = createStore() } = {}) {
   })
 
   /**
+   * The API is served from the same origin as the site, so its responses pass
+   * through the same CDN. Vercel's default `public, max-age=0, must-revalidate`
+   * is the wrong signal for per-session data: nothing here should ever sit in a
+   * shared cache, so say so explicitly.
+   */
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0')
+    next()
+  })
+
+  /**
    * Every student route is scoped to a session and a question, so resolving
    * both — and refusing anything that does not exist — happens once here
    * rather than at the top of a dozen handlers.
