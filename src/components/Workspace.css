@@ -1,0 +1,163 @@
+/* Three panes on a desk: index, page, tutor. */
+
+.ws {
+  display: grid;
+  grid-template-columns: 304px minmax(0, 1fr) 384px;
+  height: 100%;
+  background: var(--paper-sunk);
+  overflow: hidden;
+}
+
+.ws-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--paper);
+}
+
+.ws-list {
+  border-right: 1px solid var(--edge);
+}
+
+.ws-tutor {
+  border-left: 1px solid var(--edge);
+}
+
+.ws-scrim,
+.ws-tabs {
+  display: none;
+}
+
+/* ── Tablet: the tutor becomes a drawer ─────────────────────── */
+
+@media (max-width: 1179px) {
+  .ws {
+    grid-template-columns: 268px minmax(0, 1fr);
+  }
+
+  .ws-tutor {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 40;
+    width: min(400px, 92vw);
+    box-shadow: var(--shade);
+    transform: translateX(101%);
+    transition: transform 0.26s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .ws[data-tutor='open'] .ws-tutor {
+    transform: none;
+  }
+
+  .ws-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    padding: 0;
+    background: rgb(20 26 31 / 0.34);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.26s ease;
+  }
+
+  .ws[data-tutor='open'] .ws-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ── Mobile: one pane at a time, switched from the bottom ───── */
+
+@media (max-width: 759px) {
+  .ws {
+    /* minmax(0, 1fr), not 1fr: a wide stimulus table must scroll inside its
+       own container instead of widening the pane past the viewport. */
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .ws-pane {
+    grid-column: 1;
+    grid-row: 1;
+    display: none;
+    border: 0;
+  }
+
+  .ws[data-view='list'] .ws-list,
+  .ws[data-view='problem'] .ws-problem,
+  .ws[data-view='tutor'] .ws-tutor {
+    display: flex;
+  }
+
+  .ws-tutor {
+    position: static;
+    width: auto;
+    box-shadow: none;
+    transform: none;
+    transition: none;
+  }
+
+  .ws-scrim {
+    display: none;
+  }
+
+  .ws-tabs {
+    display: grid;
+    grid-column: 1;
+    grid-row: 2;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--edge);
+    background: var(--paper);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .ws-tab {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    border: 0;
+    border-top: 2px solid transparent;
+    background: none;
+    padding: 9px 4px 11px;
+    color: var(--graphite);
+  }
+
+  .ws-tab + .ws-tab {
+    box-shadow: inset 1px 0 0 var(--edge);
+  }
+
+  .ws-tab-label {
+    font-family: var(--f-display);
+    font-size: var(--t-13);
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .ws-tab-meta {
+    font-size: var(--t-11);
+    color: var(--graphite-faint);
+  }
+
+  .ws-tab[aria-current='true'] {
+    border-top-color: var(--pen);
+    color: var(--pen);
+  }
+
+  .ws-tab[aria-current='true'] .ws-tab-meta {
+    color: var(--pen);
+  }
+
+  .ws-tab-dot {
+    position: absolute;
+    top: 8px;
+    right: calc(50% - 30px);
+    width: 6px;
+    height: 6px;
+    background: var(--margin);
+  }
+}

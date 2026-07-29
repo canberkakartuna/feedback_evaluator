@@ -35,10 +35,20 @@ jobs:
 
       - name: Deploy prebuilt output
         run: |
-          timeout 300 vercel deploy --prebuilt --prod --logs \
-            --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tee deploy.log
-          status=${PIPESTATUS[0]}
-          url=$(grep -Eo 'https://[a-z0-9.-]+\.vercel\.app' deploy.log | tail -1)
-          echo "exit=$status url=${url:-none}"
-          echo "### ${url:-deploy failed} (exit $status)" >> "$GITHUB_STEP_SUMMARY"
-          exit "$status"
+          # Deploy from outside the checkout. The CLI reads HEAD's commit author
+          # from the working directory and attaches it to the deployment, and
+          # Vercel refuses deployments whose git author lacks project access.
+          # A staging dir with no git history has no author to attach.
+          staging="$RUNNER_TEMP/deploy"
+          mkdir -p "$staging"
+          cp -R .vercel "$staging/"
+          cd "$staging"
+          url=$(vercel deploy --prebuilt --prod --no-wait \
+            --token=${{ secrets.VERCEL_TOKEN }} | tail -1)
+          echo "url=$url"
+          for i in $(seq 1 8); do
+            echo "--- poll $i"
+            vercel inspect "$url" --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | head -20
+            sleep 12
+          done
+          echo "### $url" >> "$GITHUB_STEP_SUMMARY"

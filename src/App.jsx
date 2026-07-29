@@ -1,7 +1,7 @@
-import ComingSoon from './ComingSoon'
+import Workspace from './components/Workspace'
 
 function App() {
-  return <ComingSoon />
+  return <Workspace />
 }
 
 export default App

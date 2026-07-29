@@ -1,3 +1,97 @@
+/* ─────────────────────────────────────────────────────────────
+   Feedback Evaluator — design tokens
+   Visual world: a squared exercise book. Faint grid, a red margin
+   rule, fountain-pen teal ink. Everything sits on a 24px square.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light dark;
+
+  /* paper & structure */
+  --paper: #fafaf7;
+  --paper-sunk: #f1f2eb;
+  --paper-raise: #ffffff;
+  --grid: #e4e7e0;
+  --rule: #dde1d7;
+  --edge: #d8dbd0;
+
+  /* ink */
+  --ink: #141a1f;
+  --graphite: #6b7680;
+  --graphite-faint: #949da5;
+
+  /* pen — the one interactive colour */
+  --pen: #0e7566;
+  --pen-deep: #0a5a4e;
+  --pen-soft: #e3efec;
+
+  /* margin red — hairlines and "needs revision" only */
+  --margin: #b9452f;
+  --margin-soft: #f8e8e3;
+
+  /* ochre stamp — work in progress */
+  --stamp: #9d6a15;
+  --stamp-soft: #f5eddc;
+
+  /* type */
+  --f-display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
+  --f-body: 'Literata', Georgia, 'Times New Roman', serif;
+  --f-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --t-11: 0.6875rem;
+  --t-12: 0.75rem;
+  --t-13: 0.8125rem;
+  --t-14: 0.875rem;
+  --t-16: 1rem;
+  --t-18: 1.125rem;
+  --t-22: 1.375rem;
+  --t-28: 1.75rem;
+
+  /* the square */
+  --sq: 24px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  /* stationery, not software: tight radii, hairline borders */
+  --r-1: 3px;
+  --r-2: 6px;
+
+  --shade: 0 1px 2px rgb(20 26 31 / 0.05), 0 8px 24px -12px rgb(20 26 31 / 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12171a;
+    --paper-sunk: #0d1113;
+    --paper-raise: #1a2024;
+    --grid: #1f272c;
+    --rule: #242d33;
+    --edge: #273137;
+
+    --ink: #e9ece6;
+    --graphite: #8f9aa3;
+    --graphite-faint: #6d7880;
+
+    --pen: #47c5ac;
+    --pen-deep: #6bd6c1;
+    --pen-soft: #10322c;
+
+    --margin: #e4785f;
+    --margin-soft: #331b16;
+
+    --stamp: #d8a44c;
+    --stamp-soft: #2d2415;
+
+    --shade: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -10,4 +104,67 @@ body,
 
 body {
   margin: 0;
+  background: var(--paper-sunk);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: var(--t-14);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Utility face for codes, counts and rubric data */
+.mono {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Eyebrow — pane titles and field labels */
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

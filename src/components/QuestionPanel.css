@@ -1,0 +1,460 @@
+/* ── bar ────────────────────────────────────────────────────── */
+
+.qp-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex: none;
+  border-bottom: 1px solid var(--edge);
+  padding: var(--s-4) var(--s-5) var(--s-3);
+}
+
+.qp-bar-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 5px 0 0;
+  font-size: var(--t-13);
+  color: var(--graphite);
+}
+
+.qp-code {
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.qp-sep {
+  width: 3px;
+  height: 3px;
+  background: var(--graphite-faint);
+}
+
+.qp-kind {
+  font-family: var(--f-display);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.qp-bar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  flex: none;
+}
+
+.qp-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.qp-place {
+  font-size: var(--t-12);
+  color: var(--graphite-faint);
+}
+
+.qp-tutor-toggle {
+  display: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 5px 11px;
+  font-family: var(--f-display);
+  font-size: var(--t-13);
+  font-weight: 600;
+  color: var(--pen);
+}
+
+@media (min-width: 760px) and (max-width: 1179px) {
+  .qp-tutor-toggle {
+    display: block;
+  }
+}
+
+/* ── the page ───────────────────────────────────────────────── */
+
+.qp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s-6) var(--s-5) var(--s-7);
+}
+
+/* The margin rule of an exercise book, down the left of the page. */
+.qp-sheet {
+  max-width: 660px;
+  margin: 0 auto;
+  border-left: 1px solid color-mix(in srgb, var(--margin) 34%, transparent);
+  padding-left: var(--s-5);
+}
+
+.qp-prompt {
+  margin: 0;
+  font-size: var(--t-18);
+  line-height: 1.58;
+  letter-spacing: -0.003em;
+  text-wrap: pretty;
+}
+
+/* ── stimulus ───────────────────────────────────────────────── */
+
+.qp-figure {
+  margin: var(--s-5) 0 0;
+}
+
+.qp-figure figcaption {
+  margin-bottom: var(--s-2);
+}
+
+.qp-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--edge);
+  background: var(--paper-raise);
+}
+
+.qp-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 288px;
+  font-size: var(--t-13);
+}
+
+.qp-table th,
+.qp-table td {
+  border-bottom: 1px solid var(--rule);
+  padding: 8px var(--s-3);
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.qp-table td {
+  white-space: nowrap;
+}
+
+/* Units belong in the header, so let long headers wrap rather than clip. */
+.qp-table th {
+  min-width: 104px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  color: var(--graphite);
+  background: color-mix(in srgb, var(--paper-sunk) 60%, transparent);
+}
+
+.qp-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ── answer, written on the squares ─────────────────────────── */
+
+.qp-answer-block {
+  margin-top: var(--s-6);
+}
+
+.qp-answer-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+
+.qp-words {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.qp-answer {
+  display: block;
+  width: 100%;
+  min-height: 168px;
+  border: 1px solid var(--edge);
+  border-radius: 0;
+  padding: 11px 13px;
+  font-family: var(--f-body);
+  font-size: var(--t-14);
+  line-height: 24px;
+  resize: vertical;
+  background-color: var(--paper-raise);
+  background-image:
+    repeating-linear-gradient(to bottom, var(--grid) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(to right, var(--grid) 0 1px, transparent 1px 24px);
+  background-position: 0 10px, 13px 0;
+  background-attachment: local;
+}
+
+.qp-answer::placeholder {
+  color: var(--graphite-faint);
+}
+
+.qp-answer:focus-visible {
+  outline-offset: 1px;
+}
+
+/* ── actions ────────────────────────────────────────────────── */
+
+.qp-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-3);
+}
+
+.qp-btn {
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 8px 15px;
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.qp-btn:hover {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.qp-btn-primary {
+  border-color: var(--pen);
+  background: var(--pen);
+  color: var(--paper);
+}
+
+.qp-btn-primary:hover {
+  background: var(--pen-deep);
+  border-color: var(--pen-deep);
+  color: var(--paper);
+}
+
+.qp-stale {
+  margin: 0;
+  font-size: var(--t-12);
+  color: var(--stamp);
+}
+
+/* ── the mark ───────────────────────────────────────────────── */
+
+.qp-feedback {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: var(--s-5);
+  margin-top: var(--s-6);
+  border: 1px solid var(--edge);
+  border-left: 2px solid var(--margin);
+  background: var(--paper-raise);
+  padding: var(--s-4) var(--s-4) var(--s-5);
+}
+
+.qp-feedback[data-verdict='mastered'] {
+  border-left-color: var(--pen);
+}
+
+.qp-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 2px solid var(--margin);
+  border-radius: var(--r-2);
+  padding: var(--s-3) var(--s-2);
+  color: var(--margin);
+  text-align: center;
+  rotate: -2.5deg;
+}
+
+.qp-feedback[data-verdict='mastered'] .qp-stamp {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.qp-stamp-score {
+  font-size: var(--t-28);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.qp-stamp-slash {
+  padding: 0 1px;
+  opacity: 0.5;
+}
+
+.qp-stamp-label {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+
+.qp-summary {
+  margin: 0;
+  font-size: var(--t-14);
+  line-height: 1.55;
+}
+
+.qp-rubric {
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--rule);
+}
+
+.qp-criterion {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: baseline;
+  border-bottom: 1px solid var(--rule);
+  padding: 8px 0;
+  font-size: var(--t-13);
+}
+
+.qp-criterion-mark {
+  font-family: var(--f-mono);
+  color: var(--graphite-faint);
+}
+
+.qp-criterion[data-met='true'] .qp-criterion-mark {
+  color: var(--pen);
+}
+
+.qp-criterion[data-met='false'] .qp-criterion-label {
+  color: var(--graphite);
+}
+
+.qp-criterion-points {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.qp-criterion[data-met='true'] .qp-criterion-points {
+  color: var(--pen);
+}
+
+.qp-next {
+  margin: var(--s-4) 0 0;
+  font-size: var(--t-13);
+  line-height: 1.55;
+}
+
+.qp-next .eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--margin);
+}
+
+/* ── nav ────────────────────────────────────────────────────── */
+
+.qp-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex: none;
+  border-top: 1px solid var(--edge);
+  padding: var(--s-3) var(--s-5);
+}
+
+.qp-step {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  color: var(--graphite);
+}
+
+.qp-step:hover:not(:disabled) {
+  color: var(--pen);
+}
+
+.qp-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.qp-step-next {
+  text-align: right;
+}
+
+.qp-step-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.qp-step-label {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--graphite-faint);
+}
+
+.qp-step-text .mono {
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+
+/* ── narrow ─────────────────────────────────────────────────── */
+
+@media (max-width: 759px) {
+  .qp-bar {
+    padding: var(--s-3) var(--s-4);
+  }
+
+  .qp-place,
+  .qp-state {
+    display: none;
+  }
+
+  .qp-scroll {
+    padding: var(--s-5) var(--s-4) var(--s-6);
+  }
+
+  .qp-sheet {
+    padding-left: var(--s-4);
+  }
+
+  .qp-prompt {
+    font-size: var(--t-16);
+  }
+
+  .qp-feedback {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: var(--s-4);
+  }
+
+  .qp-stamp {
+    flex-direction: row;
+    gap: var(--s-3);
+    justify-content: flex-start;
+    rotate: none;
+    padding: var(--s-2) var(--s-3);
+  }
+
+  .qp-stamp-score {
+    font-size: var(--t-22);
+  }
+
+  .qp-nav {
+    padding: var(--s-2) var(--s-4);
+  }
+}

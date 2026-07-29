@@ -1,0 +1,210 @@
+.ql-head {
+  flex: none;
+  padding: var(--s-5) var(--s-4) var(--s-4);
+  border-bottom: 1px solid var(--edge);
+}
+
+.ql-title {
+  margin: 6px 0 0;
+  font-family: var(--f-display);
+  font-size: var(--t-22);
+  font-weight: 700;
+  font-stretch: 92%;
+  line-height: 1.14;
+  letter-spacing: -0.015em;
+}
+
+.ql-count {
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-12);
+  color: var(--graphite);
+}
+
+.ql-count .mono {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* The set at a glance: one square per question, in order. */
+.ql-spine {
+  display: flex;
+  gap: 3px;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ql-spine-mark {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--graphite-faint);
+}
+
+.ql-spine-mark[data-status='draft'] {
+  border-color: var(--stamp);
+  background: var(--stamp-soft);
+}
+
+.ql-spine-mark[data-status='revise'] {
+  border-color: var(--margin);
+  background: var(--margin-soft);
+}
+
+.ql-spine-mark[data-status='mastered'] {
+  border-color: var(--pen);
+  background: var(--pen);
+}
+
+.ql-spine-mark[data-active='true'] {
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* ── the list, with the red margin rule running down it ─────── */
+
+.ql-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-image: linear-gradient(
+    to right,
+    transparent 0 39px,
+    color-mix(in srgb, var(--margin) 42%, transparent) 39px 40px,
+    transparent 40px
+  );
+}
+
+.ql-group {
+  padding-bottom: var(--s-2);
+}
+
+.ql-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: 0;
+  padding: var(--s-4) var(--s-4) var(--s-2) 52px;
+  font-weight: 400;
+}
+
+.ql-group-count {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.ql-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ql-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  padding: 10px 14px 11px 11px;
+  text-align: left;
+  transition: background-color 0.14s ease;
+}
+
+.ql-row > svg {
+  margin-top: 3px;
+}
+
+.ql-row:hover {
+  background: color-mix(in srgb, var(--pen) 5%, transparent);
+}
+
+.ql-row[aria-current='true'] {
+  border-left-color: var(--pen);
+  background: var(--pen-soft);
+}
+
+.ql-row-body {
+  display: block;
+  min-width: 0;
+}
+
+.ql-row-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.ql-code {
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.ql-points {
+  flex: none;
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.ql-row-prompt {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: var(--t-13);
+  line-height: 1.42;
+  color: var(--graphite);
+}
+
+.ql-row[aria-current='true'] .ql-row-prompt {
+  color: var(--ink);
+}
+
+.ql-row-state {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.03em;
+}
+
+/* ── key ────────────────────────────────────────────────────── */
+
+.ql-foot {
+  flex: none;
+  border-top: 1px solid var(--edge);
+  padding: var(--s-3) var(--s-4);
+}
+
+.ql-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ql-key-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  color: var(--graphite);
+}
+
+@media (max-width: 759px) {
+  .ql-head {
+    padding-top: var(--s-4);
+  }
+
+  .ql-foot {
+    display: none;
+  }
+}
