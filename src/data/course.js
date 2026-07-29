@@ -754,6 +754,27 @@ export const seedState = {
   },
 }
 
+/**
+ * Questions a student types in themselves have no rubric and no script, so the
+ * tutor works from generic openings. What they ask is itself the data: it shows
+ * where they get stuck when nobody is choosing the questions for them.
+ */
+export const ownTutor = {
+  opening:
+    'Ask me anything you are stuck on. Paste the question in, or just describe where you got lost, and we will work through it together.',
+  hints: [
+    'Tell me what you have tried so far. The first line that stopped making sense is usually where to start.',
+    'Write down what you know and what you are looking for, then find the rule that connects the two.',
+    'Try the smallest version of this problem first — smaller numbers, one variable — then scale it back up.',
+  ],
+  concept:
+    'Tell me which topic this belongs to and I will lay out the idea behind it before we touch any numbers.',
+  example:
+    'Give me the exact question and I will work through a similar one line by line, then you try yours.',
+  misconception:
+    'Read your working back one line at a time and justify each step out loud. The first line you cannot justify is the line with the mistake in it.',
+}
+
 /** Replies for free-text messages, so the composer feels alive without an API. */
 export const fallbackReplies = [
   'Good — say more about the second half of that. Which molecule are you picturing when you say it?',

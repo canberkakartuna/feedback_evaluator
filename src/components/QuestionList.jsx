@@ -1,9 +1,41 @@
+import { useState } from 'react'
 import StatusMark from './StatusMark'
-import { STATUS } from '../lib/status'
+import { AUTO_MARKS, MARKS } from '../lib/status'
 import './QuestionList.css'
 
-export default function QuestionList({ course, progress, activeId, tally, onSelect, onCollapse }) {
-  const total = course.groups.reduce((sum, group) => sum + group.questions.length, 0)
+export default function QuestionList({
+  course,
+  groups,
+  progress,
+  activeId,
+  tally,
+  onSelect,
+  onAskOwn,
+  onCollapse,
+}) {
+  const [ownDraft, setOwnDraft] = useState('')
+
+  const askOwn = (event) => {
+    event.preventDefault()
+    if (!ownDraft.trim()) return
+    onAskOwn(ownDraft)
+    setOwnDraft('')
+  }
+
+  /** What the student said, or what the checker found. */
+  const rowMark = (state) => {
+    if (state.selfMark) return MARKS[state.selfMark]
+    return MARKS[state.status]
+  }
+
+  const rowNote = (state) => {
+    if (state.selfMark) return MARKS[state.selfMark].label
+    if (state.feedback?.pending) return 'With your teacher'
+    if (state.feedback?.markable && state.status !== 'new') {
+      return `${MARKS[state.status].short} · ${state.feedback.earned}/${state.feedback.total}`
+    }
+    return MARKS[state.status].label
+  }
 
   return (
     <>
@@ -36,18 +68,18 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
 
         <p className="ql-count">
           <span className="mono">
-            {tally.mastered} of {total}
+            {tally.done} of {tally.total}
           </span>{' '}
-          mastered
+          marked done
         </p>
 
         <ol className="ql-spine" aria-hidden="true">
-          {course.groups.flatMap((group) =>
+          {groups.flatMap((group) =>
             group.questions.map((question) => (
               <li
                 key={question.id}
                 className="ql-spine-mark"
-                data-status={progress[question.id].status}
+                data-shape={rowMark(progress[question.id]).shape}
                 data-active={question.id === activeId}
               />
             )),
@@ -56,7 +88,7 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
       </header>
 
       <div className="ql-scroll">
-        {course.groups.map((group) => (
+        {groups.map((group) => (
           <section key={group.id} className="ql-group">
             <h2 className="ql-group-head">
               <span className="eyebrow">{group.title}</span>
@@ -66,7 +98,7 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
             <ul className="ql-rows">
               {group.questions.map((question) => {
                 const state = progress[question.id]
-                const meta = STATUS[state.status]
+                const mark = rowMark(state)
                 const selected = question.id === activeId
 
                 return (
@@ -77,20 +109,18 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
                       aria-current={selected}
                       onClick={() => onSelect(question.id)}
                     >
-                      <StatusMark status={state.status} />
+                      <StatusMark status={state.selfMark ?? state.status} />
 
                       <span className="ql-row-body">
                         <span className="ql-row-top">
                           <span className="ql-code mono">{question.code}</span>
-                          <span className="ql-points mono">{question.points} pts</span>
+                          {question.points ? (
+                            <span className="ql-points mono">{question.points} pts</span>
+                          ) : null}
                         </span>
                         <span className="ql-row-prompt">{question.prompt}</span>
-                        <span className="ql-row-state" style={{ color: meta.tone }}>
-                          {state.feedback?.pending
-                            ? 'With your teacher'
-                            : state.feedback?.markable && state.status !== 'new'
-                              ? `${meta.short} · ${state.feedback.earned}/${state.feedback.total}`
-                              : meta.label}
+                        <span className="ql-row-state" style={{ color: mark.tone }}>
+                          {rowNote(state)}
                         </span>
                       </span>
                     </button>
@@ -100,14 +130,38 @@ export default function QuestionList({ course, progress, activeId, tally, onSele
             </ul>
           </section>
         ))}
+
+        {/* Doc item 8: what they ask unprompted shows where they actually stall. */}
+        <section className="ql-group ql-own">
+          <h2 className="ql-group-head">
+            <span className="eyebrow">Ask your own</span>
+          </h2>
+
+          <form className="ql-own-form" onSubmit={askOwn}>
+            <label className="sr-only" htmlFor="own-question">
+              Your own question
+            </label>
+            <textarea
+              id="own-question"
+              className="ql-own-input"
+              rows={3}
+              value={ownDraft}
+              placeholder="Stuck on something else? Type that question here and work on it with the tutor."
+              onChange={(event) => setOwnDraft(event.target.value)}
+            />
+            <button type="submit" className="ql-own-btn" disabled={!ownDraft.trim()}>
+              Add to my list
+            </button>
+          </form>
+        </section>
       </div>
 
       <footer className="ql-foot">
         <ul className="ql-key">
-          {Object.entries(STATUS).map(([status, meta]) => (
-            <li key={status} className="ql-key-item">
-              <StatusMark status={status} size={12} />
-              <span>{meta.short}</span>
+          {AUTO_MARKS.map((key) => (
+            <li key={key} className="ql-key-item">
+              <StatusMark status={key} size={12} />
+              <span>{MARKS[key].short}</span>
             </li>
           ))}
         </ul>

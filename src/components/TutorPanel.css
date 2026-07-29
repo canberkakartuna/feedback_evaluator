@@ -137,6 +137,42 @@
   tab-size: 2;
 }
 
+/* Quiet until it is useful: rating sits under the reply, not on top of it. */
+.tp-rate {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: var(--s-2) 0 0;
+}
+
+.tp-rate-ask {
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.tp-rate-btn {
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper-raise);
+  padding: 1px 9px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  color: var(--graphite);
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.tp-rate-btn:hover {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.tp-rate-done {
+  font-size: var(--t-11);
+  color: var(--pen);
+}
+
 .tp-typing {
   display: flex;
   gap: 4px;

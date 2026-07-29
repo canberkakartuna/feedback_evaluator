@@ -1,8 +1,8 @@
-import { STATUS } from '../lib/status'
+import { MARKS } from '../lib/status'
 
 /** A pencil mark, not a badge: hollow square → half-filled → check or flag. */
 export default function StatusMark({ status, size = 14 }) {
-  const meta = STATUS[status] ?? STATUS.new
+  const mark = MARKS[status] ?? MARKS.new
 
   return (
     <svg
@@ -11,22 +11,22 @@ export default function StatusMark({ status, size = 14 }) {
       viewBox="0 0 14 14"
       fill="none"
       aria-hidden="true"
-      style={{ color: meta.tone, display: 'block', flex: 'none' }}
+      style={{ color: mark.tone, display: 'block', flex: 'none' }}
     >
-      {status === 'mastered' ? (
+      {mark.shape === 'check' ? (
         <path
           d="M2 7.6 5.2 10.8 12 3.6"
           stroke="currentColor"
           strokeWidth="1.9"
           strokeLinecap="square"
         />
-      ) : status === 'revise' ? (
+      ) : mark.shape === 'flag' ? (
         <>
           <rect x="2.5" y="2.5" width="9" height="9" stroke="currentColor" strokeWidth="1.1" />
           <path d="M7 4.6v3.2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="square" />
           <rect x="6.3" y="9.1" width="1.4" height="1.4" fill="currentColor" />
         </>
-      ) : status === 'draft' ? (
+      ) : mark.shape === 'half' ? (
         <>
           <rect x="2.5" y="2.5" width="9" height="9" stroke="currentColor" strokeWidth="1.1" />
           <rect x="3" y="7" width="8" height="4" fill="currentColor" />

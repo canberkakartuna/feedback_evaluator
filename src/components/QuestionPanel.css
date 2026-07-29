@@ -628,6 +628,64 @@
   color: var(--margin);
 }
 
+/* ── the student's own mark ─────────────────────────────────── */
+
+.qp-selfmark {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  margin-top: var(--s-6);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s-3);
+}
+
+.qp-selfmark-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.qp-selfmark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--paper-raise);
+  padding: 5px 12px;
+  font-family: var(--f-display);
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--graphite);
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.qp-selfmark-btn:hover {
+  border-color: var(--graphite);
+}
+
+.qp-selfmark-btn[aria-pressed='true'][data-mark='done'] {
+  border-color: var(--pen);
+  background: var(--pen-soft);
+  color: var(--pen);
+}
+
+.qp-selfmark-btn[aria-pressed='true'][data-mark='unfinished'] {
+  border-color: var(--stamp);
+  background: var(--stamp-soft);
+  color: var(--stamp);
+}
+
+.qp-selfmark-btn[aria-pressed='true'][data-mark='wrong'] {
+  border-color: var(--margin);
+  background: var(--margin-soft);
+  color: var(--margin);
+}
+
 /* ── nav ────────────────────────────────────────────────────── */
 
 .qp-nav {

@@ -15,6 +15,7 @@ export default function TutorPanel({
   open,
   onSend,
   onQuickAction,
+  onRate,
   onClose,
   onCollapse,
 }) {
@@ -79,6 +80,35 @@ export default function TutorPanel({
           <article key={message.id} className="tp-msg" data-from={message.from} data-kind={message.kind}>
             {message.label ? <p className="tp-msg-label">{message.label}</p> : null}
             <p className="tp-msg-text">{message.text}</p>
+
+            {/* Doc item 5: was this feedback any use? */}
+            {message.kind === 'reply' ? (
+              <p className="tp-rate">
+                {state.ratings[message.id] ? (
+                  <span className="tp-rate-done mono">
+                    {state.ratings[message.id] === 'up' ? 'Marked helpful' : 'Marked not helpful'}
+                  </span>
+                ) : (
+                  <>
+                    <span className="tp-rate-ask mono">Did this help?</span>
+                    <button
+                      type="button"
+                      className="tp-rate-btn"
+                      onClick={() => onRate(message.id, 'up')}
+                    >
+                      Yes
+                    </button>
+                    <button
+                      type="button"
+                      className="tp-rate-btn"
+                      onClick={() => onRate(message.id, 'down')}
+                    >
+                      No
+                    </button>
+                  </>
+                )}
+              </p>
+            ) : null}
           </article>
         ))}
 

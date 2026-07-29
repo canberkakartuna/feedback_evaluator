@@ -74,17 +74,17 @@
   border: 1px solid var(--graphite-faint);
 }
 
-.ql-spine-mark[data-status='draft'] {
+.ql-spine-mark[data-shape='half'] {
   border-color: var(--stamp);
   background: var(--stamp-soft);
 }
 
-.ql-spine-mark[data-status='revise'] {
+.ql-spine-mark[data-shape='flag'] {
   border-color: var(--margin);
   background: var(--margin-soft);
 }
 
-.ql-spine-mark[data-status='mastered'] {
+.ql-spine-mark[data-shape='check'] {
   border-color: var(--pen);
   background: var(--pen);
 }
@@ -205,6 +205,57 @@
   font-family: var(--f-mono);
   font-size: var(--t-11);
   letter-spacing: 0.03em;
+}
+
+/* ── ask your own ───────────────────────────────────────────── */
+
+.ql-own {
+  border-top: 1px solid var(--rule);
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+}
+
+.ql-own-form {
+  padding: 0 var(--s-4) var(--s-3) 52px;
+}
+
+.ql-own-input {
+  display: block;
+  width: 100%;
+  border: 1px dashed color-mix(in srgb, var(--graphite) 45%, transparent);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: var(--s-2) var(--s-3);
+  font-family: var(--f-body);
+  font-size: var(--t-12);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.ql-own-input::placeholder {
+  color: var(--graphite-faint);
+}
+
+.ql-own-btn {
+  margin-top: 6px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 5px 11px;
+  font-family: var(--f-display);
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--pen);
+}
+
+.ql-own-btn:hover:not(:disabled) {
+  border-color: var(--pen);
+}
+
+.ql-own-btn:disabled {
+  opacity: 0.45;
+  color: var(--graphite-faint);
+  cursor: default;
 }
 
 /* ── key ────────────────────────────────────────────────────── */

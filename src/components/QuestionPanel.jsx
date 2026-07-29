@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import StatusMark from './StatusMark'
-import { STATUS } from '../lib/status'
+import { MARKS, SELF_MARKS } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
 import {
   MODES,
@@ -21,6 +21,7 @@ export default function QuestionPanel({
   position,
   previous,
   next,
+  onSelfMark,
   onDraftChange,
   onModeChange,
   onAttach,
@@ -92,15 +93,19 @@ export default function QuestionPanel({
               <span className="qp-code mono">{question.code}</span>
               <span className="qp-sep" aria-hidden="true" />
               <span className="qp-kind">{question.kind}</span>
-              <span className="qp-sep" aria-hidden="true" />
-              <span className="mono">{question.points} marks</span>
+              {question.points ? (
+                <>
+                  <span className="qp-sep" aria-hidden="true" />
+                  <span className="mono">{question.points} marks</span>
+                </>
+              ) : null}
             </p>
           </div>
 
           <div className="qp-bar-right">
-            <span className="qp-state" style={{ color: STATUS[state.status].tone }}>
-              <StatusMark status={state.status} size={12} />
-              {STATUS[state.status].short}
+            <span className="qp-state" style={{ color: MARKS[state.selfMark ?? state.status].tone }}>
+              <StatusMark status={state.selfMark ?? state.status} size={12} />
+              {MARKS[state.selfMark ?? state.status].short}
             </span>
             <span
               className="qp-place mono"
@@ -204,7 +209,11 @@ export default function QuestionPanel({
                   className="qp-answer"
                   value={state.draft}
                   spellCheck="true"
-                  placeholder="Write your answer here. The tutor marks it against the rubric, not against a model answer."
+                  placeholder={
+                    question.rubric.length
+                      ? 'Write your answer here. The tutor marks it against the rubric, not against a model answer.'
+                      : 'Write what you have tried so far, and the tutor will work through it with you.'
+                  }
                   onChange={(event) => onDraftChange(event.target.value)}
                 />
                 {question.workingExpected ? (
@@ -314,13 +323,35 @@ export default function QuestionPanel({
             ) : null}
 
             <div className="qp-actions">
-              <button type="button" className="qp-btn qp-btn-primary" onClick={onCheck}>
-                Check my answer
-              </button>
+              {question.rubric.length ? (
+                <button type="button" className="qp-btn qp-btn-primary" onClick={onCheck}>
+                  Check my answer
+                </button>
+              ) : null}
               <button type="button" className="qp-btn" onClick={onAskHint}>
                 Get a hint
               </button>
               {stale ? <p className="qp-stale">Edited since it was marked — check again.</p> : null}
+            </div>
+          </section>
+
+          {/* Doc item 2: the student's own read of how it went. */}
+          <section className="qp-selfmark">
+            <span className="eyebrow">How did this one go?</span>
+            <div className="qp-selfmark-row">
+              {SELF_MARKS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className="qp-selfmark-btn"
+                  data-mark={key}
+                  aria-pressed={state.selfMark === key}
+                  onClick={() => onSelfMark(state.selfMark === key ? null : key)}
+                >
+                  <StatusMark status={key} size={12} />
+                  {MARKS[key].label}
+                </button>
+              ))}
             </div>
           </section>
 
@@ -338,7 +369,7 @@ export default function QuestionPanel({
                 </span>
                 <span className="qp-stamp-label">
                   {feedback.markable
-                    ? STATUS[feedback.verdict].label
+                    ? MARKS[feedback.verdict].label
                     : feedback.pending
                       ? 'With your teacher'
                       : 'Nothing to mark'}

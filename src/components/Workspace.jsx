@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { course, fallbackReplies, questions, seedState } from '../data/course'
+import { course, fallbackReplies, ownTutor, questions, seedState } from '../data/course'
 import { answerKey, evaluateAnswer, wordCount } from '../lib/evaluate'
 import { DEFAULT_MODE, hasContent } from '../lib/answer'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -11,24 +11,29 @@ import './Workspace.css'
 const REPLY_DELAY = 900
 const DOCKED_TUTOR = '(min-width: 1180px)'
 
+function blankState(question, seed) {
+  return {
+    mode: seed?.mode ?? DEFAULT_MODE,
+    status: seed?.status ?? 'new',
+    selfMark: seed?.selfMark ?? null,
+    draft: seed?.draft ?? '',
+    attachments: seed?.attachments ? [...seed.attachments] : [],
+    strokes: [],
+    feedback: null,
+    feedbackFor: null,
+    hintsUsed: 0,
+    unread: false,
+    ratings: {},
+    messages: [{ id: `${question.id}-opening`, from: 'tutor', text: question.tutor.opening }],
+  }
+}
+
 function initProgress() {
   const map = {}
 
   for (const question of questions) {
     const seed = seedState[question.id]
-
-    const state = {
-      mode: seed?.mode ?? DEFAULT_MODE,
-      status: seed?.status ?? 'new',
-      draft: seed?.draft ?? '',
-      attachments: seed?.attachments ? [...seed.attachments] : [],
-      strokes: [],
-      feedback: null,
-      feedbackFor: null,
-      hintsUsed: 0,
-      unread: false,
-      messages: [{ id: `${question.id}-opening`, from: 'tutor', text: question.tutor.opening }],
-    }
+    const state = blankState(question, seed)
 
     if (seed && seed.status !== 'draft') {
       state.feedback = evaluateAnswer(question, state)
@@ -46,9 +51,12 @@ function releaseUrl(url) {
   if (url.startsWith('blob:')) URL.revokeObjectURL(url)
 }
 
-export default function Workspace() {
+export default function Workspace({ topicId = 'all' }) {
   const [progress, setProgress] = useState(initProgress)
-  const [activeId, setActiveId] = useState('bio-102')
+  const [ownQuestions, setOwnQuestions] = useState([])
+  const [activeId, setActiveId] = useState(
+    () => questions.find((q) => topicId === 'all' || q.groupId === topicId)?.id ?? questions[0].id,
+  )
   const [mobileView, setMobileView] = useState('problem')
   const [tutorOpen, setTutorOpen] = useState(false)
   const [tutorCollapsed, setTutorCollapsed] = useState(false)
@@ -61,17 +69,39 @@ export default function Workspace() {
 
   const tutorIsDocked = useMediaQuery(DOCKED_TUTOR)
 
-  const index = questions.findIndex((q) => q.id === activeId)
-  const active = questions[index]
-  const activeState = progress[activeId]
+  /* The chosen topic, plus anything the student added themselves. */
+  const visibleGroups = useMemo(() => {
+    const chosen =
+      topicId === 'all' ? course.groups : course.groups.filter((group) => group.id === topicId)
+
+    return ownQuestions.length
+      ? [
+          ...chosen,
+          { id: 'own', title: 'Your own questions', questions: ownQuestions },
+        ]
+      : chosen
+  }, [ownQuestions, topicId])
+
+  const visible = useMemo(
+    () => visibleGroups.flatMap((group) => group.questions),
+    [visibleGroups],
+  )
+
+  const index = visible.findIndex((q) => q.id === activeId)
+  const active = visible[index] ?? visible[0]
+  const activeState = progress[active.id]
 
   const tutorVisible = tutorIsDocked ? !tutorCollapsed : mobileView === 'tutor' || tutorOpen
 
+  /* Progress counts what the student marked, falling back to the auto check. */
   const tally = useMemo(() => {
-    const counts = { new: 0, draft: 0, revise: 0, mastered: 0 }
-    for (const question of questions) counts[progress[question.id].status] += 1
-    return counts
-  }, [progress])
+    let done = 0
+    for (const question of visible) {
+      const state = progress[question.id]
+      if (state.selfMark === 'done' || (!state.selfMark && state.status === 'mastered')) done += 1
+    }
+    return { done, total: visible.length }
+  }, [progress, visible])
 
   /* Release every object URL and pending timer when the workspace goes away. */
   const latest = useRef(progress)
@@ -125,10 +155,58 @@ export default function Workspace() {
 
   const step = useCallback(
     (delta) => {
-      const next = questions[index + delta]
+      const next = visible[index + delta]
       if (next) selectQuestion(next.id)
     },
-    [index, selectQuestion],
+    [index, selectQuestion, visible],
+  )
+
+  /** Doc item 2: the student marks their own progress; green, yellow or red. */
+  const setSelfMark = useCallback(
+    (mark) => patch(activeId, { selfMark: mark }),
+    [activeId, patch],
+  )
+
+  /** Doc item 5: feedback on the feedback. */
+  const rateMessage = useCallback(
+    (messageId, value) => {
+      setProgress((prev) => ({
+        ...prev,
+        [activeId]: {
+          ...prev[activeId],
+          ratings: { ...prev[activeId].ratings, [messageId]: value },
+        },
+      }))
+    },
+    [activeId],
+  )
+
+  /** Doc item 8: their own question, which is itself a finding. */
+  const addOwnQuestion = useCallback(
+    (prompt) => {
+      const text = prompt.trim()
+      if (!text) return
+
+      const count = ownQuestions.length + 1
+      const question = {
+        id: `own-${count}`,
+        code: `OWN-${String(count).padStart(2, '0')}`,
+        kind: 'Your question',
+        points: 0,
+        prompt: text,
+        rubric: [],
+        tutor: ownTutor,
+        own: true,
+        groupId: 'own',
+        groupTitle: 'Your own questions',
+      }
+
+      setOwnQuestions((prev) => [...prev, question])
+      setProgress((prev) => ({ ...prev, [question.id]: blankState(question) }))
+      setActiveId(question.id)
+      setMobileView('problem')
+    },
+    [ownQuestions.length],
   )
 
   const setDraft = useCallback((text) => patch(activeId, { draft: text }), [activeId, patch])
@@ -264,6 +342,7 @@ export default function Workspace() {
       respond(active.id, {
         id: nextId(),
         from: 'tutor',
+        kind: 'reply',
         text: fallbackReplies[wordCount(trimmed) % fallbackReplies.length],
       })
     },
@@ -312,7 +391,7 @@ export default function Workspace() {
       }
 
       append(active.id, { id: nextId(), from: 'student', text: ask })
-      respond(active.id, { id: nextId(), from: 'tutor', ...reply })
+      respond(active.id, { id: nextId(), from: 'tutor', kind: 'reply', ...reply })
     },
     [active, append, patch, progress, respond],
   )
@@ -330,6 +409,11 @@ export default function Workspace() {
 
   /* ── panel plumbing ──────────────────────────────────────── */
 
+  /* Keep the selection inside the visible set. */
+  useEffect(() => {
+    if (!visible.some((question) => question.id === activeId)) setActiveId(visible[0].id)
+  }, [activeId, visible])
+
   useEffect(() => {
     if (tutorVisible && progress[activeId].unread) patch(activeId, { unread: false })
   }, [activeId, patch, progress, tutorVisible])
@@ -341,10 +425,10 @@ export default function Workspace() {
     return () => window.removeEventListener('keydown', onKey)
   }, [tutorOpen])
 
-  const unreadCount = questions.filter((q) => progress[q.id].unread).length
+  const unreadCount = visible.filter((q) => progress[q.id].unread).length
 
   const tabs = [
-    { id: 'list', label: 'Questions', meta: `${tally.mastered}/${questions.length}` },
+    { id: 'list', label: 'Questions', meta: `${tally.done}/${tally.total}` },
     { id: 'problem', label: 'Problem', meta: active.code },
     { id: 'tutor', label: 'Tutor', dot: unreadCount > 0 },
   ]
@@ -376,7 +460,7 @@ export default function Workspace() {
           </svg>
           <span className="ws-rail-label">Questions</span>
           <span className="ws-rail-count mono">
-            {tally.mastered}/{questions.length}
+            {tally.done}/{tally.total}
           </span>
           <span className="sr-only">Show questions</span>
         </button>
@@ -384,10 +468,12 @@ export default function Workspace() {
         <div className="ws-list-inner">
           <QuestionList
             course={course}
+            groups={visibleGroups}
             progress={progress}
             activeId={activeId}
             tally={tally}
             onSelect={selectQuestion}
+            onAskOwn={addOwnQuestion}
             onCollapse={() => setListCollapsed(true)}
           />
         </div>
@@ -397,9 +483,10 @@ export default function Workspace() {
         <QuestionPanel
           question={active}
           state={activeState}
-          position={{ current: index + 1, total: questions.length }}
-          previous={questions[index - 1]}
-          next={questions[index + 1]}
+          position={{ current: index + 1, total: visible.length }}
+          previous={visible[index - 1]}
+          next={visible[index + 1]}
+          onSelfMark={setSelfMark}
           onDraftChange={setDraft}
           onModeChange={setMode}
           onAttach={attach}
@@ -452,6 +539,7 @@ export default function Workspace() {
             open={tutorOpen}
             onSend={send}
             onQuickAction={quickAction}
+            onRate={rateMessage}
             onClose={() => setTutorOpen(false)}
             onCollapse={() => setTutorCollapsed(true)}
           />

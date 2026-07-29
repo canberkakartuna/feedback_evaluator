@@ -1,0 +1,203 @@
+/* The cover of the exercise book: one sheet, the margin rule down its side. */
+
+.en-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: var(--s-5) var(--s-4);
+  background: var(--paper-sunk);
+  overflow-y: auto;
+}
+
+.en-card {
+  width: 100%;
+  max-width: 620px;
+  border: 1px solid var(--edge);
+  border-left: 2px solid var(--margin);
+  border-radius: var(--r-2);
+  background: var(--paper);
+  padding: var(--s-6) var(--s-6) var(--s-5);
+  box-shadow: var(--shade);
+}
+
+.en-title {
+  margin: 6px 0 0;
+  font-family: var(--f-display);
+  font-size: var(--t-28);
+  font-weight: 700;
+  font-stretch: 92%;
+  line-height: 1.12;
+  letter-spacing: -0.018em;
+}
+
+.en-lede {
+  margin: var(--s-3) 0 0;
+  font-size: var(--t-14);
+  line-height: 1.6;
+  color: var(--graphite);
+  text-wrap: pretty;
+}
+
+.en-terms {
+  margin-top: var(--s-5);
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s-4);
+}
+
+.en-terms-head {
+  margin: 0 0 var(--s-2);
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+.en-list {
+  margin: 0 0 var(--s-4);
+  padding-left: var(--s-4);
+  font-size: var(--t-13);
+  line-height: 1.62;
+}
+
+.en-list li + li {
+  margin-top: 3px;
+}
+
+.en-warn {
+  margin: 0;
+  border-left: 2px solid var(--margin);
+  padding-left: var(--s-3);
+  font-size: var(--t-13);
+  line-height: 1.55;
+  color: var(--margin);
+}
+
+.en-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--t-13);
+  line-height: 1.55;
+  cursor: pointer;
+}
+
+.en-agree input {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin: 2px 0 0;
+  accent-color: var(--pen);
+}
+
+/* ── topic choice ───────────────────────────────────────────── */
+
+.en-topics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: var(--s-5);
+}
+
+.en-topic {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border: 1px solid var(--edge);
+  border-left: 3px solid transparent;
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+}
+
+.en-topic:hover {
+  border-color: var(--pen);
+}
+
+.en-topic[aria-checked='true'] {
+  border-left-color: var(--pen);
+  background: var(--pen-soft);
+}
+
+.en-topic-name {
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+
+.en-topic-meta {
+  flex: none;
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+/* ── actions ────────────────────────────────────────────────── */
+
+.en-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+}
+
+.en-btn {
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 9px 17px;
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.en-btn:hover:not(:disabled) {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.en-btn-primary {
+  border-color: var(--pen);
+  background: var(--pen);
+  color: var(--paper);
+}
+
+.en-btn-primary:hover:not(:disabled) {
+  background: var(--pen-deep);
+  border-color: var(--pen-deep);
+  color: var(--paper);
+}
+
+.en-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 759px) {
+  .en-page {
+    align-items: flex-start;
+    padding: var(--s-4) var(--s-3);
+  }
+
+  .en-card {
+    padding: var(--s-5) var(--s-4) var(--s-4);
+  }
+
+  .en-title {
+    font-size: var(--t-22);
+  }
+}
