@@ -233,8 +233,15 @@
   color: var(--stamp);
 }
 
-/* A torn-out square of the same grid: dashed, so it reads as a slot. */
-.qp-drop {
+/* Two ways to hand in working, given equal weight: draw it, or photograph it.
+   Both are slots torn from the same paper, so neither reads as the fallback. */
+.qp-ways {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+
+.qp-way {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -242,33 +249,40 @@
   border-radius: var(--r-1);
   background: color-mix(in srgb, var(--paper-sunk) 45%, transparent);
   padding: var(--s-3) var(--s-4);
+  text-align: left;
   cursor: pointer;
   transition:
     border-color 0.14s ease,
     background-color 0.14s ease;
 }
 
-.qp-drop:hover,
-.qp-drop[data-dragging] {
+.qp-way:hover,
+.qp-way[data-dragging] {
   border-color: var(--pen);
   background: var(--pen-soft);
 }
 
-.qp-drop:has(input:focus-visible) {
+.qp-way:has(input:focus-visible) {
   outline: 2px solid var(--pen);
   outline-offset: 2px;
 }
 
-.qp-drop-main {
+.qp-way-main {
   font-family: var(--f-display);
   font-size: var(--t-14);
   font-weight: 600;
   color: var(--pen);
 }
 
-.qp-drop-sub {
+.qp-way-sub {
   font-size: var(--t-11);
   color: var(--graphite-faint);
+}
+
+@media (max-width: 900px) {
+  .qp-ways {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .qp-drop-error {

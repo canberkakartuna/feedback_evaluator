@@ -20,6 +20,7 @@ function initProgress() {
       status: seed?.status ?? 'new',
       draft: seed?.draft ?? '',
       attachments: seed?.attachments ? [...seed.attachments] : [],
+      strokes: [],
       feedback: null,
       feedbackFor: null,
       hintsUsed: 0,
@@ -143,8 +144,31 @@ export default function Workspace() {
             size: file.size,
             type: file.type,
             url: URL.createObjectURL(file),
+            source: 'file',
           })),
         ],
+      })
+    },
+    [activeId, patch, progress],
+  )
+
+  /**
+   * A board is one attachment, not a growing pile: saving replaces the
+   * previous export. Saving an empty board removes it.
+   */
+  const saveBoard = useCallback(
+    (strokes, image) => {
+      const kept = progress[activeId].attachments.filter((item) => {
+        if (item.source !== 'whiteboard') return true
+        releaseUrl(item.url)
+        return false
+      })
+
+      patch(activeId, {
+        strokes,
+        attachments: image
+          ? [...kept, { id: `f${(seq.current += 1)}`, ...image, source: 'whiteboard' }]
+          : kept,
       })
     },
     [activeId, patch, progress],
@@ -336,6 +360,7 @@ export default function Workspace() {
           onDraftChange={setDraft}
           onAttach={attach}
           onDetach={detach}
+          onSaveBoard={saveBoard}
           onCheck={checkAnswer}
           onAskHint={askForHint}
           onStep={step}

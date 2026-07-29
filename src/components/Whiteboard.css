@@ -1,0 +1,215 @@
+/* A sheet of squared paper on the desk, with the pens laid across the top. */
+
+dialog.wb {
+  display: none;
+  width: min(1000px, 94vw);
+  max-width: none;
+  max-height: 94vh;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shade);
+  overflow: hidden;
+}
+
+dialog.wb[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+dialog.wb::backdrop {
+  background: rgb(16 21 25 / 0.58);
+}
+
+.wb-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-4);
+  border-bottom: 1px solid var(--edge);
+  padding: var(--s-3) var(--s-4);
+}
+
+.wb-scope {
+  margin: 4px 0 0;
+  font-size: var(--t-13);
+  color: var(--graphite);
+}
+
+.wb-scope .mono {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.wb-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+}
+
+.wb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wb-ink-swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--swatch);
+  padding: 0;
+  transition: box-shadow 0.14s ease;
+}
+
+.wb-ink-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--paper) inset, 0 0 0 2px var(--ink);
+}
+
+.wb-tool,
+.wb-btn {
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 5px 11px;
+  font-family: var(--f-display);
+  font-size: var(--t-13);
+  font-weight: 600;
+  color: var(--graphite);
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.wb-tool:hover:not(:disabled),
+.wb-btn:hover:not(:disabled) {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.wb-tool[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.wb-tool:disabled,
+.wb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── the surface ────────────────────────────────────────────── */
+
+/* The board keeps a landscape ratio, so a phone held upright gives very little
+   room to write. Say so instead of leaving them to work it out. */
+.wb-rotate {
+  display: none;
+  margin: 0;
+  border-bottom: 1px solid var(--edge);
+  padding: var(--s-2) var(--s-4);
+  font-size: var(--t-11);
+  color: var(--stamp);
+  background: var(--stamp-soft);
+}
+
+@media (max-width: 759px) and (orientation: portrait) {
+  .wb-rotate {
+    display: block;
+  }
+}
+
+/* The board's ratio is fixed, so on a short viewport the stage scrolls rather
+   than squashing it — squashing would skew every stroke, and clipping would
+   put Save out of reach. */
+.wb-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border-bottom: 1px solid var(--edge);
+  background: var(--paper-sunk);
+}
+
+.wb-surface {
+  position: relative;
+  flex: none;
+  margin: auto;
+  width: 100%;
+  /* Must stay 3:2 to match the board's coordinate space, or strokes skew. */
+  aspect-ratio: 3 / 2;
+  background: #fffdf7;
+}
+
+.wb-surface canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.wb-ink {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+/* ── footer ─────────────────────────────────────────────────── */
+
+.wb-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  padding: var(--s-3) var(--s-4);
+}
+
+.wb-hint {
+  margin: 0;
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.wb-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+.wb-btn-primary {
+  border-color: var(--pen);
+  background: var(--pen);
+  color: var(--paper);
+}
+
+.wb-btn-primary:hover:not(:disabled) {
+  background: var(--pen-deep);
+  border-color: var(--pen-deep);
+  color: var(--paper);
+}
+
+@media (max-width: 759px) {
+  dialog.wb {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .wb-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .wb-foot {
+    padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
+  }
+}

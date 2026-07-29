@@ -3,6 +3,7 @@ import StatusMark from './StatusMark'
 import { STATUS } from '../lib/status'
 import { answerKey, wordCount } from '../lib/evaluate'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
+import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
 
 export default function QuestionPanel({
@@ -14,6 +15,7 @@ export default function QuestionPanel({
   onDraftChange,
   onAttach,
   onDetach,
+  onSaveBoard,
   onCheck,
   onAskHint,
   onStep,
@@ -22,6 +24,7 @@ export default function QuestionPanel({
   const sheet = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
+  const [boardOpen, setBoardOpen] = useState(false)
 
   const words = wordCount(state.draft)
   const files = state.attachments
@@ -31,6 +34,7 @@ export default function QuestionPanel({
   useEffect(() => {
     sheet.current?.scrollTo({ top: 0 })
     setRejected([])
+    setBoardOpen(false)
   }, [question.id])
 
   const takeFiles = (fileList) => {
@@ -134,45 +138,54 @@ export default function QuestionPanel({
 
             <div className="qp-upload">
               <p className="qp-upload-head">
-                <span className="eyebrow">
-                  {question.workingExpected ? 'Your working' : 'Attachments'}
-                </span>
+                <span className="eyebrow">Your working</span>
                 {question.workingExpected ? (
                   <span className="qp-upload-why">
-                    This one is worked out on paper — photograph it and attach it.
+                    This one is worked out by hand — draw it, or photograph your paper.
                   </span>
                 ) : null}
               </p>
 
-              <label
-                className="qp-drop"
-                data-dragging={dragging || undefined}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  setDragging(true)
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  setDragging(false)
-                  takeFiles(event.dataTransfer.files)
-                }}
-              >
-                <input
-                  type="file"
-                  className="sr-only"
-                  multiple
-                  accept={ACCEPT}
-                  onChange={(event) => {
-                    takeFiles(event.target.files)
-                    event.target.value = ''
+              <div className="qp-ways">
+                <button type="button" className="qp-way" onClick={() => setBoardOpen(true)}>
+                  <span className="qp-way-main">
+                    {state.strokes.length ? 'Edit your whiteboard' : 'Draw on the whiteboard'}
+                  </span>
+                  <span className="qp-way-sub mono">
+                    {state.strokes.length
+                      ? `${state.strokes.length} ${state.strokes.length === 1 ? 'stroke' : 'strokes'} saved`
+                      : 'Squared paper · pen, eraser, undo'}
+                  </span>
+                </button>
+
+                <label
+                  className="qp-way"
+                  data-dragging={dragging || undefined}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    setDragging(true)
                   }}
-                />
-                <span className="qp-drop-main">Add a photo or a file</span>
-                <span className="qp-drop-sub mono">
-                  Or drop one here · JPG, PNG or PDF · up to 10 MB
-                </span>
-              </label>
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => {
+                    event.preventDefault()
+                    setDragging(false)
+                    takeFiles(event.dataTransfer.files)
+                  }}
+                >
+                  <input
+                    type="file"
+                    className="sr-only"
+                    multiple
+                    accept={ACCEPT}
+                    onChange={(event) => {
+                      takeFiles(event.target.files)
+                      event.target.value = ''
+                    }}
+                  />
+                  <span className="qp-way-main">Add a photo or a file</span>
+                  <span className="qp-way-sub mono">Or drop one here · JPG, PNG or PDF · 10 MB</span>
+                </label>
+              </div>
 
               {rejected.length ? (
                 <p className="qp-drop-error" role="alert">
@@ -275,6 +288,18 @@ export default function QuestionPanel({
           ) : null}
         </article>
       </div>
+
+      {boardOpen ? (
+        <Whiteboard
+          question={question}
+          initialStrokes={state.strokes}
+          onSave={(strokes, file) => {
+            onSaveBoard(strokes, file)
+            setBoardOpen(false)
+          }}
+          onClose={() => setBoardOpen(false)}
+        />
+      ) : null}
 
       <footer className="qp-nav">
         <div className="qp-measure qp-nav-inner">
