@@ -7,24 +7,51 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(here, '..')
 
 /**
- * Config comes from .env at the repo root, in both development and deployment.
- * Loaded before anything below is read. Real environment variables still win,
- * so a host-injected value overrides the file without a code change.
+ * Config comes from `.env.local` and then `.env`, in development and deployment
+ * alike, and is loaded before anything below is read.
  *
- * The same file serves the client: Vite picks up VITE_-prefixed keys from it.
+ * Precedence runs left to right and the first setter of a key wins, so:
+ * real environment variables beat `.env.local`, which beats `.env`. A
+ * host-injected value therefore overrides both files with no code change.
  *
- * Two candidate paths, because a bundled serverless function does not
- * necessarily run from the repo root. `vercel.json` has to name `.env` under
- * `includeFiles` as well, or the file is simply not shipped with the function.
+ * The split matters. `.env` is committed — that is the only way a serverless
+ * deployment reads it — so everything in it is public to anyone with repository
+ * access, for good. `.env.local` is gitignored (`*.local`), which makes it the
+ * place for credentials such as MONGODB_URI when working locally; in a
+ * deployment those come from the host's own environment settings instead.
+ *
+ * Vite applies the same two files in the same order to VITE_-prefixed keys, so
+ * the client and the API never disagree about which value won.
+ *
+ * Both the repo root and the working directory are tried, because a bundled
+ * serverless function does not necessarily run from the root. `vercel.json` has
+ * to name `.env` under `includeFiles` too, or the file is not shipped with the
+ * function at all.
  */
-const candidates = [path.join(repoRoot, '.env'), path.join(process.cwd(), '.env')]
+const candidates = [
+  path.join(repoRoot, '.env.local'),
+  path.join(process.cwd(), '.env.local'),
+  path.join(repoRoot, '.env'),
+  path.join(process.cwd(), '.env'),
+]
 
 export const envFile = (() => {
-  for (const candidate of candidates) {
+  const files = []
+  let applied = 0
+  let skipped = 0
+
+  // Deduplicated: run from the repo root and both candidates for a name are the
+  // same file, which would otherwise be counted twice.
+  for (const candidate of new Set(candidates)) {
     const result = loadEnvFile(candidate)
-    if (result.loaded) return { ...result, path: candidate }
+    if (!result.loaded) continue
+
+    files.push(candidate)
+    applied += result.applied
+    skipped += result.skipped
   }
-  return { loaded: false, applied: 0, skipped: 0, path: null }
+
+  return { loaded: files.length > 0, applied, skipped, files }
 })()
 
 /** Vercel and friends: read-only filesystem, no instance affinity. */
@@ -60,4 +87,21 @@ export const config = {
   researchToken: process.env.RESEARCH_TOKEN ?? null,
 
   consentVersion: process.env.CONSENT_VERSION ?? '2026-07-29.placeholder',
+
+  /**
+   * MongoDB. Unset means the in-memory store: fine locally, and unsafe anywhere
+   * more than one instance answers requests — see server/README.md.
+   *
+   * The connection string carries credentials, so it belongs in `.env.local`
+   * locally and in the host's environment settings once deployed. Never in the
+   * committed `.env`.
+   */
+  mongoUri: process.env.MONGODB_URI?.trim() || null,
+
+  /**
+   * Optional. Atlas's copy-paste URI names no database, and the driver would
+   * quietly use `test`; store/mongo.js resolves this, then a name in the URI
+   * path, then its own default.
+   */
+  mongoDb: process.env.MONGODB_DB?.trim() || null,
 }

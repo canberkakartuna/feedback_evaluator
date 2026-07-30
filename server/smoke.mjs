@@ -2,13 +2,15 @@
  * End-to-end check over real HTTP: consent, answering, marking, the tutor,
  * uploads, own questions, events, and the researcher side.
  *
- *   npm run test:api
+ *   npm run test:api                 # in-memory store
+ *   npm run test:api:mongo           # the same assertions against MongoDB
  *
  * Starts its own server on a spare port with a known research token, so it
  * never touches a running one.
  */
 import { createApp } from './app.js'
 import { once } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -21,6 +23,33 @@ process.env.RESEARCH_TOKEN = 'smoke-token'
 const { config } = await import('./config.js')
 config.uploadDir = uploadDir
 config.researchToken = 'smoke-token'
+
+/**
+ * Which store to run against, decided here rather than inherited.
+ *
+ * In-memory is the default: hermetic, no network, and what a bare checkout has.
+ * `SMOKE_MONGO=1` runs the identical assertions against MongoDB — the whole
+ * point being that they should all still pass — in a throwaway database dropped
+ * at the end.
+ *
+ * The default has to override `config.mongoUri` explicitly, because `.env.local`
+ * very likely sets it, and these assertions count rows: pointed at a real
+ * database they would both fail and litter it.
+ */
+const useMongo = process.env.SMOKE_MONGO === '1'
+const smokeDb = `smoke_${randomUUID().replaceAll('-', '').slice(0, 12)}`
+
+if (useMongo) {
+  if (!config.mongoUri) {
+    console.error('SMOKE_MONGO=1 but MONGODB_URI is unset — nothing to connect to.')
+    process.exit(1)
+  }
+  config.mongoDb = smokeDb
+  console.log(`\nstore: mongodb, throwaway database "${smokeDb}"`)
+} else {
+  config.mongoUri = null
+  console.log('\nstore: in-memory')
+}
 
 const app = createApp()
 const server = app.listen(0)
@@ -67,7 +96,16 @@ try {
   console.log('\nhealth + course')
   const health = await call('GET', '/api/health')
   check('health ok', health.status === 200 && health.body.ok === true)
-  check('reports in-memory store', health.body.store === 'memory')
+  check(
+    `reports the ${useMongo ? 'mongodb' : 'in-memory'} store`,
+    health.body.store === (useMongo ? 'mongo' : 'memory'),
+    `got ${health.body.store}`,
+  )
+  check('persistence reported correctly', health.body.persistent === useMongo)
+  if (useMongo) {
+    check('database reachable', health.body.databaseReachable === true)
+    check('using the throwaway database', health.body.database === smokeDb)
+  }
 
   const course = await call('GET', '/api/course')
   check('course returns groups', course.body.course.groups.length === 4)
@@ -320,6 +358,27 @@ try {
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })
+
+  if (useMongo) {
+    await app.locals.store.close()
+
+    // Cleanup lives here rather than behind a store method: nothing in the
+    // running application should be able to delete collections.
+    //
+    // Collection by collection, not dropDatabase: an Atlas application user is
+    // granted readWrite on its databases, which covers dropping a collection but
+    // not a database. A database with nothing left in it stops existing anyway.
+    const { MongoClient } = await import('mongodb')
+    const client = new MongoClient(config.mongoUri)
+    try {
+      const db = client.db(smokeDb)
+      const names = (await db.listCollections({}, { nameOnly: true }).toArray()).map((c) => c.name)
+      await Promise.all(names.map((name) => db.collection(name).drop()))
+      console.log(`\ndropped ${smokeDb} (${names.length} collections)`)
+    } finally {
+      await client.close()
+    }
+  }
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`)

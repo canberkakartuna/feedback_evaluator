@@ -1,39 +1,51 @@
 # API
 
-Node 22 + Express 5. Storage is **in-memory** for now; see [Moving to MongoDB](#moving-to-mongodb).
+Node 22 + Express 5. Storage is **MongoDB when `MONGODB_URI` is set**, and
+in-memory when it is not — see [The store](#the-store).
 
 ```bash
-npm run dev:api      # node --watch, port 4000
-npm run test:api     # end-to-end check over real HTTP (75 assertions)
+npm run dev:api          # node --watch, port 4000
+npm run test:api         # end-to-end check over real HTTP, in-memory (76 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (78)
 ```
+
+`npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
+rows, so pointing it at a real database would both fail and litter it. The Mongo
+run uses a throwaway database and drops it at the end.
 
 Vite proxies `/api` to port 4000, so the client calls `/api/...` with no base URL.
 
 ## Environment
 
-Everything is read from **`.env` at the repo root**, in development and in the
-deployment alike. `.env.example` is the template:
+Two files at the repo root, read in development and in the deployment alike.
+`.env.example` is the template:
 
 ```bash
 cp .env.example .env
 node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"  # a token
 ```
 
-Three things worth knowing about how it is wired:
+**Precedence is: real environment variables, then `.env.local`, then `.env`.**
+The first setter of a key wins, so a host-injected value overrides both files
+with no code change — and the smoke test can set its own values before importing
+`config.js`.
 
-- **Real environment variables win.** Anything already set in the process is
-  left alone, so a host-injected value overrides the file with no code change —
-  and the smoke test can set its own values before importing `config.js`.
+The split is the important part:
+
 - **`.env` is committed**, because that is the only way a serverless deployment
   reads it. Everything in it is visible to anyone with repository access and
-  stays in git history. `RESEARCH_TOKEN` is rotated by editing the value; the
-  moment `MONGODB_URI` goes in, that is database credentials in git, and the
-  secret lines should move to the host's own environment settings instead.
+  stays in git history, permanently. `RESEARCH_TOKEN` lives here and is rotated
+  by editing the value. **No credentials.**
+- **`.env.local` is gitignored** (by the `*.local` rule) and overrides `.env`.
+  This is where `MONGODB_URI` goes when working locally.
+- **In a deployment, credentials come from the host's own environment settings**
+  (Vercel: Project → Settings → Environment Variables), which beat both files.
+  `.env.local` is not committed, so it is not deployed — that is the point.
 - **`vercel.json` names `.env` under `includeFiles`.** Without that the file is
   not traced into the function bundle and none of this loads once deployed.
 
-Vite reads the same file for `VITE_`-prefixed keys at build time, so the client
-and the API share one config file.
+Vite applies the same two files in the same order to `VITE_`-prefixed keys, so
+the client and the API never disagree about which value won.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
@@ -44,7 +56,8 @@ and the API share one config file.
 | `RESEARCH_TOKEN` | *unset* | **Researcher endpoints return 503 until this is set.** No default on purpose — these read every student's transcript. |
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
-| `MONGODB_URI` | *unset* | Not read yet — `store/mongo.js` does not exist. |
+| `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
+| `MONGODB_DB` | `feedback_evaluator` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
 
 ## What the server owns, and why
 
@@ -119,17 +132,23 @@ vercel            # preview
 vercel --prod
 ```
 
-Set in project settings: `RESEARCH_TOKEN`, and later `MONGODB_URI`.
+Set `RESEARCH_TOKEN` and `MONGODB_URI` in project settings — not in `.env`; see
+[Environment](#environment).
 
-### It deploys, but do not point students at it yet
+### One thing still assumes a single long-lived process
 
-Two things in this codebase assume one long-lived process. Both are the pieces
-deliberately deferred, and `GET /api/health` reports `ready: false` until they
-are dealt with:
+`GET /api/health` reports `ready: false` until every warning it lists is gone.
+The store was one of them and no longer is. What remains:
 
-**1. The in-memory store is per-instance.** Fluid Compute reuses warm instances,
-but there is no affinity and instances recycle, so a session created on one is
-invisible on another. Demonstrated with two instances of the app:
+**Uploads go to a disk that does not persist.** Only the temp directory is
+writable, it is per-instance, and it is cleared. `config.uploadDir` points there
+automatically when `VERCEL` is set so nothing crashes, but a photo uploaded on
+one request may be gone on the next. Replace the `fs` calls in
+`routes/uploads.js` with Vercel Blob (`npm i @vercel/blob`, private store) or
+GridFS, and keep serving bytes through `/api/uploads/:id` so the client contract
+does not change.
+
+Sessions themselves now survive. The failure this section used to describe —
 
 ```
 session created on instance A : ses_86f5094e629e49089487
@@ -137,47 +156,67 @@ session created on instance A : ses_86f5094e629e49089487
   read back from instance B   : 404 NOT FOUND
 ```
 
-Students would be logged out at random. **MongoDB is a prerequisite, not a
-follow-up.**
+— re-run against MongoDB in two separate processes:
 
-**2. Uploads go to a disk that does not persist.** Only the temp directory is
-writable, it is per-instance, and it is cleared. `config.uploadDir` points there
-automatically when `VERCEL` is set so nothing crashes, but a photo uploaded on
-one request may be gone on the next. Replace the `fs` calls in
-`routes/uploads.js` with Vercel Blob (`npm i @vercel/blob`, private store) or
-GridFS once Mongo is in, and keep serving bytes through `/api/uploads/:id` so
-the client contract does not change.
-
-Also worth knowing: `messages.seq` is a module-level counter, so two instances
-will hand out the same sequence numbers. Mongo needs to own ordering — see
-below.
-
-## Moving to MongoDB
-
-`store/memory.js` is already async and already grouped by collection —
-`sessions`, `answers`, `messages`, `events`, `ownQuestions`, `uploads`,
-`prompts`, `snippetLabels`. Add `store/mongo.js` with the same methods and
-select it in `store/index.js` when `MONGODB_URI` is set. Nothing in `routes/`
-or `services/` should change.
-
-Indexes worth creating on day one:
-
-```js
-sessions:      { id: 1 }, { code: 1 }, { createdAt: -1 }
-answers:       { sessionId: 1, questionId: 1 }   // unique
-messages:      { sessionId: 1, questionId: 1, seq: 1 }, { id: 1 }
-events:        { sessionId: 1, at: 1 }, { type: 1 }
-ownQuestions:  { sessionId: 1 }
-uploads:       { id: 1 }, { sessionId: 1 }
-snippetLabels: { snippetId: 1 }                  // unique
+```
+created ses_36be25e02cd2439fa4c2 (code P4796G) in process 94330
+  read back from process 94358 : 200 FOUND
+  read by code P4796G          : 200 FOUND
 ```
 
-Two things `memory.js` fakes that Mongo must do properly:
+## The store
 
-- **`messages.seq`** is a process-local counter. Use a per-session counter
-  document, or sort by `createdAt` with `_id` as the tie-break.
-- **Documents are cloned on read.** The driver gives you fresh objects anyway,
-  so the `clone()` calls can go.
+`store/index.js` is the only place that knows which one is in use: MongoDB when
+`MONGODB_URI` is set, in-memory when it is not. Both expose the same async
+methods, collection for collection — `sessions`, `answers`, `messages`, `events`,
+`ownQuestions`, `uploads`, `prompts`, `snippetLabels` — so nothing in `routes/`
+or `services/` knows the difference. `npm run test:api:mongo` runs the whole
+smoke suite against Mongo to keep that true.
 
-Uploads currently land on local disk. GridFS or object storage is the next step
-if more than one instance ever runs.
+**There is deliberately no fallback between them.** A connection that quietly
+degraded to an in-memory store would hand out sessions that vanish, which is the
+failure the database is here to prevent. If the URI is set and the database
+cannot be reached, requests fail and `/api/health` says why.
+
+Three things about `store/mongo.js` worth knowing before editing it:
+
+- **`_id` is the document's own id** wherever there is a natural unique key —
+  `sessions.id`, `messages.id`, `${sessionId}:${questionId}` for an answer.
+  Uniqueness is then the primary key's job, so an upsert cannot race and no
+  secondary index is needed to look one up. Every read projects `_id` away, so
+  callers see exactly what `memory.js` returns.
+- **Connecting is lazy**, so `createApp()` stays synchronous and one instance
+  holds one pool. A failed handshake is not cached — a DNS blip at boot would
+  otherwise poison a serverless instance for its whole life.
+- **`sessions.code` is not a unique index.** `shortCode()` is random and the
+  memory store lets a repeat overwrite the older entry rather than fail; a unique
+  index would turn a one-in-a-billion collision into a 500. Both stores answer
+  `findByCode` with the newest match instead.
+
+Indexes are created on first connect, and are idempotent:
+
+```js
+sessions:      { code: 1 }, { createdAt: -1 }
+answers:       { sessionId: 1 }
+messages:      { sessionId: 1, questionId: 1, seq: 1 }, { sessionId: 1, seq: 1 }
+events:        { sessionId: 1, at: 1 }, { type: 1 }
+ownQuestions:  { sessionId: 1, createdAt: 1 }
+uploads:       { sessionId: 1 }
+prompts:       { active: 1, _id: -1 }
+```
+
+### Ordering, and why `seq` moved
+
+`messages.seq` used to be a module-level counter in `routes/tutor.js`, which two
+instances would have handed out twice over. It is now allocated by the store from
+a per-session counter document (`counters`), and both numbers a request needs are
+taken in one round trip — a snippet is built from a student turn and the reply
+that answers it, so nothing may be numbered between them.
+
+`seq` therefore orders *within* a session, not globally. `listAll()` sorts by
+session, then question, then `seq`, and `buildSnippets` requires a pair to share
+both — otherwise an ask at the end of one group would pair with the reply at the
+start of the next. That was already reachable under concurrency with the global
+counter; it is now impossible.
+
+Uploads still land on local disk. GridFS or object storage is the remaining step.

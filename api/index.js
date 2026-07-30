@@ -14,9 +14,13 @@ import { createApp } from '../server/app.js'
  * makes nested paths work.
  *
  * Built once per instance rather than per request: Fluid Compute reuses warm
- * instances, so this is the cheap path. Note the consequence — the in-memory
- * store is per-instance and vanishes on recycle. See server/README.md before
- * pointing real students at a deployment.
+ * instances, so this is the cheap path, and the Mongo connection pool is shared
+ * by every request an instance serves rather than opened per invocation.
+ *
+ * `MONGODB_URI` has to be set in the project's environment settings for that
+ * store to be selected at all — it is a credential, so it is not in the
+ * committed `.env`. Uploads are still per-instance and do not survive; see
+ * server/README.md before pointing real students at a deployment.
  */
 const app = createApp()
 

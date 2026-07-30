@@ -14,8 +14,16 @@ export function buildSnippets(messages) {
     const ask = messages[i]
     const answer = messages[i + 1]
 
+    // Same session and question as well as the right shape. The list can span
+    // both — `listAll` covers every session, `listBySession` every question —
+    // and without this an ask at the end of one group would pair with the reply
+    // at the start of the next.
     const isPair =
-      ask.from === 'student' && answer.from === 'tutor' && answer.kind === 'reply'
+      ask.from === 'student' &&
+      answer.from === 'tutor' &&
+      answer.kind === 'reply' &&
+      ask.sessionId === answer.sessionId &&
+      ask.questionId === answer.questionId
 
     if (!isPair) continue
 

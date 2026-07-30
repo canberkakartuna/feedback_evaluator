@@ -2,9 +2,6 @@ import express from 'express'
 import { ACTIONS, reply, studentAsk } from '../services/tutor.js'
 import { badRequest, id, notFound, now, route } from '../lib/http.js'
 
-let seq = 0
-const nextSeq = () => (seq += 1)
-
 export function tutorRoutes(store, { resolveQuestion }) {
   const router = express.Router()
 
@@ -44,9 +41,14 @@ export function tutorRoutes(store, { resolveQuestion }) {
 
       const askText = action ? studentAsk(action, hintsUsed) : req.body.text.trim()
 
+      // Both numbers up front, and from the store: the pair is what a snippet
+      // is built from, so nothing may be numbered between them, and a
+      // process-local counter would repeat itself across instances.
+      const [askSeq, replySeq] = await store.messages.nextSeq(session.id, 2)
+
       const student = await store.messages.insert({
         id: id('msg'),
-        seq: nextSeq(),
+        seq: askSeq,
         sessionId: session.id,
         questionId: question.id,
         from: 'student',
@@ -66,7 +68,7 @@ export function tutorRoutes(store, { resolveQuestion }) {
 
       const tutor = await store.messages.insert({
         id: id('msg'),
-        seq: nextSeq(),
+        seq: replySeq,
         sessionId: session.id,
         questionId: question.id,
         from: 'tutor',

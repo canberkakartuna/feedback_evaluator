@@ -1,11 +1,14 @@
 /**
- * In-memory store, shaped like the MongoDB one that replaces it.
+ * In-memory store, shaped like the MongoDB one in store/mongo.js.
  *
  * Every method is async and every collection is keyed the way a Mongo
- * collection would be, so swapping this for a driver-backed implementation is
- * a change in store/index.js and nowhere else. Documents are cloned on the way
- * out, so callers cannot mutate stored state by accident — the same guarantee
- * a real database gives you for free.
+ * collection is, so which one is in use is a decision in store/index.js and
+ * nowhere else. Documents are cloned on the way out, so callers cannot mutate
+ * stored state by accident — the same guarantee a real database gives for free.
+ *
+ * Fine for local work and for the smoke test. Not fine anywhere more than one
+ * process serves requests: nothing here is shared, and it all goes when the
+ * process does.
  *
  * Collections: sessions, answers, messages, events, ownQuestions, uploads,
  * prompts, snippetLabels.
@@ -27,6 +30,7 @@ export function createMemoryStore() {
   const uploads = collection() // id -> upload metadata
   const prompts = []
   const snippetLabels = collection() // snippetId -> label
+  const seqs = collection() // sessionId -> last seq handed out
 
   const answerKey = (sessionId, questionId) => `${sessionId}:${questionId}`
 
@@ -90,6 +94,17 @@ export function createMemoryStore() {
     },
 
     messages: {
+      /**
+       * Counted per session, not globally, because that is what Mongo can do
+       * with a counter document — see store/mongo.js. `count` numbers are
+       * allocated at once so a student message and the reply that answers it
+       * stay adjacent.
+       */
+      async nextSeq(sessionId, count = 1) {
+        const first = (seqs.get(sessionId) ?? 0) + 1
+        seqs.set(sessionId, first + count - 1)
+        return Array.from({ length: count }, (_, i) => first + i)
+      },
       async insert(doc) {
         messages.set(doc.id, doc)
         return clone(doc)
@@ -117,12 +132,22 @@ export function createMemoryStore() {
           .map(clone)
       },
       async listAll() {
-        return [...messages.values()].sort((a, b) => a.seq - b.seq).map(clone)
+        // Grouped by session and question, not by raw seq: seq only orders
+        // within a session, and buildSnippets reads consecutive pairs.
+        return [...messages.values()]
+          .sort(
+            (a, b) =>
+              a.sessionId.localeCompare(b.sessionId) ||
+              a.questionId.localeCompare(b.questionId) ||
+              a.seq - b.seq,
+          )
+          .map(clone)
       },
       async removeBySession(sessionId) {
         for (const [id, value] of messages) {
           if (value.sessionId === sessionId) messages.delete(id)
         }
+        seqs.delete(sessionId)
       },
     },
 
