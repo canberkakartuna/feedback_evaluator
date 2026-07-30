@@ -10,9 +10,11 @@
  * process serves requests: nothing here is shared, and it all goes when the
  * process does.
  *
- * Collections: sessions, answers, messages, events, ownQuestions, uploads,
- * prompts, snippetLabels.
+ * Collections: users, authTokens, sessions, answers, messages, events,
+ * ownQuestions, uploads, prompts, snippetLabels.
  */
+
+import { DuplicateEmailError } from './errors.js'
 
 const clone = (value) => (value == null ? value : structuredClone(value))
 
@@ -20,7 +22,21 @@ function collection() {
   return new Map()
 }
 
+/**
+ * A filter that is absent matches everything, a string matches itself, and an
+ * array matches any of its members — the same three cases store/mongo.js gets
+ * for free from `$in`.
+ */
+const matches = (filter, value) => {
+  if (filter === undefined) return true
+  if (Array.isArray(filter)) return filter.includes(value)
+  return filter === value
+}
+
 export function createMemoryStore() {
+  const users = collection() // id -> user
+  const usersByEmail = collection() // email -> id
+  const authTokens = collection() // sha256(token) -> token record
   const sessions = collection()
   const sessionsByCode = collection()
   const answers = collection() // `${sessionId}:${questionId}` -> answer
@@ -36,6 +52,101 @@ export function createMemoryStore() {
 
   return {
     kind: 'memory',
+
+    users: {
+      async create(doc) {
+        if (usersByEmail.has(doc.email)) throw new DuplicateEmailError(doc.email)
+        users.set(doc.id, doc)
+        usersByEmail.set(doc.email, doc.id)
+        return clone(doc)
+      },
+      async findById(id) {
+        return clone(users.get(id) ?? null)
+      },
+      async findByEmail(email) {
+        const id = usersByEmail.get(String(email).trim().toLowerCase())
+        return id ? clone(users.get(id) ?? null) : null
+      },
+      async update(id, patch) {
+        const current = users.get(id)
+        if (!current) return null
+
+        if (patch.email !== undefined && patch.email !== current.email) {
+          const holder = usersByEmail.get(patch.email)
+          if (holder && holder !== id) throw new DuplicateEmailError(patch.email)
+          usersByEmail.delete(current.email)
+          usersByEmail.set(patch.email, id)
+        }
+
+        const next = { ...current, ...patch }
+        users.set(id, next)
+        return clone(next)
+      },
+      /**
+       * Every filter is optional and they combine, so one method covers "all
+       * students", "this teacher's students", "these teachers' students" and
+       * "everyone in scope". A roster reads best by name.
+       */
+      async list({ role, teacherId, managerId, ids, active, limit = 500 } = {}) {
+        return [...users.values()]
+          .filter(
+            (user) =>
+              matches(role, user.role) &&
+              matches(teacherId, user.teacherId ?? null) &&
+              matches(managerId, user.managerId ?? null) &&
+              matches(ids, user.id) &&
+              matches(active, user.active),
+          )
+          .sort((a, b) => a.name.localeCompare(b.name) || a.createdAt.localeCompare(b.createdAt))
+          .slice(0, limit)
+          .map(clone)
+      },
+      async count({ role, active } = {}) {
+        let total = 0
+        for (const user of users.values()) {
+          if (matches(role, user.role) && matches(active, user.active)) total += 1
+        }
+        return total
+      },
+      async remove(id) {
+        const current = users.get(id)
+        if (!current) return false
+        usersByEmail.delete(current.email)
+        users.delete(id)
+        return true
+      },
+    },
+
+    authTokens: {
+      async insert(doc) {
+        authTokens.set(doc.key, doc)
+        return clone(doc)
+      },
+      async find(key) {
+        return clone(authTokens.get(key) ?? null)
+      },
+      async touch(key, at) {
+        const current = authTokens.get(key)
+        if (!current) return null
+        const next = { ...current, lastUsedAt: at }
+        authTokens.set(key, next)
+        return clone(next)
+      },
+      async remove(key) {
+        return authTokens.delete(key)
+      },
+      /** Signing out everywhere: deactivation and a password change both do it. */
+      async removeByUser(userId) {
+        let removed = 0
+        for (const [key, value] of authTokens) {
+          if (value.userId === userId) {
+            authTokens.delete(key)
+            removed += 1
+          }
+        }
+        return removed
+      },
+    },
 
     sessions: {
       async create(doc) {
@@ -57,8 +168,9 @@ export function createMemoryStore() {
         sessions.set(id, next)
         return clone(next)
       },
-      async list({ limit = 100 } = {}) {
+      async list({ limit = 100, userId } = {}) {
         return [...sessions.values()]
+          .filter((session) => matches(userId, session.userId ?? null))
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
           .slice(0, limit)
           .map(clone)

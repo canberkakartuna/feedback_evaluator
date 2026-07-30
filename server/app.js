@@ -9,6 +9,9 @@ import { tutorRoutes } from './routes/tutor.js'
 import { uploadFileRoutes, uploadRoutes } from './routes/uploads.js'
 import { eventRoutes, ownQuestionRoutes, promptRoutes } from './routes/misc.js'
 import { researchRoutes } from './routes/research.js'
+import { authRoutes } from './routes/auth.js'
+import { userRoutes } from './routes/users.js'
+import { optionalAuth } from './lib/auth.js'
 import { ApiError, notFound, route } from './lib/http.js'
 
 export function createApp({ store = createStore() } = {}) {
@@ -45,6 +48,19 @@ export function createApp({ store = createStore() } = {}) {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0')
     next()
   })
+
+  /**
+   * Attaches `req.user` when the request carries a valid login token, and does
+   * nothing at all when it does not.
+   *
+   * Optional on purpose: most of this API is anonymous by design — a student can
+   * consent and work through a session without an account, and that has to keep
+   * being true. Routes that need an identity say so themselves with
+   * `requireAuth`. It also means the researcher endpoints, which send their own
+   * token on the same `Authorization` header, are unaffected: it matches no
+   * user, `req.user` stays null, and their own check runs.
+   */
+  app.use('/api', optionalAuth(store))
 
   /**
    * Every student route is scoped to a session and a question, so resolving
@@ -105,6 +121,22 @@ export function createApp({ store = createStore() } = {}) {
         warnings.push('RESEARCH_TOKEN is unset, so researcher endpoints are disabled.')
       }
 
+      /**
+       * Counting users is also the accounts readiness check. Zero means
+       * `POST /api/auth/bootstrap` is still open, and if no bootstrap token is
+       * configured it is open to whoever calls it first — which on a reachable
+       * deployment is a way in, not a convenience.
+       */
+      const users = database && !database.ok ? null : await store.users.count()
+
+      if (users === 0) {
+        warnings.push(
+          config.bootstrapToken
+            ? 'No users exist yet. POST /api/auth/bootstrap with the bootstrap token to create the first admin.'
+            : 'No users exist and no BOOTSTRAP_TOKEN (or RESEARCH_TOKEN) is set, so POST /api/auth/bootstrap will make an admin of whoever calls it first.',
+        )
+      }
+
       res.json({
         ok: true,
         ready: warnings.length === 0,
@@ -114,6 +146,7 @@ export function createApp({ store = createStore() } = {}) {
         databaseReachable: database ? database.ok : null,
         serverless: config.serverless,
         researchEnabled: Boolean(config.researchToken),
+        users,
         uptime: Math.round(process.uptime()),
         warnings,
       })
@@ -128,6 +161,8 @@ export function createApp({ store = createStore() } = {}) {
     }
   })
 
+  app.use('/api/auth', authRoutes(store))
+  app.use('/api/users', userRoutes(store))
   app.use('/api/sessions', sessionRoutes(store))
   app.use('/api/sessions', answerRoutes(store, deps))
   app.use('/api/sessions', tutorRoutes(store, deps))

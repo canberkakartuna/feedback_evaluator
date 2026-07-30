@@ -88,6 +88,22 @@ export const config = {
 
   consentVersion: process.env.CONSENT_VERSION ?? '2026-07-29.placeholder',
 
+  /** How long a login lasts. Presenting an older token re-authenticates nobody. */
+  authTokenTtlDays: Number(process.env.AUTH_TOKEN_TTL_DAYS ?? 30),
+
+  /**
+   * Guards the one route that can mint an admin out of nothing:
+   * `POST /api/auth/bootstrap`, which also requires that no user exists yet.
+   *
+   * Without this, an empty database is an open invitation — whoever calls first
+   * becomes the admin. It defaults to RESEARCH_TOKEN because that is already
+   * the operator secret for this deployment and one fewer value to manage; set
+   * BOOTSTRAP_TOKEN to separate the two. Unset both and bootstrap is open,
+   * which is what a bare local checkout wants and a deployment must not have —
+   * `GET /api/health` warns while that is the case.
+   */
+  bootstrapToken: process.env.BOOTSTRAP_TOKEN?.trim() || process.env.RESEARCH_TOKEN?.trim() || null,
+
   /**
    * MongoDB. Unset means the in-memory store: fine locally, and unsafe anywhere
    * more than one instance answers requests — see server/README.md.

@@ -40,6 +40,16 @@ export function sessionRoutes(store) {
         createdAt: now(),
         endedAt: null,
         topicId,
+        /**
+         * Null unless the request carried a login token.
+         *
+         * The link is optional because anonymous work has to keep working — this
+         * route is the consent record, and consent does not require an account.
+         * When there is an account, the session attaches to it, and that is what
+         * lets a teacher see their own students' work through
+         * `GET /api/users/:userId/sessions`.
+         */
+        userId: req.user?.id ?? null,
         consent: {
           given: true,
           at: now(),
@@ -52,7 +62,14 @@ export function sessionRoutes(store) {
       })
 
       await store.events.insertMany([
-        { id: id('evt'), sessionId: session.id, type: 'session_started', at: now(), payload: { topicId } },
+        {
+          id: id('evt'),
+          sessionId: session.id,
+          userId: session.userId,
+          type: 'session_started',
+          at: now(),
+          payload: { topicId, signedIn: Boolean(session.userId) },
+        },
       ])
 
       res.status(201).json({ session, course })

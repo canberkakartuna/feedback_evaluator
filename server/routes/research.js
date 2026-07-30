@@ -12,6 +12,12 @@ import { badRequest, forbidden, notFound, route, unavailable } from '../lib/http
  * env var exposes the whole study.
  */
 function requireResearcher(req) {
+  // "An admin can reach everything" — including this, without being handed the
+  // shared research token. Any other signed-in role falls through to the token
+  // check and, having no token, is refused: a teacher sees their own students
+  // through /api/users/:id/sessions, not everybody's through here.
+  if (req.user?.role === 'admin') return
+
   if (!config.researchToken) {
     throw unavailable(
       'Researcher endpoints are disabled. Set RESEARCH_TOKEN to enable them.',

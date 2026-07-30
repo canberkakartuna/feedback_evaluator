@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb'
+import { DuplicateEmailError } from './errors.js'
 
 /**
  * MongoDB-backed store.
@@ -62,7 +63,16 @@ export function databaseName(uri, explicit) {
  * stores answer findByCode with the newest match instead.
  */
 const INDEXES = {
-  sessions: [{ code: 1 }, { createdAt: -1 }],
+  // `[keys, options]` where an index needs options; bare keys otherwise.
+  //
+  // `users.email` is the one genuinely unique thing in the schema, and this
+  // index is what makes it so — a check-then-insert in a handler is two round
+  // trips with a gap in the middle, and two simultaneous sign-ups would both
+  // pass it. `users.create` turns the resulting 11000 into a DuplicateEmailError,
+  // which routes/users.js reports as a 409.
+  users: [[{ email: 1 }, { unique: true }], { role: 1, name: 1 }, { teacherId: 1 }, { managerId: 1 }],
+  authTokens: [{ userId: 1 }],
+  sessions: [{ code: 1 }, { createdAt: -1 }, { userId: 1, createdAt: -1 }],
   answers: [{ sessionId: 1 }],
   messages: [{ sessionId: 1, questionId: 1, seq: 1 }, { sessionId: 1, seq: 1 }],
   events: [{ sessionId: 1, at: 1 }, { type: 1 }],
@@ -79,17 +89,27 @@ const counterKey = (sessionId) => `seq:${sessionId}`
 
 async function ensureIndexes(db) {
   await Promise.all(
-    Object.entries(INDEXES).flatMap(([name, keys]) =>
-      keys.map((spec) =>
-        db
+    Object.entries(INDEXES).flatMap(([name, entries]) =>
+      entries.map((entry) => {
+        const [spec, options] = Array.isArray(entry) ? entry : [entry, undefined]
+        return db
           .collection(name)
-          .createIndex(spec)
+          .createIndex(spec, options ?? {})
           .catch((error) => {
-            // Worth knowing about, not worth refusing to serve over: the
-            // queries still work, they are just slower than they should be.
-            console.warn(`[api] index on ${name} ${JSON.stringify(spec)}: ${error.message}`)
-          }),
-      ),
+            // A plain index failing is worth knowing about but not worth
+            // refusing to serve over: the queries still work, just slower. A
+            // *unique* index failing is different — it is a constraint, not an
+            // optimisation — so say so in a way that stands out in a log.
+            const label = `${name} ${JSON.stringify(spec)}`
+            if (options?.unique) {
+              console.error(
+                `[api] UNIQUE index on ${label} could not be created: ${error.message} — duplicates are now possible`,
+              )
+            } else {
+              console.warn(`[api] index on ${label}: ${error.message}`)
+            }
+          })
+      }),
     ),
   )
 }
@@ -137,6 +157,104 @@ export function createMongoStore({ uri, dbName } = {}) {
       await client.close()
     },
 
+    users: {
+      async create(doc) {
+        try {
+          await (await col('users')).insertOne({ _id: doc.id, ...doc })
+        } catch (error) {
+          // 11000 is a unique-index violation, and `email` is the only unique
+          // index on the collection.
+          if (error?.code === 11000) throw new DuplicateEmailError(doc.email)
+          throw error
+        }
+        return doc
+      },
+      async findById(id) {
+        return (await col('users')).findOne({ _id: id }, BARE)
+      },
+      async findByEmail(email) {
+        return (await col('users')).findOne({ email: String(email).trim().toLowerCase() }, BARE)
+      },
+      async update(id, patch) {
+        try {
+          return await (
+            await col('users')
+          ).findOneAndUpdate({ _id: id }, { $set: patch }, { ...BARE, returnDocument: 'after' })
+        } catch (error) {
+          if (error?.code === 11000) throw new DuplicateEmailError(patch.email)
+          throw error
+        }
+      },
+      /**
+       * Every filter is optional and they combine, so one method covers "all
+       * students", "this teacher's students", "these teachers' students" and
+       * "everyone in scope". A roster reads best by name.
+       */
+      async list({ role, teacherId, managerId, ids, active, limit = 500 } = {}) {
+        const filter = {}
+        const where = (field, value) => {
+          if (value === undefined) return
+          filter[field] = Array.isArray(value) ? { $in: value } : value
+        }
+
+        where('role', role)
+        where('teacherId', teacherId)
+        where('managerId', managerId)
+        where('_id', ids)
+        where('active', active)
+
+        return (await col('users'))
+          .find(filter, { ...BARE, sort: { name: 1, createdAt: 1 }, limit })
+          .toArray()
+      },
+      async count({ role, active } = {}) {
+        const filter = {}
+        if (role !== undefined) filter.role = Array.isArray(role) ? { $in: role } : role
+        if (active !== undefined) filter.active = active
+        return (await col('users')).countDocuments(filter)
+      },
+      async remove(id) {
+        const { deletedCount } = await (await col('users')).deleteOne({ _id: id })
+        return deletedCount > 0
+      },
+    },
+
+    /**
+     * Login tokens, keyed by SHA-256 of the token — see lib/auth.js for why the
+     * token itself is never stored.
+     *
+     * There is no TTL index. `expiresAt` is an ISO string like every other
+     * timestamp in this schema, and a Mongo TTL index needs a BSON date; adding
+     * a second date field only for the index would be one more thing to keep in
+     * step. Expiry is checked on use and an expired token deletes itself then,
+     * so anything left behind is a token nobody ever presented again.
+     */
+    authTokens: {
+      async insert(doc) {
+        await (await col('authTokens')).insertOne({ _id: doc.key, ...doc })
+        return doc
+      },
+      async find(key) {
+        return (await col('authTokens')).findOne({ _id: key }, BARE)
+      },
+      async touch(key, at) {
+        return (await col('authTokens')).findOneAndUpdate(
+          { _id: key },
+          { $set: { lastUsedAt: at } },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async remove(key) {
+        const { deletedCount } = await (await col('authTokens')).deleteOne({ _id: key })
+        return deletedCount > 0
+      },
+      /** Signing out everywhere: deactivation and a password change both do it. */
+      async removeByUser(userId) {
+        const { deletedCount } = await (await col('authTokens')).deleteMany({ userId })
+        return deletedCount
+      },
+    },
+
     sessions: {
       async create(doc) {
         await (await col('sessions')).insertOne({ _id: doc.id, ...doc })
@@ -160,9 +278,13 @@ export function createMongoStore({ uri, dbName } = {}) {
           { ...BARE, returnDocument: 'after' },
         )
       },
-      async list({ limit = 100 } = {}) {
+      async list({ limit = 100, userId } = {}) {
+        const filter = {}
+        if (userId !== undefined) {
+          filter.userId = Array.isArray(userId) ? { $in: userId } : userId
+        }
         return (await col('sessions'))
-          .find({}, { ...BARE, sort: { createdAt: -1 }, limit })
+          .find(filter, { ...BARE, sort: { createdAt: -1 }, limit })
           .toArray()
       },
       async remove(id) {

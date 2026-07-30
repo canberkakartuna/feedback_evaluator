@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (76 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (78)
+npm run test:api         # end-to-end check over real HTTP, in-memory (167 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (169)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
@@ -54,6 +54,8 @@ the client and the API never disagree about which value won.
 | `UPLOAD_DIR` | `server/.uploads`, or the temp dir when serverless | Photos and whiteboard exports |
 | `MAX_UPLOAD_BYTES` | `10485760` | 10 MB per file |
 | `RESEARCH_TOKEN` | *unset* | **Researcher endpoints return 503 until this is set.** No default on purpose — these read every student's transcript. |
+| `AUTH_TOKEN_TTL_DAYS` | `30` | How long a login lasts. |
+| `BOOTSTRAP_TOKEN` | falls back to `RESEARCH_TOKEN` | Guards `POST /api/auth/bootstrap`. **Set one of the two before deploying** — with neither, whoever calls that route first on an empty database becomes the admin. |
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
@@ -65,6 +67,109 @@ the client and the API never disagree about which value won.
 - **The mark scheme.** `GET /api/course` never returns rubric keywords or tutor scripts. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
+- **Who can see whom.** Roles and the hierarchy are enforced in `services/users.js`, not in the client. See [Users, roles and the hierarchy](#users-roles-and-the-hierarchy).
+
+## Users, roles and the hierarchy
+
+Four roles, and one edge type between them. `shared/roles.js` is where the shape
+is written down; `services/users.js` is where it is enforced.
+
+```
+admin  ─ sees and does everything, including /api/research/*
+  │
+manager ─ has many teachers, and through them their students
+  │
+teacher ─ has many students
+  │
+student ─ sees only themselves
+```
+
+**The hierarchy is a pointer from child to parent.** A student holds `teacherId`,
+a teacher holds `managerId`. One source of truth per edge, so moving a student
+between teachers is a single write — no roster array to keep in step, and no way
+to end up on two of them because the second write failed.
+
+| Role | Can create | Can see |
+| --- | --- | --- |
+| `admin` | anyone | everyone |
+| `manager` | teachers, and students under their own teachers | self + their teachers + those teachers' students |
+| `teacher` | students, on their own roster | self + their own students |
+| `student` | nobody | self |
+
+Rules worth knowing before building against this:
+
+- **Out of scope reads as 404, not 403.** That an id exists at all is not
+  something one teacher should learn from another's roster.
+- **A query cannot widen scope.** `GET /api/users?teacherId=` filters *within*
+  what the caller can already see, so pointing it at someone else's roster
+  returns nothing rather than leaking it.
+- **A teacher creating a student may omit `teacherId`** — themselves is the only
+  answer available to them. An admin may leave it `null`, meaning "on nobody's
+  roster yet".
+- **Nobody administers themselves.** `name` and `email` are yours to change;
+  `active`, `role` and the parent pointer need authority over the target, and the
+  last active admin cannot demote themselves out of the system.
+- **Deactivate, don't delete.** `PATCH { active: false }` revokes every live
+  token immediately and keeps the person's work attributable. `DELETE` is refused
+  when they still have people under them, when they have recorded work sessions,
+  or when they are the caller — deleting a student is not consent withdrawal, and
+  `DELETE /api/sessions/:id` is.
+
+### Authentication
+
+Email and password. The password is hashed with `node:crypto`'s **scrypt** —
+memory-hard, no dependency — and the stored string carries its own parameters
+(`scrypt$16384$8$1$salt$key`), so raising the cost later does not lock anyone out.
+
+Login returns an opaque bearer token. **The database stores only its SHA-256**,
+so a stolen dump grants nobody a session. Plain SHA-256 is right here and scrypt
+would not be: the token is 32 random bytes, so there is no low-entropy secret to
+slow an attacker down over.
+
+Authentication is **optional at the door and required at the route**
+(`lib/auth.js`). Most of this API is anonymous by design — a student can consent
+and work through a session without an account, and that keeps working. This is
+also why the researcher endpoints are unaffected: they send their own token on
+the same `Authorization` header, it matches no user, `req.user` stays null, and
+their own check runs.
+
+### The first admin
+
+Every user is created by someone who already has an account, which leaves one
+hole: the empty database. `POST /api/auth/bootstrap` fills it, and is closed by
+two conditions — **no user exists**, and **the bootstrap token matches** when one
+is configured. Once any user exists the route is permanently shut.
+
+```bash
+curl -X POST localhost:4000/api/auth/bootstrap \
+  -H "authorization: Bearer $RESEARCH_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"name":"Root","email":"root@example.com","password":"a long passphrase"}'
+```
+
+### Auth endpoints
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/auth/bootstrap` | The first admin. Needs the bootstrap token; refused once any user exists |
+| `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token, expiresAt }`. A wrong password and an unknown address answer identically, and take the same time to |
+| `GET` | `/api/auth/me` | The signed-in user |
+| `POST` | `/api/auth/logout` | Revokes the calling token. Other devices stay signed in |
+| `POST` | `/api/auth/password` | `{ currentPassword, newPassword }`. Revokes every other token and returns a fresh one |
+
+### User endpoints
+
+All require `Authorization: Bearer <login token>`.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/users` | `{ role, name, email, password, teacherId?/managerId? }` → 201. 409 on a duplicate email |
+| `GET` | `/api/users` | Everyone in scope. `?role=&teacherId=&managerId=&active=` narrow it |
+| `GET` | `/api/users/:userId` | 404 when out of scope |
+| `PATCH` | `/api/users/:userId` | `{ name?, email?, active?, role?, teacherId?/managerId? }`. `role` is admin-only |
+| `POST` | `/api/users/:userId/password` | `{ newPassword }` — a reset for someone you administer. Revokes their sessions |
+| `DELETE` | `/api/users/:userId` | Refused with 409 when it would orphan a roster or destroy recorded work |
+| `GET` | `/api/users/:userId/sessions` | A student's work sessions with counts — how a teacher checks on their own students without the researcher token |
 
 ## Student endpoints
 
@@ -73,7 +178,7 @@ the client and the API never disagree about which value won.
 | `GET` | `/api/health` | |
 | `GET` | `/api/course?topicId=` | Sanitised. `topicId` defaults to `all` |
 | `GET` | `/api/sessions/topics` | For the entry screen |
-| `POST` | `/api/sessions` | `{ consent: true, topicId?, device?, conditionId? }` → `{ session, course }`. **400 without consent** |
+| `POST` | `/api/sessions` | `{ consent: true, topicId?, device?, conditionId? }` → `{ session, course }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
 | `GET` | `/api/sessions/:id` | Resume: session, course, answers, messages, own questions |
 | `GET` | `/api/sessions/by-code/:code` | Attach a phone to a session (doc item 3) |
 | `POST` | `/api/sessions/:id/end` | |
@@ -94,7 +199,11 @@ the client and the API never disagree about which value won.
 
 ## Researcher endpoints
 
-`Authorization: Bearer $RESEARCH_TOKEN` (or `X-Research-Token`).
+`Authorization: Bearer $RESEARCH_TOKEN` (or `X-Research-Token`) — **or a signed-in
+admin's login token**, since an admin reaches everything and should not need the
+shared token to do it. Any other role falls through to the token check and is
+refused: a teacher sees their own students through
+`GET /api/users/:userId/sessions`, not everybody through here.
 
 | Method | Path | Notes |
 | --- | --- | --- |
@@ -115,7 +224,11 @@ timestamps, not states worth a request each.
 `session_started` · `session_ended` · `question_shown` · `answer_saved` ·
 `answer_checked` · `student_marked_question` · `student_message_sent` ·
 `student_requested_help` · `ai_feedback_shown` · `student_rated_feedback` ·
-`student_uploaded_image` · `student_added_own_question`
+`student_uploaded_image` · `student_added_own_question` · `user_signed_in` ·
+`user_created`
+
+The last two are account events rather than session telemetry, so they carry
+`userId` and a `sessionId` of `null`.
 
 Server time is authoritative; a client-supplied `at` is kept as `clientAt`.
 
@@ -133,7 +246,9 @@ vercel --prod
 ```
 
 Set `RESEARCH_TOKEN` and `MONGODB_URI` in project settings — not in `.env`; see
-[Environment](#environment).
+[Environment](#environment). Then create the first admin with
+`POST /api/auth/bootstrap`; `GET /api/health` reports `ready: false` while no user
+exists.
 
 ### One thing still assumes a single long-lived process
 
@@ -147,6 +262,14 @@ one request may be gone on the next. Replace the `fs` calls in
 `routes/uploads.js` with Vercel Blob (`npm i @vercel/blob`, private store) or
 GridFS, and keep serving bytes through `/api/uploads/:id` so the client contract
 does not change.
+
+**`POST /api/auth/login` is not rate-limited.** scrypt makes each attempt cost
+about 60 ms of CPU, which is a brake on guessing but not a lock. Nothing here
+counts failures, and a per-instance counter would not be one on a serverless host
+where the next attempt may land elsewhere — it needs shared state (a
+`loginAttempts` collection keyed by email and IP, or Vercel Firewall rate-limiting
+on the path). Worth doing before this is open to the internet with real accounts
+in it.
 
 Sessions themselves now survive. The failure this section used to describe —
 
@@ -169,7 +292,7 @@ created ses_36be25e02cd2439fa4c2 (code P4796G) in process 94330
 `store/index.js` is the only place that knows which one is in use: MongoDB when
 `MONGODB_URI` is set, in-memory when it is not. Both expose the same async
 methods, collection for collection — `sessions`, `answers`, `messages`, `events`,
-`ownQuestions`, `uploads`, `prompts`, `snippetLabels` — so nothing in `routes/`
+`ownQuestions`, `uploads`, `prompts`, `snippetLabels`, `users`, `authTokens` — so nothing in `routes/`
 or `services/` knows the difference. `npm run test:api:mongo` runs the whole
 smoke suite against Mongo to keep that true.
 
@@ -193,10 +316,24 @@ Three things about `store/mongo.js` worth knowing before editing it:
   index would turn a one-in-a-billion collision into a 500. Both stores answer
   `findByCode` with the newest match instead.
 
+`users.email` is the exception to that last point, and deliberately **is**
+unique: a duplicate address is a real error, not a coincidence, and a
+check-then-insert in a handler is two round trips with a gap two simultaneous
+sign-ups would both pass. `users.create` turns the driver's 11000 into a
+`DuplicateEmailError`, the memory store raises the same thing from its own email
+index, and `routes/users.js` reports either as a 409.
+
+`authTokens` has no TTL index. `expiresAt` is an ISO string like every other
+timestamp here and a Mongo TTL index needs a BSON date; expiry is checked on use
+and an expired token deletes itself then, so what is left behind is only tokens
+nobody presented again.
+
 Indexes are created on first connect, and are idempotent:
 
 ```js
-sessions:      { code: 1 }, { createdAt: -1 }
+users:         { email: 1 } UNIQUE, { role: 1, name: 1 }, { teacherId: 1 }, { managerId: 1 }
+authTokens:    { userId: 1 }
+sessions:      { code: 1 }, { createdAt: -1 }, { userId: 1, createdAt: -1 }
 answers:       { sessionId: 1 }
 messages:      { sessionId: 1, questionId: 1, seq: 1 }, { sessionId: 1, seq: 1 }
 events:        { sessionId: 1, at: 1 }, { type: 1 }

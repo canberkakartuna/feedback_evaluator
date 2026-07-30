@@ -23,6 +23,9 @@ process.env.RESEARCH_TOKEN = 'smoke-token'
 const { config } = await import('./config.js')
 config.uploadDir = uploadDir
 config.researchToken = 'smoke-token'
+// Set explicitly rather than left to fall back to the research token, so a
+// BOOTSTRAP_TOKEN in a local .env cannot change what these assertions mean.
+config.bootstrapToken = 'smoke-token'
 
 /**
  * Which store to run against, decided here rather than inherited.
@@ -355,6 +358,448 @@ try {
   check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))
   const badSession = await call('GET', '/api/sessions/ses_missing')
   check('unknown session is 404', badSession.status === 404)
+
+  /**
+   * Accounts and the hierarchy.
+   *
+   * Deliberately last: everything above runs with no accounts at all, which is
+   * the anonymous path this must not break. The counts asserted in the
+   * researcher block would also shift if a signed-in session were created
+   * before them.
+   */
+  console.log('\nbootstrap')
+  const noUsersYet = await call('GET', '/api/health')
+  check('health reports no users', noUsersYet.body.users === 0)
+
+  const openBootstrap = await call('POST', '/api/auth/bootstrap', {
+    body: { name: 'Root', email: 'root@example.com', password: 'correct horse battery' },
+  })
+  check('bootstrap needs the bootstrap token', openBootstrap.status === 403)
+
+  const weak = await call('POST', '/api/auth/bootstrap', {
+    token: 'smoke-token',
+    body: { name: 'Root', email: 'root@example.com', password: 'short' },
+  })
+  check('short password rejected', weak.status === 400)
+
+  const notEmail = await call('POST', '/api/auth/bootstrap', {
+    token: 'smoke-token',
+    body: { name: 'Root', email: 'not-an-email', password: 'correct horse battery' },
+  })
+  check('malformed email rejected', notEmail.status === 400)
+
+  const boot = await call('POST', '/api/auth/bootstrap', {
+    token: 'smoke-token',
+    body: { name: 'Root', email: 'Root@Example.com ', password: 'correct horse battery' },
+  })
+  check('first admin created', boot.status === 201 && boot.body.user.role === 'admin')
+  check('email normalised', boot.body.user.email === 'root@example.com')
+  check('bootstrap signs the admin in', typeof boot.body.token === 'string')
+  check('password hash never returned', !JSON.stringify(boot.body).includes('scrypt'))
+  const adminToken = boot.body.token
+  const admin = boot.body.user
+
+  const again = await call('POST', '/api/auth/bootstrap', {
+    token: 'smoke-token',
+    body: { name: 'Second', email: 'second@example.com', password: 'correct horse battery' },
+  })
+  check('bootstrap closes once a user exists', again.status === 403)
+
+  console.log('\nsign in')
+  const wrongPassword = await call('POST', '/api/auth/login', {
+    body: { email: 'root@example.com', password: 'wrong password here' },
+  })
+  check('wrong password is 401', wrongPassword.status === 401)
+
+  const unknownEmail = await call('POST', '/api/auth/login', {
+    body: { email: 'nobody@example.com', password: 'wrong password here' },
+  })
+  check('unknown email answers the same way', unknownEmail.status === 401)
+  check(
+    'login does not say which was wrong',
+    wrongPassword.body.error.message === unknownEmail.body.error.message,
+  )
+
+  const login = await call('POST', '/api/auth/login', {
+    body: { email: 'root@example.com', password: 'correct horse battery' },
+  })
+  check('login returns a token', login.status === 200 && typeof login.body.token === 'string')
+  check('login records lastLoginAt', typeof login.body.user.lastLoginAt === 'string')
+
+  const anonymousMe = await call('GET', '/api/auth/me')
+  check('me needs a token', anonymousMe.status === 401)
+  const badTokenMe = await call('GET', '/api/auth/me', { token: 'not-a-real-token' })
+  check('an invalid token is 401, not a 500', badTokenMe.status === 401)
+  const me = await call('GET', '/api/auth/me', { token: adminToken })
+  check('me returns the signed-in user', me.body.user.id === admin.id)
+  check('me hides the password hash', me.body.user.passwordHash === undefined)
+
+  console.log('\nbuilding the hierarchy')
+  const manager = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'manager', name: 'Mo Manager', email: 'mo@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  check('admin creates a manager', manager?.role === 'manager')
+
+  const managerLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'mo@example.com', password: 'correct horse battery' },
+  })
+  const managerToken = managerLogin.body.token
+
+  const teacher = (
+    await call('POST', '/api/users', {
+      token: managerToken,
+      body: { role: 'teacher', name: 'Tia Teacher', email: 'tia@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  check('manager creates a teacher under themselves', teacher.managerId === manager.id)
+
+  const teacherLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'tia@example.com', password: 'correct horse battery' },
+  })
+  const teacherToken = teacherLogin.body.token
+
+  const student = (
+    await call('POST', '/api/users', {
+      token: teacherToken,
+      body: { role: 'student', name: 'Sam Student', email: 'sam@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  check('teacher creates a student under themselves', student.teacherId === teacher.id)
+  check('a student has no manager pointer', student.managerId === null)
+
+  // A second branch of the tree, to prove the scoping actually excludes things.
+  const otherTeacher = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: {
+        role: 'teacher',
+        name: 'Ada Other',
+        email: 'ada@example.com',
+        password: 'correct horse battery',
+        managerId: manager.id,
+      },
+    })
+  ).body.user
+  const otherStudent = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: {
+        role: 'student',
+        name: 'Zed Other',
+        email: 'zed@example.com',
+        password: 'correct horse battery',
+        teacherId: otherTeacher.id,
+      },
+    })
+  ).body.user
+  check('admin can create anywhere in the tree', otherStudent.teacherId === otherTeacher.id)
+
+  const unassigned = await call('POST', '/api/users', {
+    token: adminToken,
+    body: { role: 'student', name: 'Una Unassigned', email: 'una@example.com', password: 'correct horse battery' },
+  })
+  check('admin may leave a student unassigned', unassigned.body.user.teacherId === null)
+
+  console.log('\nwho can create whom')
+  const studentLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'sam@example.com', password: 'correct horse battery' },
+  })
+  let studentToken = studentLogin.body.token
+
+  const studentCreates = await call('POST', '/api/users', {
+    token: studentToken,
+    body: { role: 'student', name: 'Nope', email: 'nope@example.com', password: 'correct horse battery' },
+  })
+  check('a student creates nobody', studentCreates.status === 403)
+
+  const teacherMakesTeacher = await call('POST', '/api/users', {
+    token: teacherToken,
+    body: { role: 'teacher', name: 'Nope', email: 'nope@example.com', password: 'correct horse battery' },
+  })
+  check('a teacher cannot create a teacher', teacherMakesTeacher.status === 403)
+
+  const managerMakesManager = await call('POST', '/api/users', {
+    token: managerToken,
+    body: { role: 'manager', name: 'Nope', email: 'nope@example.com', password: 'correct horse battery' },
+  })
+  check('a manager cannot staff their own layer', managerMakesManager.status === 403)
+
+  const badRole = await call('POST', '/api/users', {
+    token: adminToken,
+    body: { role: 'headmaster', name: 'Nope', email: 'nope@example.com', password: 'correct horse battery' },
+  })
+  check('unknown role rejected', badRole.status === 400)
+
+  const wrongParentRole = await call('POST', '/api/users', {
+    token: adminToken,
+    body: {
+      role: 'student',
+      name: 'Nope',
+      email: 'nope@example.com',
+      password: 'correct horse battery',
+      teacherId: manager.id,
+    },
+  })
+  check('a student cannot be parented to a manager', wrongParentRole.status === 400)
+
+  const parentedAdmin = await call('POST', '/api/users', {
+    token: adminToken,
+    body: {
+      role: 'admin',
+      name: 'Nope',
+      email: 'nope@example.com',
+      password: 'correct horse battery',
+      teacherId: teacher.id,
+    },
+  })
+  check('a role with no parent slot cannot be given one', parentedAdmin.status === 400)
+
+  const duplicate = await call('POST', '/api/users', {
+    token: adminToken,
+    body: { role: 'student', name: 'Clone', email: 'sam@example.com', password: 'correct horse battery' },
+  })
+  check('duplicate email is 409', duplicate.status === 409)
+
+  const poached = await call('POST', '/api/users', {
+    token: teacherToken,
+    body: {
+      role: 'student',
+      name: 'Nope',
+      email: 'nope@example.com',
+      password: 'correct horse battery',
+      teacherId: otherTeacher.id,
+    },
+  })
+  check("a teacher cannot fill another teacher's roster", poached.status === 403)
+
+  console.log('\nscope')
+  const adminList = await call('GET', '/api/users', { token: adminToken })
+  check('admin sees everyone', adminList.body.users.length === 7)
+  check('admin scope reported as all', adminList.body.scope === 'all')
+
+  const managerList = await call('GET', '/api/users', { token: managerToken })
+  const managerIds = managerList.body.users.map((u) => u.id)
+  check('manager sees self, teachers and their students', managerList.body.users.length === 5)
+  check('manager sees both their teachers', managerIds.includes(teacher.id) && managerIds.includes(otherTeacher.id))
+  check('manager does not see the admin', !managerIds.includes(admin.id))
+  check('manager does not see an unassigned student', !managerIds.includes(unassigned.body.user.id))
+
+  const teacherList = await call('GET', '/api/users', { token: teacherToken })
+  const teacherIds = teacherList.body.users.map((u) => u.id)
+  check('teacher sees self and own students only', teacherList.body.users.length === 2)
+  check("teacher does not see another teacher's student", !teacherIds.includes(otherStudent.id))
+
+  const studentList = await call('GET', '/api/users', { token: studentToken })
+  check('student sees only themselves', studentList.body.users.length === 1)
+  check('and it is themselves', studentList.body.users[0].id === student.id)
+
+  const filtered = await call(`GET`, `/api/users?role=student&teacherId=${teacher.id}`, {
+    token: managerToken,
+  })
+  check('roster can be filtered', filtered.body.users.length === 1)
+
+  const poachByQuery = await call(`GET`, `/api/users?teacherId=${otherTeacher.id}`, {
+    token: teacherToken,
+  })
+  check('a query cannot widen scope', poachByQuery.body.users.length === 0)
+
+  const readOther = await call('GET', `/api/users/${otherStudent.id}`, { token: teacherToken })
+  check('out of scope reads as 404, not 403', readOther.status === 404)
+  const readOwn = await call('GET', `/api/users/${student.id}`, { token: teacherToken })
+  check('own student is readable', readOwn.body.user.id === student.id)
+  const readUp = await call('GET', `/api/users/${admin.id}`, { token: studentToken })
+  check('a student cannot read the admin', readUp.status === 404)
+
+  console.log('\nsessions belong to the student who was signed in')
+  const anonSession = await call('POST', '/api/sessions', { body: { consent: true } })
+  check('anonymous sessions still work', anonSession.body.session.userId === null)
+
+  const ownedSession = await call('POST', '/api/sessions', {
+    token: studentToken,
+    body: { consent: true, topicId: 'transport' },
+  })
+  check('a signed-in session is linked', ownedSession.body.session.userId === student.id)
+
+  const teacherSees = await call('GET', `/api/users/${student.id}/sessions`, { token: teacherToken })
+  check("teacher sees their student's sessions", teacherSees.body.sessions.length === 1)
+  check('with counts attached', teacherSees.body.sessions[0].counts.messages === 0)
+  const teacherPries = await call('GET', `/api/users/${otherStudent.id}/sessions`, {
+    token: teacherToken,
+  })
+  check("teacher cannot see another teacher's student's sessions", teacherPries.status === 404)
+  const managerSees = await call('GET', `/api/users/${student.id}/sessions`, { token: managerToken })
+  check('manager reaches through the teacher', managerSees.body.sessions.length === 1)
+
+  console.log('\nediting, reassigning, deactivating')
+  const renamed = await call('PATCH', `/api/users/${student.id}`, {
+    token: studentToken,
+    body: { name: 'Samantha Student' },
+  })
+  check('a student may rename themselves', renamed.body.user.name === 'Samantha Student')
+
+  const selfPromote = await call('PATCH', `/api/users/${student.id}`, {
+    token: studentToken,
+    body: { role: 'admin' },
+  })
+  check('a student cannot promote themselves', selfPromote.status === 403)
+
+  const selfDeactivate = await call('PATCH', `/api/users/${student.id}`, {
+    token: studentToken,
+    body: { active: false },
+  })
+  check('nobody deactivates their own account', selfDeactivate.status === 400)
+
+  const selfDemote = await call('PATCH', `/api/users/${admin.id}`, {
+    token: adminToken,
+    body: { role: 'manager' },
+  })
+  check('the last admin cannot demote themselves', selfDemote.status === 400)
+
+  const moved = await call('PATCH', `/api/users/${student.id}`, {
+    token: managerToken,
+    body: { teacherId: otherTeacher.id },
+  })
+  check('manager moves a student between their teachers', moved.body.user.teacherId === otherTeacher.id)
+  const afterMove = await call('GET', `/api/users/${student.id}`, { token: teacherToken })
+  check('the old teacher loses sight of them', afterMove.status === 404)
+
+  const movedBack = await call('PATCH', `/api/users/${student.id}`, {
+    token: adminToken,
+    body: { teacherId: teacher.id },
+  })
+  check('and can be moved back', movedBack.body.user.teacherId === teacher.id)
+
+  const promoted = await call('PATCH', `/api/users/${unassigned.body.user.id}`, {
+    token: adminToken,
+    body: { role: 'teacher', managerId: manager.id },
+  })
+  check('admin changes a role', promoted.body.user.role === 'teacher')
+  check('the stale pointer is cleared', promoted.body.user.teacherId === null)
+  check('and the new one is set', promoted.body.user.managerId === manager.id)
+
+  const nothing = await call('PATCH', `/api/users/${student.id}`, { token: adminToken, body: {} })
+  check('an empty patch is rejected', nothing.status === 400)
+
+  console.log('\npasswords')
+  const wrongCurrent = await call('POST', '/api/auth/password', {
+    token: studentToken,
+    body: { currentPassword: 'not it at all', newPassword: 'a whole new password' },
+  })
+  check('changing a password needs the current one', wrongCurrent.status === 403)
+
+  const changed = await call('POST', '/api/auth/password', {
+    token: studentToken,
+    body: { currentPassword: 'correct horse battery', newPassword: 'a whole new password' },
+  })
+  check('password changed', changed.body.changed === true)
+  const staleToken = await call('GET', '/api/auth/me', { token: studentToken })
+  check('a password change signs out the old token', staleToken.status === 401)
+  studentToken = changed.body.token
+  check('and hands back a working one', (await call('GET', '/api/auth/me', { token: studentToken })).status === 200)
+
+  const selfReset = await call('POST', `/api/users/${student.id}/password`, {
+    token: studentToken,
+    body: { newPassword: 'trying to skip the check' },
+  })
+  check('the reset route is not a way around the current password', selfReset.status === 400)
+
+  const reset = await call('POST', `/api/users/${student.id}/password`, {
+    token: teacherToken,
+    body: { newPassword: 'teacher set this one' },
+  })
+  check('teacher resets their student', reset.body.reset === true)
+  check('the reset revoked their sessions', reset.body.sessionsRevoked === 1)
+  check(
+    'the old password stops working',
+    (
+      await call('POST', '/api/auth/login', {
+        body: { email: 'sam@example.com', password: 'a whole new password' },
+      })
+    ).status === 401,
+  )
+  const reLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'sam@example.com', password: 'teacher set this one' },
+  })
+  check('the new one works', reLogin.status === 200)
+  studentToken = reLogin.body.token
+
+  const strangerReset = await call('POST', `/api/users/${otherStudent.id}/password`, {
+    token: teacherToken,
+    body: { newPassword: 'not your student' },
+  })
+  check("a teacher cannot reset another teacher's student", strangerReset.status === 404)
+
+  console.log('\nsigning out and deactivating')
+  const signedOut = await call('POST', '/api/auth/logout', { token: studentToken })
+  check('logout succeeds', signedOut.body.signedOut === true)
+  check(
+    'the token stops working',
+    (await call('GET', '/api/auth/me', { token: studentToken })).status === 401,
+  )
+
+  const backIn = await call('POST', '/api/auth/login', {
+    body: { email: 'sam@example.com', password: 'teacher set this one' },
+  })
+  studentToken = backIn.body.token
+
+  const deactivated = await call('PATCH', `/api/users/${student.id}`, {
+    token: teacherToken,
+    body: { active: false },
+  })
+  check('teacher deactivates their student', deactivated.body.user.active === false)
+  check(
+    'deactivation revokes live tokens immediately',
+    (await call('GET', '/api/auth/me', { token: studentToken })).status === 401,
+  )
+  const deactivatedLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'sam@example.com', password: 'teacher set this one' },
+  })
+  check('a deactivated account cannot sign in', deactivatedLogin.status === 403)
+
+  console.log('\ndeleting is deliberately hard')
+  const deleteSelf = await call('DELETE', `/api/users/${admin.id}`, { token: adminToken })
+  check('you cannot delete yourself', deleteSelf.status === 400)
+
+  const deleteWithStudents = await call('DELETE', `/api/users/${teacher.id}`, { token: managerToken })
+  check('a teacher with students cannot be deleted', deleteWithStudents.status === 409)
+  check('and the blockers are named', deleteWithStudents.body.error.details.children.length >= 1)
+
+  const deleteWithSessions = await call('DELETE', `/api/users/${student.id}`, { token: teacherToken })
+  check('a user with recorded work cannot be deleted', deleteWithSessions.status === 409)
+
+  const deletable = (
+    await call('POST', '/api/users', {
+      token: teacherToken,
+      body: { role: 'student', name: 'Temp Student', email: 'temp@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  const deletedTemp = await call('DELETE', `/api/users/${deletable.id}`, { token: teacherToken })
+  check('a student with no work can be deleted', deletedTemp.body.deleted === true)
+  check(
+    'and is gone',
+    (await call('GET', `/api/users/${deletable.id}`, { token: adminToken })).status === 404,
+  )
+  const emailFreed = await call('POST', '/api/users', {
+    token: teacherToken,
+    body: { role: 'student', name: 'Reuse', email: 'temp@example.com', password: 'correct horse battery' },
+  })
+  check('the email is free again', emailFreed.status === 201)
+
+  console.log('\nan admin reaches everything')
+  const adminResearch = await call('GET', '/api/research/sessions', { token: adminToken })
+  check('admin reads research without the research token', adminResearch.status === 200)
+  const teacherResearch = await call('GET', '/api/research/sessions', { token: teacherToken })
+  check('a teacher does not', teacherResearch.status === 403)
+  const managerResearch = await call('GET', '/api/research/snippets', { token: managerToken })
+  check('nor does a manager', managerResearch.status === 403)
+  const stillWorks = await call('GET', '/api/research/sessions', { token: 'smoke-token' })
+  check('the research token still works', stillWorks.status === 200)
+
+  const finalHealth = await call('GET', '/api/health')
+  check('health counts users', finalHealth.body.users === 8)
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })
