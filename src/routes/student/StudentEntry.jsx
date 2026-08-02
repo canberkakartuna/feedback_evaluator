@@ -12,16 +12,15 @@ import '../console.css'
  * that does not create the consent record, on the server as well as here, so
  * the gate holds even against someone calling the API directly.
  *
- * After that there are two doors, and which one a student sees depends on
- * whether they have an account:
+ * After that there are two ways in, and the first is the common case:
  *
- * - **A join code**, typed off the board. No account, no name, nothing asked.
- *   This is the normal case and the one the study is designed around.
- * - **A list**, for a student who is signed in, showing the published work of
- *   their own teacher.
+ * - **Anonymously**, with a join code typed off the board. No account, no name,
+ *   nothing asked. This is what the study is designed around.
+ * - **Signed in**, for a student whose teacher made them an account. They get a
+ *   list of their own teacher's published work instead of typing a code.
  *
- * Both end in the same place. The code path is offered to signed-in students
- * too, since a class may be doing an activity set by someone else.
+ * Both end in the same place, and the join code is offered to signed-in
+ * students too, since a class may be doing an activity set by someone else.
  *
  * The consent wording is a PLACEHOLDER. Replace it with the text your ethics
  * committee approves before this goes near a real student.
@@ -258,7 +257,7 @@ export default function StudentEntry() {
         </div>
 
         <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
-          Teacher or administrator? <Link to="/signin">Sign in</Link>.
+          Have an account? <Link to="/signin">Sign in</Link>.
         </p>
       </div>
     </main>

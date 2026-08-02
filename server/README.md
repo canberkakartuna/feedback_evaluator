@@ -209,7 +209,7 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | `GET` | `/api/health` | |
 | `POST` | `/api/sessions` | `{ consent: true, code }` **or** `{ consent: true, activityId }` → `{ session, activity }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
 | `GET` | `/api/sessions/:id` | Resume: session, activity, answers, messages, own questions |
-| `GET` | `/api/sessions/by-code/:code` | Attach a phone to a session (doc item 3) |
+| `GET` | `/api/sessions/by-code/:code` | Resolves a session's **own** code (not the activity's) to that session. **No screen uses this at the moment** — cross-device resume was taken back out, and the student doors are a join code or a password. Left standing, and still covered by the smoke test, because it is the seam that flow would return through |
 | `POST` | `/api/sessions/:id/end` | |
 | `DELETE` | `/api/sessions/:id` | "Delete my session" — also deletes the files |
 | `PUT` | `/api/sessions/:id/answers/:questionId` | `{ mode?, draft?, strokes?, selfMark? }` |

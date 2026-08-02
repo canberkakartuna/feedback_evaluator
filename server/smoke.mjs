@@ -611,9 +611,13 @@ try {
     !JSON.stringify(started.body).includes('water potential'),
   )
 
+  // No screen uses this at the moment — the student doors are a join code or a
+  // password, and resuming by session code was taken back out. The route is left
+  // standing because it is the seam a cross-device flow would go back through,
+  // so it stays covered rather than quietly rotting.
   const byCode = await call('GET', `/api/sessions/by-code/${session.code}`)
-  check('phone can attach by session code', byCode.body.session.id === session.id)
-  check('and gets the activity too', byCode.body.activity.id === activity.id)
+  check('a session code still resolves to its session', byCode.body.session.id === session.id)
+  check('and carries the activity', byCode.body.activity.id === activity.id)
 
   console.log('\nanswers + marking')
   const saved = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {

@@ -25,6 +25,18 @@ npm run test:api              # 243 end-to-end assertions over real HTTP
 | `/teacher` | teachers, managers | Write activities, read student work, label snippets |
 | `/admin` | administrators | Accounts, and the system-wide AI prompt |
 
+### Two ways in for a student
+
+- **Anonymously**, with the activity's six-character join code. One code per
+  activity, the same for the whole class, written on the board. No account, no
+  name, nothing asked. This is what the study is designed around.
+- **Signed in**, with an email and password their teacher set for them. They
+  pick from a list of their own teacher's published work instead of typing a
+  code, and their sessions carry their name.
+
+Both land in the same workspace, and the join code works for signed-in students
+too, since a class may be doing an activity set by someone else.
+
 ### There is no sign-up
 
 Accounts are created downwards and only downwards: an administrator adds
@@ -40,15 +52,14 @@ so while no user exists.
 **Most students never get an account.** They open the site, agree to the consent
 notice, and type the code their teacher put on the board. The session is
 anonymous, and the teacher still sees it, because it is attached to an activity
-they own. Student accounts exist for the cases where named work across sessions
-is wanted; both paths lead to the same workspace.
+they own.
 
 ## How the pieces fit
 
 ```
 activity ──< question          a teacher's set of questions, behind one join code
    │
-   └──< session ──< answer     one student's run at it — anonymous or signed in
+   └──< session ──< answer     one student's run at it — anonymous or named
              │
              └──< message      the tutor thread, per question
                      │
