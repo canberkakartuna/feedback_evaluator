@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { DEFAULT_MODE } from '../../lib/answer'
+import { readAsDataUrl } from '../../lib/attachments'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 import { ownTutor } from '../../../shared/tutor-scripts'
 import QuestionList from '../../components/QuestionList'
@@ -56,14 +57,6 @@ function toState(question, answer, messages) {
     messages: [opening, ...messages],
   }
 }
-
-const readAsDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}`))
-    reader.readAsDataURL(file)
-  })
 
 export default function Session() {
   const { sessionId } = useParams()

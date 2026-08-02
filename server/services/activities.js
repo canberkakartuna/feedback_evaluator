@@ -210,15 +210,21 @@ function parseTutor(value) {
 export function parseQuestionInput(body, { forCreate } = {}) {
   const patch = {}
 
+  /**
+   * The prompt is optional in itself — an uploaded image can be the question.
+   * What is *not* optional is that the question asks something, and that is
+   * checked in routes/activities.js once the image has been resolved, since
+   * only there is it known whether one is attached or already stored.
+   */
   const prompt = body?.prompt
-  if (forCreate || prompt !== undefined) {
-    if (typeof prompt !== 'string' || !prompt.trim()) {
-      throw badRequest('"prompt" must be a non-empty string')
-    }
+  if (prompt !== undefined) {
+    if (typeof prompt !== 'string') throw badRequest('"prompt" must be a string')
     if (prompt.length > LIMITS.prompt) {
       throw badRequest(`"prompt" must be at most ${LIMITS.prompt} characters`)
     }
     patch.prompt = prompt.trim()
+  } else if (forCreate) {
+    patch.prompt = ''
   }
 
   if (body?.kind !== undefined) {
@@ -309,6 +315,7 @@ export function newQuestion({ activityId, position, code, ...rest }) {
     code: code || null,
     kind: 'Explain',
     prompt: '',
+    image: null,
     stimulus: null,
     workingExpected: false,
     rubric: [],

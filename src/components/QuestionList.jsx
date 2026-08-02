@@ -119,7 +119,9 @@ export default function QuestionList({
                             <span className="ql-points mono">{question.points} pts</span>
                           ) : null}
                         </span>
-                        <span className="ql-row-prompt">{question.prompt}</span>
+                        <span className="ql-row-prompt">
+                          {question.prompt || (question.image ? 'Question as a picture' : '')}
+                        </span>
                         <span className="ql-row-state" style={{ color: mark.tone }}>
                           {rowNote(state)}
                         </span>

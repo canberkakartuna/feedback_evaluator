@@ -24,7 +24,17 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'fe-smoke-'))
+/**
+ * A dot-prefixed leaf, deliberately.
+ *
+ * The real default is `server/.uploads`, and `res.sendFile` refuses any path
+ * with a dot-prefixed segment unless told not to — so a temp directory without
+ * one tested a layout no deployment has, and every "the bytes are served"
+ * assertion below passed against a configuration nobody runs. It cost a live
+ * 500 to find. Keep the dot.
+ */
+const uploadDir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'fe-smoke-')), '.uploads')
+await fs.mkdir(uploadDir, { recursive: true })
 process.env.UPLOAD_DIR = uploadDir
 process.env.RESEARCH_TOKEN = 'smoke-token'
 
@@ -489,6 +499,72 @@ try {
     },
   })
   check('a ragged table row is rejected', raggedTable.status === 400)
+
+  /**
+   * The other way to set a question: photograph it.
+   *
+   * Retyping a question out of a textbook is the slowest part of setting work,
+   * so an uploaded image counts as the question on its own. What is enforced is
+   * that a question asks *something* — a prompt, an image, or both — never
+   * neither.
+   */
+  console.log('\nwriting a question, or uploading one')
+  const askless = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { kind: 'Explain' },
+  })
+  check('a question with neither prompt nor image is refused', askless.status === 400)
+
+  const uploadedQ = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { kind: 'Diagram', image: { name: 'q4.png', dataUrl: PNG } },
+  })
+  check('an image alone is a question', uploadedQ.status === 201)
+  check('it has no prompt', uploadedQ.body.question.prompt === '')
+  check('the image came back with a url', uploadedQ.body.question.image.url.startsWith('/api/uploads/'))
+  check(
+    'and the bytes are served',
+    (await fetch(`${base}${uploadedQ.body.question.image.url}`)).status === 200,
+  )
+
+  const badImage = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { image: { name: 'notes.txt', dataUrl: 'data:text/plain;base64,aGVsbG8=' } },
+  })
+  check('an unsupported image type is refused', badImage.status === 400)
+
+  const strippedPrompt = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { image: null } },
+  )
+  check('removing the only image is refused', strippedPrompt.status === 400)
+  check(
+    'and the question still has its image',
+    (
+      await call('GET', `/api/activities/${activity.id}`, { token: teacherToken })
+    ).body.questions.find((q) => q.id === uploadedQ.body.question.id).image !== null,
+  )
+
+  const typedInstead = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { prompt: 'Describe the apparatus shown.', image: null } },
+  )
+  check('but swapping the image for a prompt is fine', typedInstead.status === 200)
+  check('the image is gone', typedInstead.body.question.image === null)
+  check('the prompt is there', typedInstead.body.question.prompt === 'Describe the apparatus shown.')
+
+  const bothWays = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { image: { name: 'q4b.png', dataUrl: PNG } } },
+  )
+  check('a question can have both', bothWays.body.question.prompt && bothWays.body.question.image)
+
+  await call('DELETE', `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`, {
+    token: teacherToken,
+  })
 
   console.log('\nauthoring scope')
   const peek = await call('GET', `/api/activities/${activity.id}`, { token: otherTeacherToken })

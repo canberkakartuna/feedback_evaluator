@@ -1,5 +1,8 @@
 import express from 'express'
-import { publicQuestion } from '../../shared/activity.js'
+import { hasQuestion, publicQuestion } from '../../shared/activity.js'
+import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
+import { objectKey, storage } from '../lib/storage.js'
+import { removeBytes } from './uploads.js'
 import {
   activityScope,
   assertCanAuthor,
@@ -13,7 +16,7 @@ import {
 } from '../services/activities.js'
 import { studentActivities } from '../services/delivery.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
-import { ApiError, badRequest, notFound, now, route } from '../lib/http.js'
+import { ApiError, badRequest, id, notFound, now, route } from '../lib/http.js'
 
 /**
  * Authoring: everything a teacher does to build the work before a student sees
@@ -36,6 +39,92 @@ export function activityRoutes(store) {
     ...activity,
     questionCount: await store.questions.count({ activityId: activity.id }),
   })
+
+  /**
+   * The uploaded half of a question.
+   *
+   * Three cases, distinguished by what `body.image` is:
+   *
+   *   undefined  leave whatever is there alone
+   *   null       remove it
+   *   { dataUrl } replace it
+   *
+   * Kept in the `uploads` collection alongside student attachments, so one
+   * route serves both and the signed-URL logic exists once — but with
+   * `activityId` set and `sessionId` null, because a question outlives every
+   * session that ever showed it and must not be swept up when one is deleted.
+   */
+  async function resolveImage(activity, body, existing) {
+    if (body?.image === undefined) return { changed: false }
+    if (body.image === null) return { changed: true, image: null, replaced: existing }
+
+    if (typeof body.image !== 'object' || Array.isArray(body.image)) {
+      throw badRequest('"image" must be an object or null')
+    }
+
+    const { type, bytes } = decodeDataUrl(body.image.dataUrl)
+    const name = safeName(body.image.name, type)
+
+    const uploadId = id('upl')
+    const files = storage()
+    const key = objectKey(`activities/${activity.id}`, uploadId, EXTENSIONS[type])
+    const written = await files.put(key, bytes, type)
+
+    const upload = await store.uploads.insert({
+      id: uploadId,
+      sessionId: null,
+      activityId: activity.id,
+      questionId: null,
+      name,
+      type,
+      size: bytes.length,
+      source: 'question',
+      storage: files.kind,
+      key,
+      path: written.path,
+      url: `/api/uploads/${uploadId}`,
+      createdAt: now(),
+    })
+
+    return {
+      changed: true,
+      replaced: existing,
+      image: {
+        id: upload.id,
+        name,
+        type,
+        size: upload.size,
+        url: upload.url,
+        key,
+        path: written.path,
+        storage: files.kind,
+      },
+    }
+  }
+
+  /** Bytes for an image that has just been replaced or removed. */
+  async function discard(image) {
+    if (!image?.id) return
+    const upload = await store.uploads.findById(image.id)
+    if (upload) await removeBytes(upload)
+  }
+
+  /** Every question image in an activity, for when the activity itself goes. */
+  async function discardAll(questions) {
+    await Promise.all(questions.map((question) => discard(question.image)))
+  }
+
+  /**
+   * A question has to ask something. Checked here rather than in
+   * parseQuestionInput because it depends on the merge of what was sent and
+   * what was already stored — clearing the prompt is fine if there is an image,
+   * and removing the image is fine if there is a prompt.
+   */
+  function assertAsksSomething(merged) {
+    if (!hasQuestion(merged)) {
+      throw badRequest('A question needs either a prompt or an uploaded image')
+    }
+  }
 
   /* ------------------------------------------------------------- student read */
 
@@ -121,7 +210,6 @@ export function activityRoutes(store) {
       res.json({
         activity: {
           id: activity.id,
-          code: activity.code,
           title: activity.title,
           blurb: activity.blurb,
           status: activity.status,
@@ -177,6 +265,10 @@ export function activityRoutes(store) {
         })
       }
 
+      // Images first: once removeByActivity has run there is nothing left
+      // holding the keys, and the bytes would be orphaned in the bucket.
+      await discardAll(await store.questions.list({ activityId: activity.id }))
+
       const questions = await store.questions.removeByActivity(activity.id)
       await store.activities.remove(activity.id)
 
@@ -194,6 +286,18 @@ export function activityRoutes(store) {
 
       const existing = await store.questions.list({ activityId: activity.id })
       const fields = parseQuestionInput(req.body, { forCreate: true })
+
+      const uploaded = await resolveImage(activity, req.body, null)
+      if (uploaded.changed) fields.image = uploaded.image
+
+      try {
+        assertAsksSomething(fields)
+      } catch (error) {
+        // The bytes are already written at this point, so take them back out
+        // rather than leaving an orphan nothing will ever reference.
+        await discard(uploaded.image)
+        throw error
+      }
 
       const question = await store.questions.create(
         newQuestion({ activityId: activity.id, position: nextPosition(existing), ...fields }),
@@ -217,9 +321,25 @@ export function activityRoutes(store) {
       if (!question || question.activityId !== activity.id) throw notFound('No such question')
 
       const patch = parseQuestionInput(req.body)
+
+      const uploaded = await resolveImage(activity, req.body, question.image)
+      if (uploaded.changed) patch.image = uploaded.image
+
       if (!Object.keys(patch).length) throw badRequest('Nothing to update')
 
+      try {
+        assertAsksSomething({ ...question, ...patch })
+      } catch (error) {
+        await discard(uploaded.image)
+        throw error
+      }
+
       const updated = await store.questions.update(question.id, { ...patch, updatedAt: now() })
+
+      // Only once the write succeeded — an image dropped before a failed update
+      // would leave the question pointing at bytes that no longer exist.
+      if (uploaded.changed) await discard(uploaded.replaced)
+
       await store.activities.update(activity.id, { updatedAt: now() })
 
       const siblings = await store.questions.list({ activityId: activity.id })
@@ -255,6 +375,7 @@ export function activityRoutes(store) {
       }
 
       await store.questions.remove(question.id)
+      await discard(question.image)
       await store.activities.update(activity.id, { updatedAt: now() })
 
       res.json({ deleted: true, questionId: question.id })

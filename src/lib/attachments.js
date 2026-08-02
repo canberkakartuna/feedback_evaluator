@@ -35,3 +35,19 @@ export function formatBytes(bytes) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+/**
+ * A File as a base64 data URL, which is how every upload reaches the API.
+ *
+ * The API takes attachments inside JSON rather than multipart, so both the
+ * student photographing their working and the teacher uploading a question go
+ * through here.
+ */
+export function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`))
+    reader.readAsDataURL(file)
+  })
+}

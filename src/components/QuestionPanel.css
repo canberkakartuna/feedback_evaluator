@@ -807,3 +807,19 @@
     padding: var(--s-2) var(--s-4);
   }
 }
+
+/* A question the teacher photographed rather than typed. Sized to be readable
+   without dominating the panel — a worksheet crop is usually wider than tall. */
+.qp-shot {
+  margin: var(--s-3) 0 0;
+}
+
+.qp-shot-img {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  background: #fff;
+}

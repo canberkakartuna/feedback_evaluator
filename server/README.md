@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (245 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (247)
+npm run test:api         # end-to-end check over real HTTP, in-memory (257 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (259)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
@@ -60,6 +60,11 @@ the client and the API never disagree about which value won.
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
 | `MONGODB_DB` | `feedback_evaluator` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
+| `SPACES_KEY` / `SPACES_SECRET` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Both set means the Spaces backend; either missing means local disk. |
+| `SPACES_BUCKET` | `dropshot` | Just a name. |
+| `SPACES_REGION` | `sfo3` | Used for request signing; the endpoint does the routing. |
+| `SPACES_ENDPOINT` | `https://$SPACES_REGION.digitaloceanspaces.com` | |
+| `SPACES_URL_TTL` | `300` | Seconds a signed read URL stays valid. |
 
 ## What the server owns, and why
 
@@ -188,7 +193,7 @@ from another's list.
 | `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
 | `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
 | `DELETE` | `/api/activities/:id` | 409 once any student has worked on it — unpublish instead |
-| `POST` | `/api/activities/:id/questions` | `{ prompt, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **Only `prompt` is required** |
+| `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
 | `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
 | `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
@@ -296,13 +301,18 @@ exists.
 `GET /api/health` reports `ready: false` until every warning it lists is gone.
 The store was one of them and no longer is. What remains:
 
-**Uploads go to a disk that does not persist.** Only the temp directory is
-writable, it is per-instance, and it is cleared. `config.uploadDir` points there
-automatically when `VERCEL` is set so nothing crashes, but a photo uploaded on
-one request may be gone on the next. Replace the `fs` calls in
-`routes/uploads.js` with Vercel Blob (`npm i @vercel/blob`, private store) or
-GridFS, and keep serving bytes through `/api/uploads/:id` so the client contract
-does not change.
+**Uploads need object storage, and now have it.** `lib/storage.js` has two
+backends behind one interface, the same shape as the store: set `SPACES_KEY` and
+`SPACES_SECRET` and files go to DigitalOcean Spaces, leave them unset and they
+go to local disk. Disk on a serverless host is data loss — the temp directory is
+per-instance and cleared — so `/api/health` warns while that combination is
+live. `npm run setup:spaces` creates the bucket and proves a round trip works.
+
+**Objects are private.** These are photographs of student work collected under a
+consent notice, so the bucket is created private, every object is written
+`ACL: private`, and `GET /api/uploads/:id` mints a short-lived signed URL and
+redirects rather than proxying the bytes through the function. The setup script
+fetches an object *without* a signature and fails if it comes back 200.
 
 **`POST /api/auth/login` is not rate-limited.** scrypt makes each attempt cost
 about 60 ms of CPU, which is a brake on guessing but not a lock. Nothing here

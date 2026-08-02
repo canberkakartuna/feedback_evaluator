@@ -1,112 +1,82 @@
 import { useState } from 'react'
-import { LIMITS, QUESTION_KINDS } from '../../../shared/activity'
+import { LIMITS } from '../../../shared/activity'
+import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/attachments'
 
 /**
  * Writing or editing one question.
  *
- * The shape of this form is the argument the whole feature rests on: **the
- * prompt is the only required field.** A teacher who types a question and
- * presses save gets a working question — the tutor answers from the system
- * prompt and the answer is passed on unmarked. The mark scheme and the hints
- * are two collapsed sections underneath, and filling them in adds automatic
- * marking and staged hints on top.
+ * Two fields, and a question needs **one** of them: type it, or photograph it
+ * off a worksheet and upload that. Both together is fine — a diagram with a
+ * line of instruction over it — but neither is refused.
  *
- * Both extras are folded away by default rather than shown empty, so the
- * common case is a prompt box and a Save button, and the elaborate case is
- * still one click away.
+ * This form used to carry four more controls: a question kind, a
+ * worked-on-paper flag, a per-criterion mark scheme, and a set of hints to
+ * release one at a time. They are gone. Setting work should take as long as
+ * typing the question, and everything that made it take longer than that was
+ * optional anyway.
+ *
+ * The API still accepts all four, and questions authored earlier keep whatever
+ * they were given — this stopped sending them, it did not delete them. What
+ * that means in practice is that new questions are unmarked and the tutor
+ * answers from the system prompt, which is the path the whole application
+ * already supports and the smoke test already covers.
  */
-
-const blankCriterion = () => ({ label: '', points: 1, keywords: '', coach: '' })
-
-/** Keywords are stored as an array and edited as one comma-separated line. */
-const splitKeywords = (line) =>
-  line
-    .split(',')
-    .map((keyword) => keyword.trim())
-    .filter(Boolean)
-
-function toFormState(question) {
-  return {
-    prompt: question?.prompt ?? '',
-    kind: question?.kind ?? 'Explain',
-    workingExpected: question?.workingExpected ?? false,
-    criteria: (question?.rubric ?? []).map((criterion) => ({
-      id: criterion.id,
-      label: criterion.label,
-      points: criterion.points,
-      keywords: (criterion.keywords ?? []).join(', '),
-      coach: criterion.coach ?? '',
-    })),
-    hints: question?.tutor?.hints ?? [],
-    opening: question?.tutor?.opening ?? '',
-    concept: question?.tutor?.concept ?? '',
-    example: question?.tutor?.example ?? '',
-    misconception: question?.tutor?.misconception ?? '',
-  }
-}
-
 export default function QuestionForm({ question, onSave, onCancel, busy }) {
-  const [form, setForm] = useState(() => toFormState(question))
-  const [showRubric, setShowRubric] = useState(() => (question?.rubric?.length ?? 0) > 0)
-  const [showTutor, setShowTutor] = useState(() => (question?.tutor?.hints?.length ?? 0) > 0)
+  const [prompt, setPrompt] = useState(question?.prompt ?? '')
+
+  // `undefined` means "leave whatever is stored alone", which is what the API
+  // wants too — so the three states line up and nothing has to be translated.
+  const [image, setImage] = useState(undefined)
+  const [imageError, setImageError] = useState(null)
   const [error, setError] = useState(null)
 
-  const set = (fields) => setForm((prev) => ({ ...prev, ...fields }))
+  /** What the student would see: the new upload, or the stored one, or nothing. */
+  const shownImage = image === undefined ? (question?.image ?? null) : image
+  const asksSomething = Boolean(prompt.trim() || shownImage)
 
-  const setCriterion = (index, fields) =>
-    set({
-      criteria: form.criteria.map((criterion, i) =>
-        i === index ? { ...criterion, ...fields } : criterion,
-      ),
-    })
+  const pickImage = async (fileList) => {
+    const { accepted, rejected } = partitionFiles(Array.from(fileList ?? []))
+    if (rejected.length) {
+      setImageError(`${rejected[0].name} ${rejected[0].reason}.`)
+      return
+    }
+    if (!accepted.length) return
+
+    const file = accepted[0]
+    setImageError(null)
+    try {
+      setImage({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        dataUrl: await readAsDataUrl(file),
+        // Shown immediately; a stored one comes back with a url instead.
+        preview: URL.createObjectURL(file),
+      })
+    } catch (failure) {
+      setImageError(failure.message)
+    }
+  }
 
   const submit = async (event) => {
     event.preventDefault()
-    if (!form.prompt.trim()) return
-
-    const unlabelled = form.criteria.findIndex((criterion) => !criterion.label.trim())
-    if (showRubric && unlabelled !== -1) {
-      setError(`Criterion ${unlabelled + 1} needs a label, or remove it.`)
-      return
-    }
+    if (!asksSomething) return
 
     setError(null)
 
     try {
       await onSave({
-        prompt: form.prompt,
-        kind: form.kind,
-        workingExpected: form.workingExpected,
-        // Folded away means "no mark scheme", which is a real state the server
-        // understands — not the same as leaving the field out of the patch.
-        rubric: showRubric
-          ? form.criteria.map((criterion) => ({
-              id: criterion.id,
-              label: criterion.label,
-              points: Number(criterion.points) || 0,
-              keywords: splitKeywords(criterion.keywords),
-              coach: criterion.coach,
-            }))
-          : [],
-        tutor: showTutor
-          ? {
-              opening: form.opening,
-              hints: form.hints.filter((hint) => hint.trim()),
-              concept: form.concept,
-              example: form.example,
-              misconception: form.misconception,
-            }
-          : null,
+        prompt,
+        // Omitted entirely when untouched, so editing the wording does not
+        // re-upload a picture that has not changed.
+        ...(image === undefined
+          ? {}
+          : { image: image && { name: image.name, dataUrl: image.dataUrl } }),
       })
     } catch (failure) {
       setError(failure.message)
     }
   }
-
-  const totalPoints = form.criteria.reduce(
-    (sum, criterion) => sum + (Number(criterion.points) || 0),
-    0,
-  )
 
   return (
     <form className="cs-form" onSubmit={submit}>
@@ -118,265 +88,61 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           id="q-prompt"
           className="cs-textarea"
           rows={4}
-          required
           maxLength={LIMITS.prompt}
           placeholder="A red blood cell is placed in distilled water. Explain why it bursts."
-          value={form.prompt}
-          onChange={(event) => set({ prompt: event.target.value })}
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
         />
+        <p className="cs-hint">
+          Leave this empty if you are uploading the question as a picture instead.
+        </p>
       </div>
 
-      <div className="cs-row">
-        <div className="cs-field">
-          <label className="cs-label" htmlFor="q-kind">
-            Kind
-          </label>
-          <select
-            id="q-kind"
-            className="cs-select"
-            value={form.kind}
-            onChange={(event) => set({ kind: event.target.value })}
-          >
-            {QUESTION_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="cs-field">
+        <label className="cs-label" htmlFor="q-image">
+          Or upload the question
+        </label>
 
-        <div className="cs-field">
-          <span className="cs-label">Working</span>
-          <label className="cs-check">
-            <input
-              type="checkbox"
-              checked={form.workingExpected}
-              onChange={(event) => set({ workingExpected: event.target.checked })}
+        {shownImage ? (
+          <div className="cs-qimage">
+            <img
+              src={shownImage.preview ?? shownImage.url}
+              alt={shownImage.name}
+              className="cs-qimage-thumb"
             />
-            <span>
-              Normally worked out on paper — prompt for a photo of the working rather than typing.
-            </span>
-          </label>
-        </div>
-      </div>
-
-      {/* ── mark scheme ───────────────────────────────────────── */}
-
-      <div className="cs-crit">
-        <div className="cs-crit-head">
-          <label className="cs-check">
-            <input
-              type="checkbox"
-              checked={showRubric}
-              onChange={(event) => {
-                setShowRubric(event.target.checked)
-                if (event.target.checked && !form.criteria.length) {
-                  set({ criteria: [blankCriterion()] })
-                }
+            <div className="cs-qimage-meta">
+              <p className="cs-qimage-name">{shownImage.name}</p>
+              {shownImage.size ? (
+                <p className="cs-hint mono">{formatBytes(shownImage.size)}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="cs-btn cs-btn-sm cs-btn-danger"
+              onClick={() => {
+                if (image?.preview) URL.revokeObjectURL(image.preview)
+                setImage(null)
+                setImageError(null)
               }}
-            />
-            <span>
-              <strong>Mark this question automatically</strong>
-              <br />
-              <span className="cs-hint">
-                Leave off and the tutor still helps — the answer just goes to you unmarked.
-              </span>
-            </span>
-          </label>
-          {showRubric ? <span className="mono cs-hint">{totalPoints} pts</span> : null}
-        </div>
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <input
+            id="q-image"
+            className="cs-input"
+            type="file"
+            accept={ACCEPT}
+            onChange={(event) => pickImage(event.target.files)}
+          />
+        )}
 
-        {showRubric ? (
-          <>
-            {form.criteria.map((criterion, index) => (
-              <div key={index} className="cs-crit">
-                <div className="cs-crit-head">
-                  <span className="eyebrow">Criterion {index + 1}</span>
-                  <button
-                    type="button"
-                    className="cs-btn cs-btn-sm cs-btn-danger"
-                    onClick={() =>
-                      set({ criteria: form.criteria.filter((_, i) => i !== index) })
-                    }
-                  >
-                    Remove
-                  </button>
-                </div>
-
-                <div className="cs-row">
-                  <div className="cs-field" style={{ gridColumn: '1 / -1' }}>
-                    <label className="cs-label">What earns the mark</label>
-                    <input
-                      className="cs-input"
-                      maxLength={LIMITS.criterionLabel}
-                      placeholder="Names the water potential gradient"
-                      value={criterion.label}
-                      onChange={(event) => setCriterion(index, { label: event.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="cs-row">
-                  <div className="cs-field">
-                    <label className="cs-label">Points</label>
-                    <input
-                      className="cs-input"
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={criterion.points}
-                      onChange={(event) => setCriterion(index, { points: event.target.value })}
-                    />
-                  </div>
-
-                  <div className="cs-field" style={{ gridColumn: 'span 2' }}>
-                    <label className="cs-label">Keywords, comma separated</label>
-                    <input
-                      className="cs-input"
-                      placeholder="water potential, hypotonic, more dilute"
-                      value={criterion.keywords}
-                      onChange={(event) => setCriterion(index, { keywords: event.target.value })}
-                    />
-                    <p className="cs-hint">
-                      The mark lands if the answer contains any one of these. Never shown to the
-                      student.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="cs-field">
-                  <label className="cs-label">If they miss it, say</label>
-                  <input
-                    className="cs-input"
-                    maxLength={LIMITS.criterionCoach}
-                    placeholder="Say which way water moves and what drives it."
-                    value={criterion.coach}
-                    onChange={(event) => setCriterion(index, { coach: event.target.value })}
-                  />
-                </div>
-              </div>
-            ))}
-
-            <div>
-              <button
-                type="button"
-                className="cs-btn cs-btn-sm"
-                disabled={form.criteria.length >= LIMITS.criteria}
-                onClick={() => set({ criteria: [...form.criteria, blankCriterion()] })}
-              >
-                + Add criterion
-              </button>
-            </div>
-          </>
-        ) : null}
-      </div>
-
-      {/* ── tutor script ──────────────────────────────────────── */}
-
-      <div className="cs-crit">
-        <div className="cs-crit-head">
-          <label className="cs-check">
-            <input
-              type="checkbox"
-              checked={showTutor}
-              onChange={(event) => {
-                setShowTutor(event.target.checked)
-                if (event.target.checked && !form.hints.length) set({ hints: [''] })
-              }}
-            />
-            <span>
-              <strong>Write the hints myself</strong>
-              <br />
-              <span className="cs-hint">
-                Released one at a time, in order. Leave off and the tutor uses generic prompts.
-              </span>
-            </span>
-          </label>
-        </div>
-
-        {showTutor ? (
-          <>
-            <div className="cs-hints">
-              {form.hints.map((hint, index) => (
-                <div key={index} className="cs-hint-row">
-                  <span className="cs-hint-n">{index + 1}</span>
-                  <textarea
-                    className="cs-textarea"
-                    rows={2}
-                    maxLength={LIMITS.hint}
-                    placeholder="Start outside the cell. Distilled water has no solute in it at all."
-                    value={hint}
-                    onChange={(event) =>
-                      set({
-                        hints: form.hints.map((entry, i) =>
-                          i === index ? event.target.value : entry,
-                        ),
-                      })
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="cs-btn cs-btn-sm cs-btn-danger"
-                    onClick={() => set({ hints: form.hints.filter((_, i) => i !== index) })}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <button
-                type="button"
-                className="cs-btn cs-btn-sm"
-                disabled={form.hints.length >= LIMITS.hints}
-                onClick={() => set({ hints: [...form.hints, ''] })}
-              >
-                + Add hint
-              </button>
-            </div>
-
-            <div className="cs-field">
-              <label className="cs-label">Opening line</label>
-              <textarea
-                className="cs-textarea"
-                rows={2}
-                value={form.opening}
-                placeholder="This one is really two questions wearing one coat. Which half feels shakier?"
-                onChange={(event) => set({ opening: event.target.value })}
-              />
-            </div>
-
-            <div className="cs-field">
-              <label className="cs-label">The concept behind it</label>
-              <textarea
-                className="cs-textarea"
-                rows={2}
-                value={form.concept}
-                onChange={(event) => set({ concept: event.target.value })}
-              />
-            </div>
-
-            <div className="cs-field">
-              <label className="cs-label">A worked example</label>
-              <textarea
-                className="cs-textarea"
-                rows={2}
-                value={form.example}
-                onChange={(event) => set({ example: event.target.value })}
-              />
-            </div>
-
-            <div className="cs-field">
-              <label className="cs-label">The usual mistake</label>
-              <textarea
-                className="cs-textarea"
-                rows={2}
-                value={form.misconception}
-                onChange={(event) => set({ misconception: event.target.value })}
-              />
-            </div>
-          </>
+        <p className="cs-hint">A photo or scan of the question. JPG, PNG or PDF, up to 10 MB.</p>
+        {imageError ? (
+          <p className="cs-note" data-tone="bad" role="alert">
+            {imageError}
+          </p>
         ) : null}
       </div>
 
@@ -385,13 +151,12 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           {error}
         </p>
       ) : null}
+      {!asksSomething ? (
+        <p className="cs-hint">Write the question above, or upload a picture of it.</p>
+      ) : null}
 
       <div className="cs-actions">
-        <button
-          type="submit"
-          className="cs-btn cs-btn-primary"
-          disabled={busy || !form.prompt.trim()}
-        >
+        <button type="submit" className="cs-btn cs-btn-primary" disabled={busy || !asksSomething}>
           {busy ? 'Saving…' : question ? 'Save changes' : 'Add question'}
         </button>
         <button type="button" className="cs-btn" onClick={onCancel}>

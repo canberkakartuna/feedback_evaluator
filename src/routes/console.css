@@ -486,42 +486,6 @@
   gap: var(--s-4);
 }
 
-.cs-crit {
-  display: grid;
-  gap: var(--s-3);
-  padding: var(--s-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-2);
-  background: var(--paper);
-}
-
-.cs-crit-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s-2);
-}
-
-.cs-hints {
-  display: grid;
-  gap: var(--s-2);
-}
-
-.cs-hint-row {
-  display: flex;
-  gap: var(--s-2);
-  align-items: flex-start;
-}
-
-.cs-hint-n {
-  flex-shrink: 0;
-  width: 20px;
-  padding-top: 8px;
-  font-family: var(--f-mono);
-  font-size: var(--t-12);
-  color: var(--graphite-faint);
-}
-
 /* ── labelling ───────────────────────────────────────────────── */
 
 .cs-snip {
@@ -656,4 +620,39 @@
   .cs-snip {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── an uploaded question, in the authoring form ──────────────── */
+
+.cs-qimage {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2);
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+}
+
+.cs-qimage-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+}
+
+.cs-qimage-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-qimage-name {
+  margin: 0;
+  font-size: var(--t-13);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

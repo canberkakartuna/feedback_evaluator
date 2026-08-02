@@ -122,7 +122,18 @@ export default function QuestionPanel({
 
       <div className="qp-scroll" ref={sheet}>
         <article className="qp-sheet">
-          <p className="qp-prompt">{question.prompt}</p>
+          {question.prompt ? <p className="qp-prompt">{question.prompt}</p> : null}
+
+          {/* The teacher photographed the question instead of typing it. */}
+          {question.image ? (
+            <figure className="qp-shot">
+              <img
+                className="qp-shot-img"
+                src={question.image.url}
+                alt={question.prompt ? 'The question, as set' : 'The question'}
+              />
+            </figure>
+          ) : null}
 
           {question.stimulus?.kind === 'table' ? (
             <figure className="qp-figure">

@@ -1,37 +1,8 @@
 import express from 'express'
-import path from 'node:path'
 import { config } from '../config.js'
 import { objectKey, storage } from '../lib/storage.js'
-import { badRequest, id, notFound, now, route } from '../lib/http.js'
-
-const EXTENSIONS = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/heic': 'heic',
-  'application/pdf': 'pdf',
-}
-
-/** Photographed working and whiteboard exports both arrive as data URLs. */
-function decodeDataUrl(value) {
-  const match = /^data:([^;,]+);base64,(.+)$/s.exec(value ?? '')
-  if (!match) throw badRequest('"dataUrl" must be a base64 data URL')
-
-  const [, type, base64] = match
-  if (!EXTENSIONS[type]) {
-    throw badRequest(`Unsupported type "${type}". Send a JPG, PNG, WebP, HEIC or PDF.`)
-  }
-
-  const bytes = Buffer.from(base64, 'base64')
-  if (!bytes.length) throw badRequest('Attachment is empty')
-  if (bytes.length > config.maxUploadBytes) {
-    throw badRequest(
-      `Attachment is ${(bytes.length / 1024 / 1024).toFixed(1)} MB; the limit is ${(config.maxUploadBytes / 1024 / 1024).toFixed(0)} MB.`,
-    )
-  }
-
-  return { type, bytes }
-}
+import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
+import { id, notFound, now, route } from '../lib/http.js'
 
 export function uploadRoutes(store, { resolveQuestion }) {
   const router = express.Router()
@@ -43,10 +14,7 @@ export function uploadRoutes(store, { resolveQuestion }) {
 
       const source = req.body.source === 'whiteboard' ? 'whiteboard' : 'file'
       const { type, bytes } = decodeDataUrl(req.body.dataUrl)
-      const name =
-        typeof req.body.name === 'string' && req.body.name.trim()
-          ? path.basename(req.body.name).slice(0, 200)
-          : `upload.${EXTENSIONS[type]}`
+      const name = safeName(req.body.name, type)
 
       const uploadId = id('upl')
       const files = storage()
@@ -190,7 +158,26 @@ export function uploadFileRoutes(store) {
 
       res.type(upload.type)
       res.setHeader('Content-Disposition', `inline; filename="${upload.name}"`)
-      res.sendFile(upload.path)
+
+      /**
+       * `dotfiles: 'allow'` is load-bearing, not a loosening.
+       *
+       * The default upload directory is `server/.uploads`, and `send` refuses
+       * any path with a dot-prefixed segment unless told otherwise — so with
+       * the default configuration every locally stored file 404s inside
+       * sendFile and surfaces as a 500. The path here is not user input: it is
+       * read from the upload record, which the server wrote from an id it
+       * minted itself, so there is no traversal to defend against.
+       */
+      res.sendFile(upload.path, { dotfiles: 'allow' }, (error) => {
+        if (!error) return
+        // The record exists but the bytes do not — a disk-backed file after an
+        // instance recycled, most often. 404 is the honest answer, and it must
+        // not be a 500 with a stack trace.
+        if (!res.headersSent) {
+          res.status(404).json({ error: { message: 'That file is no longer available' } })
+        }
+      })
     }),
   )
 

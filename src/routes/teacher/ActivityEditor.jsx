@@ -169,8 +169,7 @@ export default function ActivityEditor() {
 
         {questions.length === 0 && !adding ? (
           <p className="cs-empty">
-            No questions yet. The only thing a question needs is the question itself — the mark
-            scheme and the hints are optional.
+            No questions yet. Write one, or upload a photo of one — either is enough.
           </p>
         ) : (
           <ul className="cs-qlist">
@@ -178,11 +177,23 @@ export default function ActivityEditor() {
               <li key={question.id} className="cs-q">
                 <div className="cs-q-head">
                   <span className="cs-q-code">{question.code}</span>
-                  <p className="cs-q-prompt">{question.prompt}</p>
+                  <p className="cs-q-prompt">
+                    {question.prompt || <em>Uploaded question — no text</em>}
+                  </p>
 
-                  <span className="cs-pill" data-tone={question.rubric.length ? 'live' : 'quiet'}>
-                    {question.rubric.length ? `${question.rubric.length} criteria` : 'unmarked'}
-                  </span>
+                  {question.image ? (
+                    <span className="cs-pill" data-tone="draft">
+                      picture
+                    </span>
+                  ) : null}
+
+                  {/* Only when there is one. New questions have no mark
+                      scheme, so "unmarked" on every row would be noise. */}
+                  {question.rubric?.length ? (
+                    <span className="cs-pill" data-tone="live">
+                      {question.rubric.length} criteria
+                    </span>
+                  ) : null}
 
                   <button
                     type="button"

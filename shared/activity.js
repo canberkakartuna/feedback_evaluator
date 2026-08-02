@@ -7,8 +7,14 @@
  * has to take.
  *
  *   activity  { id, title, blurb, ownerId, status, createdAt, updatedAt }
- *   question  { id, activityId, code, kind, points, prompt, stimulus,
+ *   question  { id, activityId, code, kind, prompt, image, stimulus,
  *               workingExpected, rubric[], tutor{}, position, ... }
+ *
+ * **A question is a typed prompt, an uploaded image, or both.** Retyping a
+ * question out of a textbook is the slowest part of setting work, so a teacher
+ * can photograph it instead. `hasQuestion` below is the one place that decides
+ * whether a question actually asks anything; everything else asks it rather
+ * than testing the two fields itself.
  *
  * **The rubric and the tutor script are optional.** A teacher who types only a
  * prompt gets a question that still works: the chat answers from the
@@ -89,6 +95,16 @@ export const totalPoints = (question) =>
 export const hintCount = (question) => question?.tutor?.hints?.length ?? 0
 
 /**
+ * Whether this question puts a question to the student at all.
+ *
+ * Either half is enough. Requiring the prompt when there is a legible photo of
+ * the question would make a teacher transcribe something the class can already
+ * read, and requiring neither would let an empty card reach a student.
+ */
+export const hasQuestion = (question) =>
+  Boolean(question?.prompt?.trim() || question?.image)
+
+/**
  * What a student is allowed to receive.
  *
  * Rubric keywords and tutor scripts stay on the server. Shipping them would put
@@ -103,6 +119,19 @@ export function publicQuestion(question, activity) {
     kind: question.kind,
     points: totalPoints(question),
     prompt: question.prompt,
+    /**
+     * The uploaded question, when there is one. Only the fields needed to
+     * render it — the storage key and path stay on the server, the same way
+     * they do for a student's own upload.
+     */
+    image: question.image
+      ? {
+          id: question.image.id,
+          name: question.image.name,
+          type: question.image.type,
+          url: question.image.url,
+        }
+      : null,
     stimulus: question.stimulus ?? null,
     workingExpected: Boolean(question.workingExpected),
     markable: hasRubric(question),

@@ -13,7 +13,7 @@ npm install
 cp .env.example .env          # then put MONGODB_URI in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 245 end-to-end assertions over real HTTP
+npm run test:api              # 257 end-to-end assertions over real HTTP
 ```
 
 ## Three audiences, one deployment
@@ -78,7 +78,9 @@ single act that opens it, and the server refuses to publish one with no
 questions. Unpublishing closes it again without touching anything recorded,
 which is why it is offered whenever a delete is refused.
 
-A **question** needs only a prompt. Two optional extras change what it can do:
+A **question** has to ask something — a typed prompt, an uploaded photo of the
+question, or both. Nobody should have to retype a question out of a textbook.
+Two further extras are optional and change what the question can do:
 
 - a **rubric** — criteria with keywords — turns on automatic marking with
   per-criterion feedback;
@@ -118,6 +120,7 @@ server/          the API — see server/README.md
   routes/          HTTP surface
   services/        the rules, in one place each
   store/           memory + mongo, identical interfaces
+  lib/storage.js   uploads: local disk or DigitalOcean Spaces
 src/
   routes/          one folder per audience: student, teacher, admin
   components/      the workspace panels
