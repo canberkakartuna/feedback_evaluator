@@ -1,8 +1,8 @@
 import express from 'express'
 import { config } from './config.js'
 import { createStore } from './store/index.js'
-import { findQuestion, publicCourse, topics } from './services/course.js'
-import { ownTutor } from '../shared/course.js'
+import { resolveQuestion as lookupQuestion } from './services/delivery.js'
+import { activityRoutes } from './routes/activities.js'
 import { sessionRoutes } from './routes/sessions.js'
 import { answerRoutes } from './routes/answers.js'
 import { tutorRoutes } from './routes/tutor.js'
@@ -71,17 +71,10 @@ export function createApp({ store = createStore() } = {}) {
     const session = await store.sessions.findById(req.params.sessionId)
     if (!session) throw notFound('No such session')
 
-    const questionId = req.params.questionId
-    const known = findQuestion(questionId)
+    const question = await lookupQuestion(store, session, req.params.questionId)
+    if (!question) throw notFound('No such question')
 
-    if (known) return { session, question: known }
-
-    const own = await store.ownQuestions.findById(questionId)
-    if (own && own.sessionId === session.id) {
-      return { session, question: { ...own, rubric: [], tutor: ownTutor } }
-    }
-
-    throw notFound('No such question')
+    return { session, question }
   }
 
   const deps = { resolveQuestion }
@@ -153,16 +146,9 @@ export function createApp({ store = createStore() } = {}) {
     }),
   )
 
-  app.get('/api/course', (req, res, next) => {
-    try {
-      res.json({ course: publicCourse(req.query.topicId ?? 'all'), topics: topics() })
-    } catch (error) {
-      next(error)
-    }
-  })
-
   app.use('/api/auth', authRoutes(store))
   app.use('/api/users', userRoutes(store))
+  app.use('/api/activities', activityRoutes(store))
   app.use('/api/sessions', sessionRoutes(store))
   app.use('/api/sessions', answerRoutes(store, deps))
   app.use('/api/sessions', tutorRoutes(store, deps))

@@ -32,7 +32,7 @@ export default function TutorPanel({
     if (open) closeButton.current?.focus()
   }, [open])
 
-  const hintsLeft = question.tutor.hints.length - state.hintsUsed
+  const hintsLeft = (question.hintCount ?? 0) - state.hintsUsed
 
   const submit = (event) => {
     event.preventDefault()

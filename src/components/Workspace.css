@@ -256,3 +256,33 @@
     background: var(--margin);
   }
 }
+
+/* A failed request, said out loud. The workspace is mostly optimistic, so
+   without this a save that did not happen looks exactly like one that did. */
+.ws-problem-banner {
+  position: fixed;
+  top: var(--s-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: min(560px, calc(100vw - 2 * var(--s-4)));
+  padding: var(--s-2) var(--s-3);
+  background: var(--margin-soft);
+  border: 1px solid var(--margin);
+  border-radius: var(--r-2);
+  box-shadow: var(--shade);
+  font-size: var(--t-13);
+}
+
+.ws-problem-banner button {
+  flex-shrink: 0;
+  padding: 0 var(--s-1);
+  background: none;
+  border: none;
+  font-size: var(--t-18);
+  line-height: 1;
+  color: var(--margin);
+}

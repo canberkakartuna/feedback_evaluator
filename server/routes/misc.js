@@ -1,5 +1,6 @@
 import express from 'express'
-import { ownTutor } from '../../shared/course.js'
+import { ownTutor } from '../../shared/tutor-scripts.js'
+import { requireAuth, requireRole } from '../lib/auth.js'
 import { badRequest, id, notFound, now, requireString, route } from '../lib/http.js'
 
 /** Doc item 8: questions the student brings themselves. */
@@ -23,10 +24,11 @@ export function ownQuestionRoutes(store) {
         kind: 'Your question',
         points: 0,
         prompt: prompt.trim(),
+        markable: false,
         criteriaCount: 0,
         hintCount: ownTutor.hints.length,
-        groupId: 'own',
-        groupTitle: 'Your own questions',
+        activityId: null,
+        activityTitle: 'Your own questions',
         createdAt: now(),
       })
 
@@ -101,7 +103,19 @@ export function eventRoutes(store) {
   return router
 }
 
-/** Doc item 6 and prompt versioning: which prompt a session ran on. */
+/**
+ * The system prompt every tutor chat runs on, and its version history.
+ *
+ * One prompt for the whole system, not one per activity — the doc is explicit
+ * about that: it is "written once at the top and affects every chatbox". Which
+ * is also why writing it is closed to staff and stamped with who did it. A
+ * teacher editing this is editing every other teacher's students' feedback too,
+ * so the UI says so and the record here shows who to ask about it afterwards.
+ *
+ * Versions are append-only. `session.promptVersion` is stamped at session
+ * creation, so "which prompt produced this feedback?" stays answerable after
+ * the prompt has moved on — the question the whole study rests on.
+ */
 export function promptRoutes(store) {
   const router = express.Router()
 
@@ -114,6 +128,8 @@ export function promptRoutes(store) {
 
   router.post(
     '/',
+    requireAuth,
+    requireRole('teacher', 'manager', 'admin'),
     route(async (req, res) => {
       const text = requireString(req.body, 'text', { max: 20000 })
       const versions = await store.prompts.list()
@@ -123,6 +139,8 @@ export function promptRoutes(store) {
         text: text.trim(),
         note: typeof req.body.note === 'string' ? req.body.note.slice(0, 500) : null,
         active: true,
+        createdBy: req.user.id,
+        createdByName: req.user.name,
         createdAt: now(),
       })
 

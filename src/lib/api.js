@@ -1,14 +1,23 @@
 /**
  * Client for the API in ../../server.
  *
- * The components do not use this yet — they still run on the bundled copy of
- * the course. This is the seam for that swap: every call the UI needs already
- * exists here and is covered by `npm run test:api`.
+ * One call per endpoint, grouped the way the routes are, so a screen never
+ * builds a URL itself. Vite proxies /api to the API server, so there is no base
+ * URL in development.
  *
- * Vite proxies /api to the API server, so there is no base URL in development.
+ * **The login token is held here**, not passed down through props.
+ *
+ * Every request sends it if there is one, which is what lets an anonymous
+ * student and a signed-in teacher share the same functions: the anonymous
+ * student simply has no token, and the routes that do not need one do not care.
+ * It is kept in localStorage so a refresh does not sign a teacher out
+ * mid-marking, and cleared on any 401 — a token the server has stopped
+ * accepting is worse than no token, because it makes every later call fail in a
+ * way the UI would otherwise have to guess at.
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
+const TOKEN_KEY = 'fe.token'
 
 export class ApiError extends Error {
   constructor(status, message, details) {
@@ -18,17 +27,60 @@ export class ApiError extends Error {
   }
 }
 
+let token = null
+try {
+  token = localStorage.getItem(TOKEN_KEY)
+} catch {
+  // Private browsing, or storage disabled. Sign-in still works for this tab;
+  // it just will not survive a refresh, which is better than not loading.
+}
+
+const listeners = new Set()
+
+export function getToken() {
+  return token
+}
+
+export function setToken(next) {
+  token = next || null
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+    else localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // As above — an unwritable store is not a reason to fail the sign-in.
+  }
+  for (const listener of listeners) listener(token)
+}
+
+/** Lets the auth context re-read `me` when a 401 clears the token underneath it. */
+export function onTokenChange(listener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 async function call(method, path, body) {
   const response = await fetch(`${BASE}${path}`, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
+    headers: {
+      ...(body ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
 
   const text = await response.text()
-  const payload = text ? JSON.parse(text) : null
+  let payload = null
+  try {
+    payload = text ? JSON.parse(text) : null
+  } catch {
+    payload = null
+  }
 
   if (!response.ok) {
+    // A rejected token is dropped rather than retried with. Anonymous routes
+    // keep working; anything that needed an identity now says so cleanly.
+    if (response.status === 401 && token) setToken(null)
+
     throw new ApiError(
       response.status,
       payload?.error?.message ?? `Request failed with ${response.status}`,
@@ -41,12 +93,84 @@ async function call(method, path, body) {
 
 export const api = {
   health: () => call('GET', '/api/health'),
-  topics: () => call('GET', '/api/sessions/topics'),
-  course: (topicId = 'all') => call('GET', `/api/course?topicId=${encodeURIComponent(topicId)}`),
+
+  /* ---------------------------------------------------------------- accounts */
+
+  login: async (email, password) => {
+    const result = await call('POST', '/api/auth/login', { email, password })
+    setToken(result.token)
+    return result
+  },
+  logout: async () => {
+    try {
+      await call('POST', '/api/auth/logout')
+    } finally {
+      // Cleared even if the call failed: the point of pressing sign out is to
+      // stop being signed in here, whatever the server managed to record.
+      setToken(null)
+    }
+  },
+  me: () => call('GET', '/api/auth/me'),
+  changePassword: async (currentPassword, newPassword) => {
+    const result = await call('POST', '/api/auth/password', { currentPassword, newPassword })
+    setToken(result.token)
+    return result
+  },
+  bootstrap: async (bootstrapToken, body) => {
+    const previous = token
+    setToken(bootstrapToken)
+    try {
+      const result = await call('POST', '/api/auth/bootstrap', body)
+      setToken(result.token)
+      return result
+    } catch (error) {
+      setToken(previous)
+      throw error
+    }
+  },
+
+  /* ------------------------------------------------------------------- users */
+
+  users: (query = {}) => {
+    const search = new URLSearchParams(
+      Object.entries(query).filter(([, value]) => value != null && value !== ''),
+    ).toString()
+    return call('GET', `/api/users${search ? `?${search}` : ''}`)
+  },
+  user: (userId) => call('GET', `/api/users/${userId}`),
+  createUser: (body) => call('POST', '/api/users', body),
+  updateUser: (userId, patch) => call('PATCH', `/api/users/${userId}`, patch),
+  deleteUser: (userId) => call('DELETE', `/api/users/${userId}`),
+  resetPassword: (userId, newPassword) =>
+    call('POST', `/api/users/${userId}/password`, { newPassword }),
+  userSessions: (userId) => call('GET', `/api/users/${userId}/sessions`),
+
+  /* -------------------------------------------------------------- activities */
+
+  activities: () => call('GET', '/api/activities'),
+  activity: (activityId) => call('GET', `/api/activities/${activityId}`),
+  activityPreview: (activityId) => call('GET', `/api/activities/${activityId}/preview`),
+  createActivity: (body) => call('POST', '/api/activities', body),
+  updateActivity: (activityId, patch) => call('PATCH', `/api/activities/${activityId}`, patch),
+  deleteActivity: (activityId) => call('DELETE', `/api/activities/${activityId}`),
+
+  addQuestion: (activityId, body) => call('POST', `/api/activities/${activityId}/questions`, body),
+  updateQuestion: (activityId, questionId, patch) =>
+    call('PATCH', `/api/activities/${activityId}/questions/${questionId}`, patch),
+  deleteQuestion: (activityId, questionId) =>
+    call('DELETE', `/api/activities/${activityId}/questions/${questionId}`),
+  reorderQuestions: (activityId, questionIds) =>
+    call('POST', `/api/activities/${activityId}/questions/reorder`, { questionIds }),
+
+  /** The join box, and the list a signed-in student gets from their teacher. */
+  activityByCode: (code) => call('GET', `/api/activities/by-code/${encodeURIComponent(code)}`),
+  availableActivities: () => call('GET', '/api/activities/available'),
+
+  /* ---------------------------------------------------------------- sessions */
 
   /** Consent is the session. There is no way to start one without it. */
-  startSession: ({ topicId = 'all', device, conditionId } = {}) =>
-    call('POST', '/api/sessions', { consent: true, topicId, device, conditionId }),
+  startSession: ({ activityId, code, device } = {}) =>
+    call('POST', '/api/sessions', { consent: true, activityId, code, device }),
   resumeSession: (sessionId) => call('GET', `/api/sessions/${sessionId}`),
   sessionByCode: (code) => call('GET', `/api/sessions/by-code/${encodeURIComponent(code)}`),
   endSession: (sessionId) => call('POST', `/api/sessions/${sessionId}/end`),
@@ -80,4 +204,21 @@ export const api = {
 
   /** Batched: the interesting measures are gaps between timestamps. */
   sendEvents: (sessionId, events) => call('POST', `/api/sessions/${sessionId}/events`, { events }),
+
+  /* ------------------------------------------------------- prompts + reading */
+
+  prompts: () => call('GET', '/api/prompts'),
+  setPrompt: (text, note) => call('POST', '/api/prompts', { text, note }),
+
+  researchSessions: () => call('GET', '/api/research/sessions'),
+  transcript: (sessionId) => call('GET', `/api/research/sessions/${sessionId}/transcript`),
+  snippets: (query = {}) => {
+    const search = new URLSearchParams(
+      Object.entries(query).filter(([, value]) => value != null && value !== ''),
+    ).toString()
+    return call('GET', `/api/research/snippets${search ? `?${search}` : ''}`)
+  },
+  labelSnippet: (snippetId, patch) =>
+    call('PATCH', `/api/research/snippets/${encodeURIComponent(snippetId)}`, patch),
+  exportUrl: (format = 'json') => `${BASE}/api/research/export?format=${format}`,
 }

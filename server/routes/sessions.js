@@ -1,19 +1,57 @@
 import express from 'express'
 import fs from 'node:fs/promises'
 import { config } from '../config.js'
-import { publicCourse, topics } from '../services/course.js'
+import { activityQuestions, publicActivity } from '../services/delivery.js'
 import { badRequest, id, notFound, now, route, shortCode } from '../lib/http.js'
 
 export function sessionRoutes(store) {
   const router = express.Router()
 
-  /** Topics for the entry screen, before any session exists. */
-  router.get(
-    '/topics',
-    route(async (req, res) => {
-      res.json({ topics: topics() })
-    }),
-  )
+  /**
+   * Which activity this session is for.
+   *
+   * Two ways in, because there are two kinds of student: a join **code**, typed
+   * off the board by someone with no account, and an **activityId**, clicked
+   * from the list a signed-in student gets from their own teacher. They resolve
+   * to the same thing, and both refuse an unpublished activity — a draft is
+   * work in progress, and a student who reached one would be answering
+   * questions their teacher has not finished writing.
+   */
+  async function resolveActivity(body) {
+    const byCode = typeof body?.code === 'string' && Boolean(body.code.trim())
+
+    const activity = byCode
+      ? await store.activities.findByCode(body.code)
+      : typeof body?.activityId === 'string'
+        ? await store.activities.findById(body.activityId)
+        : null
+
+    if (!activity) {
+      throw notFound(byCode ? 'No activity with that code' : 'No such activity')
+    }
+
+    /**
+     * An unpublished activity answers differently depending on how it was
+     * reached, and the difference is deliberate.
+     *
+     * A **code** is typed into a public box by someone with no account, so a
+     * draft has to be indistinguishable from a code that was never issued —
+     * anything else turns the box into a way to discover that a teacher is
+     * drafting something. This matches the preview route, which 404s on a draft
+     * for the same reason.
+     *
+     * An **activityId** only ever comes from the list a signed-in student was
+     * already shown, so the interesting case there is a teacher unpublishing
+     * between the list and the click. That student is entitled to know it was
+     * withdrawn rather than that it never existed.
+     */
+    if (activity.status !== 'published') {
+      if (byCode) throw notFound('No activity with that code')
+      throw badRequest('That activity is not open yet')
+    }
+
+    return activity
+  }
 
   /**
    * Starting a session IS the consent record. There is no route that creates a
@@ -30,8 +68,8 @@ export function sessionRoutes(store) {
         })
       }
 
-      const topicId = req.body.topicId ?? 'all'
-      const course = publicCourse(topicId) // throws 404 on an unknown topic
+      const activity = await resolveActivity(req.body)
+      const questions = await activityQuestions(store, activity.id)
       const active = await store.prompts.active()
 
       const session = await store.sessions.create({
@@ -39,7 +77,7 @@ export function sessionRoutes(store) {
         code: shortCode(),
         createdAt: now(),
         endedAt: null,
-        topicId,
+        activityId: activity.id,
         /**
          * Null unless the request carried a login token.
          *
@@ -68,34 +106,53 @@ export function sessionRoutes(store) {
           userId: session.userId,
           type: 'session_started',
           at: now(),
-          payload: { topicId, signedIn: Boolean(session.userId) },
+          payload: {
+            activityId: activity.id,
+            signedIn: Boolean(session.userId),
+            joinedByCode: typeof req.body.code === 'string',
+          },
         },
       ])
 
-      res.status(201).json({ session, course })
+      res.status(201).json({ session, activity: publicActivity(activity, questions) })
     }),
   )
 
-  /** Resume: everything the client needs to rebuild its state. */
+  /**
+   * Everything the client needs to rebuild its state.
+   *
+   * The activity is loaded through the session rather than passed in, so a
+   * resumed session shows the questions it was started against even if the
+   * teacher has since edited them — and it keeps working if the activity was
+   * unpublished in the meantime, which resolveActivity would refuse.
+   */
+  async function sessionPayload(session) {
+    const activity = session.activityId
+      ? await store.activities.findById(session.activityId)
+      : null
+
+    return {
+      session,
+      activity: activity
+        ? publicActivity(activity, await activityQuestions(store, activity.id))
+        : null,
+    }
+  }
+
   router.get(
     '/:sessionId',
     route(async (req, res) => {
       const session = await store.sessions.findById(req.params.sessionId)
       if (!session) throw notFound('No such session')
 
-      const [answers, messages, own] = await Promise.all([
+      const [payload, answers, messages, own] = await Promise.all([
+        sessionPayload(session),
         store.answers.listBySession(session.id),
         store.messages.listBySession(session.id),
         store.ownQuestions.listBySession(session.id),
       ])
 
-      res.json({
-        session,
-        course: publicCourse(session.topicId),
-        answers,
-        messages,
-        ownQuestions: own,
-      })
+      res.json({ ...payload, answers, messages, ownQuestions: own })
     }),
   )
 
@@ -105,7 +162,7 @@ export function sessionRoutes(store) {
     route(async (req, res) => {
       const session = await store.sessions.findByCode(req.params.code)
       if (!session) throw notFound('No session with that code')
-      res.json({ session, course: publicCourse(session.topicId) })
+      res.json(await sessionPayload(session))
     }),
   )
 

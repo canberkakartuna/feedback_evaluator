@@ -19,3 +19,22 @@ export class DuplicateEmailError extends Error {
 }
 
 export const isDuplicateEmail = (error) => error?.code === 'DUPLICATE_EMAIL'
+
+/**
+ * A join code that is already taken.
+ *
+ * Unlike an email this is never chosen by anyone — shortCode() draws it at
+ * random from 32^6, so a collision is luck rather than a mistake, and nobody
+ * needs to be told about it. services/activities.js catches this and draws
+ * again; only a run of failures reaches a caller.
+ */
+export class DuplicateCodeError extends Error {
+  constructor(code) {
+    super(`Activity code ${code} is already in use`)
+    this.name = 'DuplicateCodeError'
+    this.code = 'DUPLICATE_CODE'
+    this.joinCode = code
+  }
+}
+
+export const isDuplicateCode = (error) => error?.code === 'DUPLICATE_CODE'

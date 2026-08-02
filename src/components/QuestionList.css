@@ -293,3 +293,21 @@
     display: none;
   }
 }
+
+/* Consent has two halves, and this is the second one. Quiet, but present on
+   every screen the student works from — a withdrawal route they have to go
+   hunting for is not really offered. */
+.ql-withdraw {
+  margin-top: var(--s-3);
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: var(--t-12);
+  color: var(--graphite-faint);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ql-withdraw:hover {
+  color: var(--margin);
+}

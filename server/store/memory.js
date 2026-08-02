@@ -10,11 +10,11 @@
  * process serves requests: nothing here is shared, and it all goes when the
  * process does.
  *
- * Collections: users, authTokens, sessions, answers, messages, events,
- * ownQuestions, uploads, prompts, snippetLabels.
+ * Collections: users, authTokens, activities, questions, sessions, answers,
+ * messages, events, ownQuestions, uploads, prompts, snippetLabels.
  */
 
-import { DuplicateEmailError } from './errors.js'
+import { DuplicateCodeError, DuplicateEmailError } from './errors.js'
 
 const clone = (value) => (value == null ? value : structuredClone(value))
 
@@ -37,6 +37,9 @@ export function createMemoryStore() {
   const users = collection() // id -> user
   const usersByEmail = collection() // email -> id
   const authTokens = collection() // sha256(token) -> token record
+  const activities = collection() // id -> activity
+  const activitiesByCode = collection() // join code -> id
+  const questions = collection() // id -> question
   const sessions = collection()
   const sessionsByCode = collection()
   const answers = collection() // `${sessionId}:${questionId}` -> answer
@@ -148,6 +151,99 @@ export function createMemoryStore() {
       },
     },
 
+    activities: {
+      async create(doc) {
+        // Mongo refuses this with a unique index; refuse it here too, or a
+        // collision would silently steal the code off an existing activity and
+        // send its students somewhere else.
+        if (activitiesByCode.has(doc.code)) throw new DuplicateCodeError(doc.code)
+        activities.set(doc.id, doc)
+        activitiesByCode.set(doc.code, doc.id)
+        return clone(doc)
+      },
+      async findById(id) {
+        return clone(activities.get(id) ?? null)
+      },
+      async findByCode(code) {
+        const id = activitiesByCode.get(String(code).trim().toUpperCase())
+        return id ? clone(activities.get(id) ?? null) : null
+      },
+      async update(id, patch) {
+        const current = activities.get(id)
+        if (!current) return null
+        const next = { ...current, ...patch }
+        activities.set(id, next)
+        return clone(next)
+      },
+      async list({ ownerId, status, ids, limit = 200 } = {}) {
+        return [...activities.values()]
+          .filter(
+            (activity) =>
+              matches(ownerId, activity.ownerId) &&
+              matches(status, activity.status) &&
+              matches(ids, activity.id),
+          )
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, limit)
+          .map(clone)
+      },
+      async remove(id) {
+        const current = activities.get(id)
+        if (!current) return false
+        activitiesByCode.delete(current.code)
+        activities.delete(id)
+        return true
+      },
+    },
+
+    /**
+     * Questions belong to an activity and are ordered by `position` — a float,
+     * so inserting between two neighbours is one write rather than renumbering
+     * the tail. store/mongo.js says more about why.
+     */
+    questions: {
+      async create(doc) {
+        questions.set(doc.id, doc)
+        return clone(doc)
+      },
+      async findById(id) {
+        return clone(questions.get(id) ?? null)
+      },
+      async update(id, patch) {
+        const current = questions.get(id)
+        if (!current) return null
+        const next = { ...current, ...patch }
+        questions.set(id, next)
+        return clone(next)
+      },
+      async list({ activityId } = {}) {
+        return [...questions.values()]
+          .filter((question) => matches(activityId, question.activityId))
+          .sort((a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt))
+          .map(clone)
+      },
+      async count({ activityId } = {}) {
+        let total = 0
+        for (const question of questions.values()) {
+          if (matches(activityId, question.activityId)) total += 1
+        }
+        return total
+      },
+      async remove(id) {
+        return questions.delete(id)
+      },
+      async removeByActivity(activityId) {
+        let removed = 0
+        for (const [id, value] of questions) {
+          if (value.activityId === activityId) {
+            questions.delete(id)
+            removed += 1
+          }
+        }
+        return removed
+      },
+    },
+
     sessions: {
       async create(doc) {
         sessions.set(doc.id, doc)
@@ -168,9 +264,13 @@ export function createMemoryStore() {
         sessions.set(id, next)
         return clone(next)
       },
-      async list({ limit = 100, userId } = {}) {
+      async list({ limit = 100, userId, activityId } = {}) {
         return [...sessions.values()]
-          .filter((session) => matches(userId, session.userId ?? null))
+          .filter(
+            (session) =>
+              matches(userId, session.userId ?? null) &&
+              matches(activityId, session.activityId ?? null),
+          )
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
           .slice(0, limit)
           .map(clone)

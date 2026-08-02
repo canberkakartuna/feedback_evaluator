@@ -1,4 +1,4 @@
-import { fallbackReplies } from '../../shared/course.js'
+import { fallbackReplies } from '../../shared/tutor-scripts.js'
 import { hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
@@ -47,9 +47,14 @@ export function reply({ question, answer, action, text, promptVersion }) {
 
   if (action === 'hint') {
     if (hintsUsed >= question.tutor.hints.length) {
+      // What to point them at next depends on whether anybody wrote a mark
+      // scheme for this question — promising to mark an unmarkable answer is
+      // worse than saying nothing.
       return {
         ...base,
-        text: `That was the last hint for ${question.code}. Write what you have and press Check my answer — I will mark it against the rubric and name what is missing.`,
+        text: question.rubric?.length
+          ? `That was the last hint for ${question.code}. Write what you have and press Check my answer — I will mark it against the rubric and name what is missing.`
+          : `That was the last hint for ${question.code}. Write out your reasoning and I will read it back with you.`,
       }
     }
     return {

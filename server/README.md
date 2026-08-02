@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (167 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (169)
+npm run test:api         # end-to-end check over real HTTP, in-memory (243 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (247)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
@@ -64,7 +64,8 @@ the client and the API never disagree about which value won.
 ## What the server owns, and why
 
 - **Consent.** There is no route that creates a session without `consent: true`. The UI gate is a courtesy; this is the gate.
-- **The mark scheme.** `GET /api/course` never returns rubric keywords or tutor scripts. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
+- **The questions themselves.** Teachers author them; nothing is hard-coded. An activity is a set of questions behind one join code, and a student reaches it by typing that code — see [Activity endpoints](#activity-endpoints).
+- **The mark scheme.** No student-facing route returns rubric keywords or tutor scripts; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
 - **Who can see whom.** Roles and the hierarchy are enforced in `services/users.js`, not in the client. See [Users, roles and the hierarchy](#users-roles-and-the-hierarchy).
@@ -171,21 +172,49 @@ All require `Authorization: Bearer <login token>`.
 | `DELETE` | `/api/users/:userId` | Refused with 409 when it would orphan a roster or destroy recorded work |
 | `GET` | `/api/users/:userId/sessions` | A student's work sessions with counts — how a teacher checks on their own students without the researcher token |
 
+### Activity endpoints
+
+Authoring requires a login token and a role of teacher, manager or admin. Reach
+is by ownership: a teacher sees their own activities, a manager sees theirs plus
+every teacher on their roster, an admin sees all. Out of reach answers 404, not
+403 — whether an activity id exists is not something one teacher should learn
+from another's list.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/activities` | Everything in scope, each with a `questionCount` |
+| `POST` | `/api/activities` | `{ title, blurb? }` → 201. Created as a **draft** with a join code |
+| `GET` | `/api/activities/:id` | The authoring view: full questions, **mark scheme and hints included** |
+| `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
+| `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
+| `DELETE` | `/api/activities/:id` | 409 once any student has worked on it — unpublish instead |
+| `POST` | `/api/activities/:id/questions` | `{ prompt, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **Only `prompt` is required** |
+| `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
+| `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
+| `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
+| `GET` | `/api/activities/by-code/:code` | **Open.** The join box: title and count only, and only for a published activity |
+| `GET` | `/api/activities/available` | Published work from a signed-in student's own teacher |
+
+**The rubric and the tutor script are optional, and that is the design.** A
+question with only a prompt still works: the chat answers from the system
+prompt and the answer is passed on unmarked rather than scored against criteria
+nobody wrote. Fill them in and the same question gains per-criterion marking and
+staged hints. `shared/activity.js` holds the helpers every reader uses so that
+"no rubric" means one thing everywhere.
+
 ## Student endpoints
 
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/health` | |
-| `GET` | `/api/course?topicId=` | Sanitised. `topicId` defaults to `all` |
-| `GET` | `/api/sessions/topics` | For the entry screen |
-| `POST` | `/api/sessions` | `{ consent: true, topicId?, device?, conditionId? }` → `{ session, course }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
-| `GET` | `/api/sessions/:id` | Resume: session, course, answers, messages, own questions |
+| `POST` | `/api/sessions` | `{ consent: true, code }` **or** `{ consent: true, activityId }` → `{ session, activity }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
+| `GET` | `/api/sessions/:id` | Resume: session, activity, answers, messages, own questions |
 | `GET` | `/api/sessions/by-code/:code` | Attach a phone to a session (doc item 3) |
 | `POST` | `/api/sessions/:id/end` | |
 | `DELETE` | `/api/sessions/:id` | "Delete my session" — also deletes the files |
 | `PUT` | `/api/sessions/:id/answers/:questionId` | `{ mode?, draft?, strokes?, selfMark? }` |
 | `GET` | `/api/sessions/:id/answers/:questionId` | |
-| `POST` | `/api/sessions/:id/answers/:questionId/check` | Marks against the hidden rubric |
+| `POST` | `/api/sessions/:id/answers/:questionId/check` | Marks against the hidden rubric. **400 when the question has no rubric** |
 | `GET` | `/api/sessions/:id/questions/:qid/messages` | Thread for one question |
 | `POST` | `/api/sessions/:id/questions/:qid/messages` | `{ text }` **or** `{ action: hint\|concept\|example\|review }` → `{ student, tutor }` |
 | `POST` | `/api/sessions/:id/messages/:msgId/rating` | `{ value: up\|down, note? }` (doc item 5) |
@@ -195,26 +224,40 @@ All require `Authorization: Bearer <login token>`.
 | `POST` | `/api/sessions/:id/own-questions` | `{ prompt }` (doc item 8) |
 | `GET` | `/api/sessions/:id/own-questions` | |
 | `POST` | `/api/sessions/:id/events` | `{ events: [{ type, questionId?, payload?, at? }] }`, max 200 |
-| `GET`/`POST` | `/api/prompts` | Versioned system prompt (doc item 6) |
+| `GET` | `/api/prompts` | The active system prompt and its version history |
+| `POST` | `/api/prompts` | `{ text, note? }` → a new version, made active. Teacher, manager or admin; stamped with who wrote it |
 
-## Researcher endpoints
+## Reading and labelling
 
-`Authorization: Bearer $RESEARCH_TOKEN` (or `X-Research-Token`) — **or a signed-in
-admin's login token**, since an admin reaches everything and should not need the
-shared token to do it. Any other role falls through to the token check and is
-refused: a teacher sees their own students through
-`GET /api/users/:userId/sessions`, not everybody through here.
+Two different callers use these, and they see different amounts.
 
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/api/research/sessions` | Every session with message/snippet/event counts |
-| `GET` | `/api/research/sessions/:id/transcript` | Grouped by question, with answers and events |
-| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | **Snippets** = one student turn + the feedback that answered it |
-| `PATCH` | `/api/research/snippets/:id` | `{ included, labels: { criterionId: yes\|no\|partly }, note, labelledBy }` |
-| `GET` | `/api/research/export?format=json\|csv` | Kept snippets only; CSV is one row per snippet |
+A **researcher** presents `Authorization: Bearer $RESEARCH_TOKEN` (or
+`X-Research-Token`), and a signed-in **admin** needs neither — they reach
+everything already. Both see every session in the system.
+
+A **teacher or manager** sees only what came out of their own work: sessions
+belonging to students on their roster, *plus* anonymous sessions on activities
+they own. That second half matters, because most sessions are anonymous and
+would otherwise be invisible to the teacher who set the work. The scope is
+computed per request from the same hierarchy `services/users.js` uses, and is
+applied to writes as well as reads — a teacher cannot label a snippet out of
+another teacher's class any more than they can read one.
+
+| Method | Path | Who | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/research/sessions` | scoped | Sessions with message/snippet/event counts |
+| `GET` | `/api/research/sessions/:id/transcript` | scoped | Grouped by question, with answers and events |
+| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped | **Snippets** = one student turn + the feedback that answered it |
+| `PATCH` | `/api/research/snippets/:id` | scoped | `{ included, labels: { criterionId: yes\|no\|partly }, note }` |
+| `GET` | `/api/research/export?format=json\|csv` | **researcher only** | Kept snippets across every class; CSV is one row per snippet |
 
 Snippets are **derived** from transcripts, not stored, so they stay correct as a
 thread grows. Only the decision about each one is persisted.
+
+`labelledBy` is taken from the login token, not the request body. The study wants
+two coders per snippet so an inter-rater score can be computed, and that number
+means nothing if the coder's name is self-reported. A researcher on the shared
+token has no account, so they may still name themselves.
 
 ## Events
 
@@ -292,7 +335,8 @@ created ses_36be25e02cd2439fa4c2 (code P4796G) in process 94330
 `store/index.js` is the only place that knows which one is in use: MongoDB when
 `MONGODB_URI` is set, in-memory when it is not. Both expose the same async
 methods, collection for collection — `sessions`, `answers`, `messages`, `events`,
-`ownQuestions`, `uploads`, `prompts`, `snippetLabels`, `users`, `authTokens` — so nothing in `routes/`
+`ownQuestions`, `uploads`, `prompts`, `snippetLabels`, `users`, `authTokens`,
+`activities`, `questions` — so nothing in `routes/`
 or `services/` knows the difference. `npm run test:api:mongo` runs the whole
 smoke suite against Mongo to keep that true.
 

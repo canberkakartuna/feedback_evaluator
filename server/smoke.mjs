@@ -1,12 +1,21 @@
 /**
- * End-to-end check over real HTTP: consent, answering, marking, the tutor,
- * uploads, own questions, events, and the researcher side.
+ * End-to-end check over real HTTP: accounts, authoring, consent, answering,
+ * marking, the tutor, uploads, own questions, events, and the labelling loop.
  *
  *   npm run test:api                 # in-memory store
  *   npm run test:api:mongo           # the same assertions against MongoDB
  *
  * Starts its own server on a spare port with a known research token, so it
  * never touches a running one.
+ *
+ * **Accounts come first now, and that is a change worth knowing about.** They
+ * used to run last, so that everything above them proved the anonymous path
+ * still worked with no users in the system at all. Questions are no longer
+ * hard-coded — a teacher authors them — so a teacher has to exist before there
+ * is anything for a student to open. The anonymous path is still covered, and
+ * still the default: every student assertion below runs against a session
+ * created with no token, joined by code, exactly as a student with no account
+ * would. The signed-in student is the extra case, not the base one.
  */
 import { createApp } from './app.js'
 import { once } from 'node:events'
@@ -95,8 +104,60 @@ async function call(method, url, { body, token } = {}) {
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='
 
+/**
+ * The question the marking assertions run against.
+ *
+ * A real rubric with real keywords, because the point of several checks below
+ * is that none of this reaches the browser. "water potential" appears in a
+ * keyword and in a hint and in no public field, so finding it in a student
+ * payload means something leaked.
+ */
+const OSMOSIS = {
+  prompt:
+    'A red blood cell is placed in distilled water. Within a minute it swells and bursts. Explain why, and say why a plant cell in the same beaker would not burst.',
+  kind: 'Explain',
+  rubric: [
+    {
+      label: 'Names the water potential gradient',
+      points: 1,
+      keywords: ['water potential', 'hypotonic'],
+      coach: 'Say which way water moves and what drives it.',
+    },
+    {
+      label: 'Identifies osmosis across the membrane',
+      points: 1,
+      keywords: ['osmosis', 'partially permeable'],
+      coach: 'Name the process, and the property of the membrane that allows it.',
+    },
+    {
+      label: 'Credits the cell wall for the plant cell',
+      points: 1,
+      keywords: ['cell wall', 'turgid'],
+      coach: 'The plant cell has a structure the red blood cell lacks.',
+    },
+  ],
+  tutor: {
+    opening: 'This one is two questions wearing one coat. Which half feels shakier?',
+    hints: [
+      'Start outside the cell. Distilled water has no solute in it at all.',
+      'Water moves down that gradient, into the cell, by osmosis.',
+      'The plant cell has a rigid layer outside the membrane that pushes back.',
+    ],
+    concept: 'Osmosis is the net movement of water across a partially permeable membrane.',
+    example: 'Worked parallel: a potato cylinder in 1.0 M sucrose loses mass.',
+    misconception: 'Careful with "the water is sucked in" — water is not pulled.',
+  },
+}
+
+/** A teacher who typed a prompt and nothing else. Allowed, and has to work. */
+const BARE_QUESTION = {
+  prompt: 'Sketch the apparatus you would use to measure the rate of this reaction.',
+  kind: 'Diagram',
+  workingExpected: true,
+}
+
 try {
-  console.log('\nhealth + course')
+  console.log('\nhealth on an empty system')
   const health = await call('GET', '/api/health')
   check('health ok', health.status === 200 && health.body.ok === true)
   check(
@@ -105,272 +166,13 @@ try {
     `got ${health.body.store}`,
   )
   check('persistence reported correctly', health.body.persistent === useMongo)
+  check('health reports no users', health.body.users === 0)
   if (useMongo) {
     check('database reachable', health.body.databaseReachable === true)
     check('using the throwaway database', health.body.database === smokeDb)
   }
 
-  const course = await call('GET', '/api/course')
-  check('course returns groups', course.body.course.groups.length === 4)
-  const firstQuestion = course.body.course.groups[0].questions[0]
-  check('question carries a prompt', typeof firstQuestion.prompt === 'string')
-  check('no rubric on the question', !('rubric' in firstQuestion))
-  check('tutor scripts are NOT exposed', !('tutor' in firstQuestion))
-  // "water potential" is a BIO-101 rubric keyword and appears in its hints,
-  // but in none of the public fields — so finding it means something leaked.
-  const payload = JSON.stringify(course.body)
-  check('no rubric keywords anywhere in the payload', !payload.includes('water potential'))
-  check('no hint text anywhere in the payload', !payload.includes('Start outside the cell'))
-  check('criteria are counted, not listed', firstQuestion.criteriaCount === 3)
-
-  const badTopic = await call('GET', '/api/course?topicId=nope')
-  check('unknown topic is 404', badTopic.status === 404)
-
-  console.log('\nconsent gate')
-  const refused = await call('POST', '/api/sessions', { body: { topicId: 'all' } })
-  check('no session without consent', refused.status === 400)
-  check('says which field is missing', refused.body.error.details?.field === 'consent')
-
-  const declined = await call('POST', '/api/sessions', { body: { consent: false } })
-  check('explicit refusal also rejected', declined.status === 400)
-
-  const started = await call('POST', '/api/sessions', {
-    body: { consent: true, topicId: 'transport', device: 'smoke' },
-  })
-  check('session created', started.status === 201)
-  const session = started.body.session
-  check('consent recorded with a version', Boolean(session.consent.version))
-  check('topic scoped course returned', started.body.course.groups.length === 1)
-  check('session has a short code', /^[A-Z2-9]{6}$/.test(session.code))
-
-  const byCode = await call('GET', `/api/sessions/by-code/${session.code}`)
-  check('phone can attach by code', byCode.body.session.id === session.id)
-
-  console.log('\nanswers + marking')
-  const qId = started.body.course.groups[0].questions[1].id // BIO-102, the data question
-  const saved = await call('PUT', `/api/sessions/${session.id}/answers/${qId}`, {
-    body: { mode: 'write', draft: 'It is active transport because the plateau shows saturation.' },
-  })
-  check('answer saved', saved.status === 200 && saved.body.answer.mode === 'write')
-
-  const checked = await call('POST', `/api/sessions/${session.id}/answers/${qId}/check`)
-  check('marked server-side', checked.status === 200)
-  check('partial credit awarded', checked.body.feedback.earned > 0)
-  check(
-    'unmet criterion returns coaching, not keywords',
-    typeof checked.body.feedback.nextStep === 'string' &&
-      !JSON.stringify(checked.body.feedback).includes('keywords'),
-  )
-  check('criterion labels present', checked.body.feedback.criteria.length === 4)
-
-  const badMode = await call('PUT', `/api/sessions/${session.id}/answers/${qId}`, {
-    body: { mode: 'telepathy' },
-  })
-  check('unknown mode rejected', badMode.status === 400)
-
-  const switched = await call('PUT', `/api/sessions/${session.id}/answers/${qId}`, {
-    body: { mode: 'draw' },
-  })
-  check('switching mode clears the old answer', switched.body.answer.draft === '')
-  check('switching mode clears the old mark', switched.body.answer.feedback === null)
-
-  const drawCheck = await call('POST', `/api/sessions/${session.id}/answers/${qId}/check`)
-  check('a drawing is not scored', drawCheck.body.feedback.markable === false)
-
-  const marked = await call('PUT', `/api/sessions/${session.id}/answers/${qId}`, {
-    body: { selfMark: 'unfinished' },
-  })
-  check('self-mark stored', marked.body.answer.selfMark === 'unfinished')
-  const badMark = await call('PUT', `/api/sessions/${session.id}/answers/${qId}`, {
-    body: { selfMark: 'brilliant' },
-  })
-  check('unknown self-mark rejected', badMark.status === 400)
-
-  console.log('\ntutor')
-  const hint1 = await call('POST', `/api/sessions/${session.id}/questions/${qId}/messages`, {
-    body: { action: 'hint' },
-  })
-  check('hint returns both turns', hint1.status === 201 && Boolean(hint1.body.student && hint1.body.tutor))
-  check('hint 1 labelled', hint1.body.tutor.label === 'Hint 1 of 3')
-  const hint2 = await call('POST', `/api/sessions/${session.id}/questions/${qId}/messages`, {
-    body: { action: 'hint' },
-  })
-  check('hints escalate server-side', hint2.body.tutor.label === 'Hint 2 of 3')
-  check('hint text differs', hint1.body.tutor.text !== hint2.body.tutor.text)
-
-  const typed = await call('POST', `/api/sessions/${session.id}/questions/${qId}/messages`, {
-    body: { text: 'Is it because the carriers are saturated?' },
-  })
-  check('free text gets a reply', typed.status === 201 && typed.body.tutor.text.length > 0)
-
-  const empty = await call('POST', `/api/sessions/${session.id}/questions/${qId}/messages`, {
-    body: {},
-  })
-  check('empty message rejected', empty.status === 400)
-
-  const rated = await call('POST', `/api/sessions/${session.id}/messages/${typed.body.tutor.id}/rating`, {
-    body: { value: 'up' },
-  })
-  check('feedback can be rated', rated.body.message.rating === 'up')
-
-  const rateStudent = await call(
-    'POST',
-    `/api/sessions/${session.id}/messages/${typed.body.student.id}/rating`,
-    { body: { value: 'up' } },
-  )
-  check('student turns cannot be rated', rateStudent.status === 400)
-
-  console.log('\nuploads')
-  const upload = await call('POST', `/api/sessions/${session.id}/questions/${qId}/uploads`, {
-    body: { name: 'working.png', dataUrl: PNG, source: 'whiteboard' },
-  })
-  check('upload accepted', upload.status === 201)
-  check('attached to the answer', upload.body.answer.attachments.length === 1)
-  check('bytes are served back', (await fetch(`${base}${upload.body.upload.url}`)).status === 200)
-  check('file path is not leaked', upload.body.upload.path === undefined)
-
-  const second = await call('POST', `/api/sessions/${session.id}/questions/${qId}/uploads`, {
-    body: { name: 'again.png', dataUrl: PNG, source: 'whiteboard' },
-  })
-  check('a board replaces its own export', second.body.answer.attachments.length === 1)
-
-  const badFile = await call('POST', `/api/sessions/${session.id}/questions/${qId}/uploads`, {
-    body: { name: 'x.txt', dataUrl: 'data:text/plain;base64,aGVsbG8=' },
-  })
-  check('unsupported type rejected', badFile.status === 400)
-
-  console.log('\nown questions + events')
-  const own = await call('POST', `/api/sessions/${session.id}/own-questions`, {
-    body: { prompt: 'How do I solve 3(x - 2) = 4x + 1?' },
-  })
-  check('own question created', own.status === 201 && own.body.question.code === 'OWN-01')
-
-  const ownHint = await call(
-    'POST',
-    `/api/sessions/${session.id}/questions/${own.body.question.id}/messages`,
-    { body: { action: 'hint' } },
-  )
-  check('own question gets generic hints', ownHint.body.tutor.label === 'Hint 1 of 3')
-
-  const ownCheck = await call(
-    'POST',
-    `/api/sessions/${session.id}/answers/${own.body.question.id}/check`,
-  )
-  check('own question cannot be marked', ownCheck.status === 400)
-
-  const events = await call('POST', `/api/sessions/${session.id}/events`, {
-    body: { events: [{ type: 'question_shown', questionId: qId }, { type: 'idle' }] },
-  })
-  check('events accepted in a batch', events.body.written === 2)
-  const badEvent = await call('POST', `/api/sessions/${session.id}/events`, {
-    body: { events: [{ payload: {} }] },
-  })
-  check('typeless event rejected', badEvent.status === 400)
-
-  console.log('\nprompt versioning')
-  const prompt = await call('POST', '/api/prompts', {
-    body: { text: 'Never give the final answer. Ask one question back.', note: 'v1 socratic' },
-  })
-  check('prompt version created', prompt.body.prompt.versionId === 'v1')
-  const later = await call('POST', '/api/sessions', { body: { consent: true } })
-  check('new sessions record the active prompt', later.body.session.promptVersion === 'v1')
-
-  console.log('\nresearcher access')
-  const noToken = await call('GET', '/api/research/sessions')
-  check('research needs a token', noToken.status === 403)
-  const wrongToken = await call('GET', '/api/research/sessions', { token: 'nope' })
-  check('wrong token refused', wrongToken.status === 403)
-
-  const list = await call('GET', '/api/research/sessions', { token: 'smoke-token' })
-  check('sessions listed', list.status === 200 && list.body.sessions.length === 2)
-  const row = list.body.sessions.find((entry) => entry.id === session.id)
-  check('message counts reported', row.counts.messages === 8)
-  check('snippet count reported', row.counts.snippets === 4)
-
-  const transcript = await call(`GET`, `/api/research/sessions/${session.id}/transcript`, {
-    token: 'smoke-token',
-  })
-  check('transcript grouped by question', transcript.body.questions.length === 2)
-  check('own question flagged in transcript', transcript.body.questions.some((q) => q.isOwnQuestion))
-
-  const snippets = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
-    token: 'smoke-token',
-  })
-  check('snippets are student+feedback pairs', snippets.body.snippets.length === 4)
-  check(
-    'each snippet holds both turns',
-    snippets.body.snippets.every((s) => s.student.text && s.tutor.text),
-  )
-  check('labelling criteria offered', snippets.body.criteria.length === 5)
-  check('undecided by default', snippets.body.snippets.every((s) => s.included === null))
-
-  const target = snippets.body.snippets[0]
-  const labelled = await call('PATCH', `/api/research/snippets/${target.id}`, {
-    token: 'smoke-token',
-    body: {
-      included: true,
-      labels: { specific: 'yes', actionable: 'partly', 'no-answer': 'yes' },
-      note: 'Good nudge, stops short of the answer.',
-      labelledBy: 'teacher-1',
-    },
-  })
-  check('snippet labelled', labelled.body.label.included === true)
-
-  const badLabel = await call('PATCH', `/api/research/snippets/${target.id}`, {
-    token: 'smoke-token',
-    body: { labels: { specific: 'maybe' } },
-  })
-  check('label value validated', badLabel.status === 400)
-  const badCriterion = await call('PATCH', `/api/research/snippets/${target.id}`, {
-    token: 'smoke-token',
-    body: { labels: { invented: 'yes' } },
-  })
-  check('unknown criterion rejected', badCriterion.status === 400)
-
-  const included = await call('GET', '/api/research/snippets?included=true', {
-    token: 'smoke-token',
-  })
-  check('can filter to kept snippets', included.body.count === 1)
-
-  const exportJson = await call('GET', '/api/research/export', { token: 'smoke-token' })
-  check('export holds only kept snippets', exportJson.body.count === 1)
-  const exportCsv = await fetch(`${base}/api/research/export?format=csv`, {
-    headers: { authorization: 'Bearer smoke-token' },
-  })
-  const csv = await exportCsv.text()
-  check('csv export', exportCsv.headers.get('content-type').includes('text/csv'))
-  check('csv has a header and one row', csv.trim().split('\n').length === 2)
-  check('csv includes the label column', csv.includes('label_specific'))
-
-  console.log('\nwithdrawal')
-  const deleted = await call('DELETE', `/api/sessions/${session.id}`)
-  check('session deleted', deleted.body.deleted === true)
-  check('its files were removed', deleted.body.files === 2)
-  const gone = await call('GET', `/api/sessions/${session.id}`)
-  check('session no longer readable', gone.status === 404)
-  const afterDelete = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
-    token: 'smoke-token',
-  })
-  check('its snippets are gone too', afterDelete.body.snippets.length === 0)
-
-  console.log('\nnot found')
-  const nowhere = await call('GET', '/api/nope')
-  check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))
-  const badSession = await call('GET', '/api/sessions/ses_missing')
-  check('unknown session is 404', badSession.status === 404)
-
-  /**
-   * Accounts and the hierarchy.
-   *
-   * Deliberately last: everything above runs with no accounts at all, which is
-   * the anonymous path this must not break. The counts asserted in the
-   * researcher block would also shift if a signed-in session were created
-   * before them.
-   */
   console.log('\nbootstrap')
-  const noUsersYet = await call('GET', '/api/health')
-  check('health reports no users', noUsersYet.body.users === 0)
-
   const openBootstrap = await call('POST', '/api/auth/bootstrap', {
     body: { name: 'Root', email: 'root@example.com', password: 'correct horse battery' },
   })
@@ -420,12 +222,6 @@ try {
     wrongPassword.body.error.message === unknownEmail.body.error.message,
   )
 
-  const login = await call('POST', '/api/auth/login', {
-    body: { email: 'root@example.com', password: 'correct horse battery' },
-  })
-  check('login returns a token', login.status === 200 && typeof login.body.token === 'string')
-  check('login records lastLoginAt', typeof login.body.user.lastLoginAt === 'string')
-
   const anonymousMe = await call('GET', '/api/auth/me')
   check('me needs a token', anonymousMe.status === 401)
   const badTokenMe = await call('GET', '/api/auth/me', { token: 'not-a-real-token' })
@@ -443,10 +239,11 @@ try {
   ).body.user
   check('admin creates a manager', manager?.role === 'manager')
 
-  const managerLogin = await call('POST', '/api/auth/login', {
-    body: { email: 'mo@example.com', password: 'correct horse battery' },
-  })
-  const managerToken = managerLogin.body.token
+  const managerToken = (
+    await call('POST', '/api/auth/login', {
+      body: { email: 'mo@example.com', password: 'correct horse battery' },
+    })
+  ).body.token
 
   const teacher = (
     await call('POST', '/api/users', {
@@ -456,10 +253,11 @@ try {
   ).body.user
   check('manager creates a teacher under themselves', teacher.managerId === manager.id)
 
-  const teacherLogin = await call('POST', '/api/auth/login', {
-    body: { email: 'tia@example.com', password: 'correct horse battery' },
-  })
-  const teacherToken = teacherLogin.body.token
+  const teacherToken = (
+    await call('POST', '/api/auth/login', {
+      body: { email: 'tia@example.com', password: 'correct horse battery' },
+    })
+  ).body.token
 
   const student = (
     await call('POST', '/api/users', {
@@ -497,6 +295,12 @@ try {
   ).body.user
   check('admin can create anywhere in the tree', otherStudent.teacherId === otherTeacher.id)
 
+  const otherTeacherToken = (
+    await call('POST', '/api/auth/login', {
+      body: { email: 'ada@example.com', password: 'correct horse battery' },
+    })
+  ).body.token
+
   const unassigned = await call('POST', '/api/users', {
     token: adminToken,
     body: { role: 'student', name: 'Una Unassigned', email: 'una@example.com', password: 'correct horse battery' },
@@ -504,10 +308,10 @@ try {
   check('admin may leave a student unassigned', unassigned.body.user.teacherId === null)
 
   console.log('\nwho can create whom')
-  const studentLogin = await call('POST', '/api/auth/login', {
+  const studentLoginFirst = await call('POST', '/api/auth/login', {
     body: { email: 'sam@example.com', password: 'correct horse battery' },
   })
-  let studentToken = studentLogin.body.token
+  let studentToken = studentLoginFirst.body.token
 
   const studentCreates = await call('POST', '/api/users', {
     token: studentToken,
@@ -575,21 +379,608 @@ try {
   })
   check("a teacher cannot fill another teacher's roster", poached.status === 403)
 
-  console.log('\nscope')
-  const adminList = await call('GET', '/api/users', { token: adminToken })
-  check('admin sees everyone', adminList.body.users.length === 7)
-  check('admin scope reported as all', adminList.body.scope === 'all')
+  /* ================================================================ authoring */
 
-  const managerList = await call('GET', '/api/users', { token: managerToken })
-  const managerIds = managerList.body.users.map((u) => u.id)
-  check('manager sees self, teachers and their students', managerList.body.users.length === 5)
+  console.log('\nauthoring an activity')
+  const noAuth = await call('POST', '/api/activities', { body: { title: 'Sneaky' } })
+  check('creating an activity needs a token', noAuth.status === 401)
+
+  const studentAuthors = await call('POST', '/api/activities', {
+    token: studentToken,
+    body: { title: 'Sneaky' },
+  })
+  check('a student cannot author', studentAuthors.status === 403)
+
+  const untitled = await call('POST', '/api/activities', { token: teacherToken, body: {} })
+  check('an activity needs a title', untitled.status === 400)
+
+  const created = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Membranes & transport', blurb: 'How things cross the membrane.' },
+  })
+  check('teacher creates an activity', created.status === 201)
+  const activity = created.body.activity
+  check('it starts as a draft', activity.status === 'draft')
+  check('it has a join code', /^[A-Z2-9]{6}$/.test(activity.code))
+  check('it is owned by its author', activity.ownerId === teacher.id)
+  check('it starts empty', activity.questionCount === 0)
+
+  console.log('\nadding questions')
+  const emptyPublish = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { status: 'published' },
+  })
+  check('an empty activity cannot be published', emptyPublish.status === 400)
+
+  const noPrompt = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { kind: 'Explain' },
+  })
+  check('a question needs a prompt', noPrompt.status === 400)
+
+  const badKind = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { prompt: 'Fine prompt', kind: 'Interpretive dance' },
+  })
+  check('an unknown question kind is rejected', badKind.status === 400)
+
+  const badCriterion = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { prompt: 'Fine prompt', rubric: [{ points: 1 }] },
+  })
+  check('a criterion needs a label', badCriterion.status === 400)
+
+  const badPoints = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { prompt: 'Fine prompt', rubric: [{ label: 'Something', points: -3 }] },
+  })
+  check('negative points rejected', badPoints.status === 400)
+
+  const marked = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: OSMOSIS,
+  })
+  check('question with a rubric created', marked.status === 201)
+  const markedQ = marked.body.question
+  check('it is numbered Q1', markedQ.code === 'Q1')
+  check('the rubric came back to its author', markedQ.rubric.length === 3)
+  check('criteria were given ids', markedQ.rubric.every((c) => typeof c.id === 'string' && c.id))
+  check('keywords were lower-cased', markedQ.rubric[0].keywords.includes('water potential'))
+
+  const bare = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: BARE_QUESTION,
+  })
+  check('a question with no rubric is allowed', bare.status === 201)
+  const bareQ = bare.body.question
+  check('it is numbered Q2', bareQ.code === 'Q2')
+  check('its rubric is empty, not absent', Array.isArray(bareQ.rubric) && bareQ.rubric.length === 0)
+  check('its tutor script is empty, not absent', bareQ.tutor.hints.length === 0)
+
+  const dataQ = (
+    await call('POST', `/api/activities/${activity.id}/questions`, {
+      token: teacherToken,
+      body: {
+        prompt: 'Use the table to decide whether uptake is diffusion or active transport.',
+        kind: 'Read the data',
+        stimulus: {
+          kind: 'table',
+          caption: 'Glucose uptake',
+          columns: ['External glucose', 'Uptake', 'Uptake with cyanide'],
+          rows: [
+            ['1.0', '18', '2'],
+            ['16.0', '80', '8'],
+          ],
+        },
+        rubric: [
+          { label: 'Concludes active transport', points: 1, keywords: ['active transport'] },
+          { label: 'Uses the plateau', points: 1, keywords: ['plateau', 'levels off'] },
+        ],
+      },
+    })
+  ).body.question
+  check('a question can carry a table', dataQ.stimulus.rows.length === 2)
+
+  const raggedTable = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: {
+      prompt: 'Fine prompt',
+      stimulus: { kind: 'table', columns: ['a', 'b'], rows: [['only one']] },
+    },
+  })
+  check('a ragged table row is rejected', raggedTable.status === 400)
+
+  console.log('\nauthoring scope')
+  const peek = await call('GET', `/api/activities/${activity.id}`, { token: otherTeacherToken })
+  check("another teacher cannot read it, and gets 404 not 403", peek.status === 404)
+
+  const meddle = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: otherTeacherToken,
+    body: { prompt: 'Not yours' },
+  })
+  check('nor add a question to it', meddle.status === 404)
+
+  const managerReads = await call('GET', `/api/activities/${activity.id}`, { token: managerToken })
+  check("the manager above them can read it", managerReads.status === 200)
+  const adminReads = await call('GET', `/api/activities/${activity.id}`, { token: adminToken })
+  check('so can an admin', adminReads.status === 200)
+
+  const ownList = await call('GET', '/api/activities', { token: teacherToken })
+  check('teacher lists their own', ownList.body.activities.length === 1)
+  check('with a question count', ownList.body.activities[0].questionCount === 3)
+  const otherList = await call('GET', '/api/activities', { token: otherTeacherToken })
+  check("and not another teacher's", otherList.body.activities.length === 0)
+  const managerList = await call('GET', '/api/activities', { token: managerToken })
+  check("a manager sees their teachers'", managerList.body.activities.length === 1)
+
+  console.log('\nreordering')
+  const shortOrder = await call('POST', `/api/activities/${activity.id}/questions/reorder`, {
+    token: teacherToken,
+    body: { questionIds: [dataQ.id] },
+  })
+  check('a partial order is rejected', shortOrder.status === 400)
+
+  const dupeOrder = await call('POST', `/api/activities/${activity.id}/questions/reorder`, {
+    token: teacherToken,
+    body: { questionIds: [dataQ.id, dataQ.id, markedQ.id] },
+  })
+  check('a duplicate in the order is rejected', dupeOrder.status === 400)
+
+  const reordered = await call('POST', `/api/activities/${activity.id}/questions/reorder`, {
+    token: teacherToken,
+    body: { questionIds: [dataQ.id, markedQ.id, bareQ.id] },
+  })
+  check('reordering works', reordered.status === 200)
+  check('the moved question is now Q1', reordered.body.questions[0].id === dataQ.id)
+  check('and renumbered', reordered.body.questions[0].code === 'Q1')
+  check('the old Q1 is now Q2', reordered.body.questions[1].code === 'Q2')
+
+  // Put it back, so the assertions below read in the order they were written.
+  await call('POST', `/api/activities/${activity.id}/questions/reorder`, {
+    token: teacherToken,
+    body: { questionIds: [markedQ.id, bareQ.id, dataQ.id] },
+  })
+
+  console.log('\nnothing leaks to the student')
+  const preview = await call('GET', `/api/activities/${activity.id}/preview`, {
+    token: teacherToken,
+  })
+  const previewText = JSON.stringify(preview.body)
+  check('preview returns every question', preview.body.activity.questions.length === 3)
+  check('no rubric on a previewed question', !('rubric' in preview.body.activity.questions[0]))
+  check('no tutor script either', !('tutor' in preview.body.activity.questions[0]))
+  check('no keyword survives the trip', !previewText.includes('water potential'))
+  check('no hint text survives it', !previewText.includes('Start outside the cell'))
+  check('criteria are counted, not listed', preview.body.activity.questions[0].criteriaCount === 3)
+  check('and the count is honest', preview.body.activity.questions[0].points === 3)
+  check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
+  check('a marked one says so too', preview.body.activity.questions[0].markable === true)
+
+  console.log('\npublishing')
+  const draftJoin = await call('GET', `/api/activities/by-code/${activity.code}`)
+  check('a draft is not reachable by code', draftJoin.status === 404)
+
+  const draftSession = await call('POST', '/api/sessions', {
+    body: { consent: true, code: activity.code },
+  })
+  check('and cannot be started', draftSession.status === 404)
+
+  const published = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { status: 'published' },
+  })
+  check('publishing works once it has questions', published.body.activity.status === 'published')
+
+  const join = await call('GET', `/api/activities/by-code/${activity.code}`)
+  check('now the code resolves', join.status === 200)
+  check('the join preview names it', join.body.activity.title === 'Membranes & transport')
+  check('and counts the questions', join.body.activity.questionCount === 3)
+  check('but carries no questions', !('questions' in join.body.activity))
+
+  const wrongCode = await call('GET', '/api/activities/by-code/ZZZZZZ')
+  check('an unknown code is 404', wrongCode.status === 404)
+
+  /* ================================================================== student */
+
+  console.log('\nconsent gate')
+  const refused = await call('POST', '/api/sessions', { body: { code: activity.code } })
+  check('no session without consent', refused.status === 400)
+  check('says which field is missing', refused.body.error.details?.field === 'consent')
+
+  const declined = await call('POST', '/api/sessions', {
+    body: { consent: false, code: activity.code },
+  })
+  check('explicit refusal also rejected', declined.status === 400)
+
+  const noActivity = await call('POST', '/api/sessions', { body: { consent: true } })
+  check('a session must name an activity', noActivity.status === 404)
+
+  console.log('\njoining anonymously')
+  const started = await call('POST', '/api/sessions', {
+    body: { consent: true, code: activity.code, device: 'smoke' },
+  })
+  check('session created by code', started.status === 201)
+  const session = started.body.session
+  check('it is anonymous', session.userId === null)
+  check('consent recorded with a version', Boolean(session.consent.version))
+  check('it is bound to the activity', session.activityId === activity.id)
+  check('the activity came back with it', started.body.activity.questions.length === 3)
+  check('session has its own short code', /^[A-Z2-9]{6}$/.test(session.code))
+  check(
+    'no mark scheme in the session payload',
+    !JSON.stringify(started.body).includes('water potential'),
+  )
+
+  const byCode = await call('GET', `/api/sessions/by-code/${session.code}`)
+  check('phone can attach by session code', byCode.body.session.id === session.id)
+  check('and gets the activity too', byCode.body.activity.id === activity.id)
+
+  console.log('\nanswers + marking')
+  const saved = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: {
+      mode: 'write',
+      draft:
+        'Distilled water has a higher water potential, so water enters by osmosis through the partially permeable membrane.',
+    },
+  })
+  check('answer saved', saved.status === 200 && saved.body.answer.mode === 'write')
+
+  const checked = await call('POST', `/api/sessions/${session.id}/answers/${markedQ.id}/check`)
+  check('marked server-side', checked.status === 200)
+  check('partial credit awarded', checked.body.feedback.earned === 2)
+  check('out of the authored total', checked.body.feedback.total === 3)
+  check('criterion labels present', checked.body.feedback.criteria.length === 3)
+  check(
+    'unmet criterion returns coaching, not keywords',
+    typeof checked.body.feedback.nextStep === 'string' &&
+      !JSON.stringify(checked.body.feedback).includes('keywords'),
+  )
+
+  const unmarkable = await call('POST', `/api/sessions/${session.id}/answers/${bareQ.id}/check`)
+  check('a question with no rubric cannot be checked', unmarkable.status === 400)
+
+  const badMode = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: { mode: 'telepathy' },
+  })
+  check('unknown mode rejected', badMode.status === 400)
+
+  const switched = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: { mode: 'draw' },
+  })
+  check('switching mode clears the old answer', switched.body.answer.draft === '')
+  check('switching mode clears the old mark', switched.body.answer.feedback === null)
+
+  const drawCheck = await call('POST', `/api/sessions/${session.id}/answers/${markedQ.id}/check`)
+  check('a drawing is not scored', drawCheck.body.feedback.markable === false)
+
+  const selfMarked = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: { selfMark: 'unfinished' },
+  })
+  check('self-mark stored', selfMarked.body.answer.selfMark === 'unfinished')
+  const badMark = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: { selfMark: 'brilliant' },
+  })
+  check('unknown self-mark rejected', badMark.status === 400)
+
+  console.log('\ntutor')
+  const hint1 = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
+    body: { action: 'hint' },
+  })
+  check('hint returns both turns', hint1.status === 201 && Boolean(hint1.body.student && hint1.body.tutor))
+  check('hint 1 labelled', hint1.body.tutor.label === 'Hint 1 of 3')
+  check('it is the hint the teacher wrote', hint1.body.tutor.text.startsWith('Start outside'))
+
+  const hint2 = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
+    body: { action: 'hint' },
+  })
+  check('hints escalate server-side', hint2.body.tutor.label === 'Hint 2 of 3')
+  check('hint text differs', hint1.body.tutor.text !== hint2.body.tutor.text)
+
+  const bareHint = await call('POST', `/api/sessions/${session.id}/questions/${bareQ.id}/messages`, {
+    body: { action: 'hint' },
+  })
+  check('a question with no script still gives a hint', bareHint.status === 201)
+  check('from the generic set', bareHint.body.tutor.label === 'Hint 1 of 3')
+
+  const typed = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
+    body: { text: 'Is it because the carriers are saturated?' },
+  })
+  check('free text gets a reply', typed.status === 201 && typed.body.tutor.text.length > 0)
+
+  const empty = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
+    body: {},
+  })
+  check('empty message rejected', empty.status === 400)
+
+  const rated = await call('POST', `/api/sessions/${session.id}/messages/${typed.body.tutor.id}/rating`, {
+    body: { value: 'up' },
+  })
+  check('feedback can be rated', rated.body.message.rating === 'up')
+
+  const rateStudent = await call(
+    'POST',
+    `/api/sessions/${session.id}/messages/${typed.body.student.id}/rating`,
+    { body: { value: 'up' } },
+  )
+  check('student turns cannot be rated', rateStudent.status === 400)
+
+  console.log('\nuploads')
+  const upload = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'working.png', dataUrl: PNG, source: 'whiteboard' },
+  })
+  check('upload accepted', upload.status === 201)
+  check('attached to the answer', upload.body.answer.attachments.length === 1)
+  check('bytes are served back', (await fetch(`${base}${upload.body.upload.url}`)).status === 200)
+  check('file path is not leaked', upload.body.upload.path === undefined)
+
+  const second = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'again.png', dataUrl: PNG, source: 'whiteboard' },
+  })
+  check('a board replaces its own export', second.body.answer.attachments.length === 1)
+
+  const badFile = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'x.txt', dataUrl: 'data:text/plain;base64,aGVsbG8=' },
+  })
+  check('unsupported type rejected', badFile.status === 400)
+
+  console.log('\nown questions + events')
+  const own = await call('POST', `/api/sessions/${session.id}/own-questions`, {
+    body: { prompt: 'How do I solve 3(x - 2) = 4x + 1?' },
+  })
+  check('own question created', own.status === 201 && own.body.question.code === 'OWN-01')
+
+  const ownHint = await call(
+    'POST',
+    `/api/sessions/${session.id}/questions/${own.body.question.id}/messages`,
+    { body: { action: 'hint' } },
+  )
+  check('own question gets generic hints', ownHint.body.tutor.label === 'Hint 1 of 3')
+
+  const ownCheck = await call(
+    'POST',
+    `/api/sessions/${session.id}/answers/${own.body.question.id}/check`,
+  )
+  check('own question cannot be marked', ownCheck.status === 400)
+
+  const events = await call('POST', `/api/sessions/${session.id}/events`, {
+    body: { events: [{ type: 'question_shown', questionId: markedQ.id }, { type: 'idle' }] },
+  })
+  check('events accepted in a batch', events.body.written === 2)
+  const badEvent = await call('POST', `/api/sessions/${session.id}/events`, {
+    body: { events: [{ payload: {} }] },
+  })
+  check('typeless event rejected', badEvent.status === 400)
+
+  console.log('\nprompt versioning')
+  const anonPrompt = await call('POST', '/api/prompts', { body: { text: 'Sneaky rewrite' } })
+  check('the system prompt cannot be set anonymously', anonPrompt.status === 401)
+  const studentPrompt = await call('POST', '/api/prompts', {
+    token: studentToken,
+    body: { text: 'Give me the answers' },
+  })
+  check('nor by a student', studentPrompt.status === 403)
+
+  const prompt = await call('POST', '/api/prompts', {
+    token: teacherToken,
+    body: { text: 'Never give the final answer. Ask one question back.', note: 'v1 socratic' },
+  })
+  check('a teacher can set it', prompt.body.prompt.versionId === 'v1')
+  check('and is recorded as its author', prompt.body.prompt.createdBy === teacher.id)
+
+  console.log('\na signed-in student')
+  const available = await call('GET', '/api/activities/available', { token: studentToken })
+  check("a student sees their own teacher's published work", available.body.activities.length === 1)
+  const strangerAvailable = await call('GET', '/api/activities/available', {
+    token: (
+      await call('POST', '/api/auth/login', {
+        body: { email: 'zed@example.com', password: 'correct horse battery' },
+      })
+    ).body.token,
+  })
+  check("and not another teacher's", strangerAvailable.body.activities.length === 0)
+
+  const ownedSession = await call('POST', '/api/sessions', {
+    token: studentToken,
+    body: { consent: true, activityId: activity.id },
+  })
+  check('a signed-in session is linked', ownedSession.body.session.userId === student.id)
+  check('new sessions record the active prompt', ownedSession.body.session.promptVersion === 'v1')
+
+  const teacherSees = await call('GET', `/api/users/${student.id}/sessions`, { token: teacherToken })
+  check("teacher sees their student's sessions", teacherSees.body.sessions.length === 1)
+  const teacherPries = await call('GET', `/api/users/${otherStudent.id}/sessions`, {
+    token: teacherToken,
+  })
+  check("teacher cannot see another teacher's student's sessions", teacherPries.status === 404)
+  const managerSees = await call('GET', `/api/users/${student.id}/sessions`, { token: managerToken })
+  check('manager reaches through the teacher', managerSees.body.sessions.length === 1)
+
+  /* ================================================================ labelling */
+
+  console.log('\nthe teacher labelling loop')
+  const teacherSessions = await call('GET', '/api/research/sessions', { token: teacherToken })
+  check('a teacher may now read transcripts', teacherSessions.status === 200)
+  check(
+    'they see the anonymous session on their own activity',
+    teacherSessions.body.sessions.some((row) => row.id === session.id),
+  )
+  check(
+    "and their own student's",
+    teacherSessions.body.sessions.some((row) => row.id === ownedSession.body.session.id),
+  )
+  check('two in total', teacherSessions.body.sessions.length === 2)
+
+  const strangerSessions = await call('GET', '/api/research/sessions', {
+    token: otherTeacherToken,
+  })
+  check('another teacher sees none of it', strangerSessions.body.sessions.length === 0)
+
+  const row = teacherSessions.body.sessions.find((entry) => entry.id === session.id)
+  check('message counts reported', row.counts.messages === 10)
+  check('snippet count reported', row.counts.snippets === 5)
+
+  const transcript = await call('GET', `/api/research/sessions/${session.id}/transcript`, {
+    token: teacherToken,
+  })
+  check('transcript grouped by question', transcript.body.questions.length === 3)
+  check('own question flagged in transcript', transcript.body.questions.some((q) => q.isOwnQuestion))
+  check(
+    'authored questions carry their ordinal code',
+    transcript.body.questions.some((q) => q.code === 'Q1'),
+  )
+
+  const strangerTranscript = await call('GET', `/api/research/sessions/${session.id}/transcript`, {
+    token: otherTeacherToken,
+  })
+  check('another teacher cannot read that transcript', strangerTranscript.status === 404)
+
+  const snippets = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
+    token: teacherToken,
+  })
+  check('snippets are student+feedback pairs', snippets.body.snippets.length === 5)
+  check(
+    'each snippet holds both turns',
+    snippets.body.snippets.every((s) => s.student.text && s.tutor.text),
+  )
+  check('labelling criteria offered', snippets.body.criteria.length === 5)
+  check('undecided by default', snippets.body.snippets.every((s) => s.included === null))
+
+  const target = snippets.body.snippets[0]
+  const labelled = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: {
+      included: true,
+      labels: { specific: 'yes', actionable: 'partly', 'no-answer': 'yes' },
+      note: 'Good nudge, stops short of the answer.',
+    },
+  })
+  check('teacher labels a snippet', labelled.body.label.included === true)
+  check('the labeller is taken from the token', labelled.body.label.labelledBy === teacher.id)
+  check('and named', labelled.body.label.labelledByName === 'Tia Teacher')
+
+  const forged = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { included: true, labelledBy: 'someone-else' },
+  })
+  check('a self-reported labeller is ignored', forged.body.label.labelledBy === teacher.id)
+
+  const strangerLabels = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: otherTeacherToken,
+    body: { included: false },
+  })
+  check("another teacher cannot label someone else's snippet", strangerLabels.status === 404)
+
+  const badLabel = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { labels: { specific: 'maybe' } },
+  })
+  check('label value validated', badLabel.status === 400)
+  const badCriterion2 = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { labels: { invented: 'yes' } },
+  })
+  check('unknown criterion rejected', badCriterion2.status === 400)
+  const nothingToLabel = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: {},
+  })
+  check('an empty label patch is rejected', nothingToLabel.status === 400)
+
+  const included = await call('GET', '/api/research/snippets?included=true', {
+    token: teacherToken,
+  })
+  check('can filter to kept snippets', included.body.count === 1)
+
+  console.log('\nresearcher access')
+  const noToken = await call('GET', '/api/research/sessions')
+  check('research needs a token', noToken.status === 403)
+  const wrongToken = await call('GET', '/api/research/sessions', { token: 'nope' })
+  check('wrong token refused', wrongToken.status === 403)
+  const studentResearch = await call('GET', '/api/research/sessions', { token: studentToken })
+  check('a student cannot read research', studentResearch.status === 403)
+
+  const list = await call('GET', '/api/research/sessions', { token: 'smoke-token' })
+  check('the research token sees every session', list.body.sessions.length === 2)
+
+  const exportJson = await call('GET', '/api/research/export', { token: 'smoke-token' })
+  check('export holds only kept snippets', exportJson.body.count === 1)
+  const teacherExport = await call('GET', '/api/research/export', { token: teacherToken })
+  check('a teacher cannot export the dataset', teacherExport.status === 403)
+  const adminExport = await call('GET', '/api/research/export', { token: adminToken })
+  check('an admin can', adminExport.status === 200)
+
+  const exportCsv = await fetch(`${base}/api/research/export?format=csv`, {
+    headers: { authorization: 'Bearer smoke-token' },
+  })
+  const csv = await exportCsv.text()
+  check('csv export', exportCsv.headers.get('content-type').includes('text/csv'))
+  check('csv has a header and one row', csv.trim().split('\n').length === 2)
+  check('csv includes the label column', csv.includes('label_specific'))
+
+  /* ================================================================= deletion */
+
+  console.log('\nan activity in use cannot be deleted')
+  const deleteUsed = await call('DELETE', `/api/activities/${activity.id}`, { token: teacherToken })
+  check('deleting a worked-on activity is 409', deleteUsed.status === 409)
+  check('and it says how to close it instead', Boolean(deleteUsed.body.error.details.hint))
+
+  const deleteUsedQuestion = await call(
+    'DELETE',
+    `/api/activities/${activity.id}/questions/${bareQ.id}`,
+    { token: teacherToken },
+  )
+  check('nor a question students have seen', deleteUsedQuestion.status === 409)
+
+  const spare = (
+    await call('POST', '/api/activities', { token: teacherToken, body: { title: 'Spare' } })
+  ).body.activity
+  const spareQuestion = (
+    await call('POST', `/api/activities/${spare.id}/questions`, {
+      token: teacherToken,
+      body: { prompt: 'Nobody has seen this.' },
+    })
+  ).body.question
+  const droppedQuestion = await call(
+    'DELETE',
+    `/api/activities/${spare.id}/questions/${spareQuestion.id}`,
+    { token: teacherToken },
+  )
+  check('an unused question can be deleted', droppedQuestion.body.deleted === true)
+  const dropped = await call('DELETE', `/api/activities/${spare.id}`, { token: teacherToken })
+  check('and so can an unused activity', dropped.body.deleted === true)
+  check(
+    'it is gone',
+    (await call('GET', `/api/activities/${spare.id}`, { token: teacherToken })).status === 404,
+  )
+
+  console.log('\nwithdrawal')
+  const deleted = await call('DELETE', `/api/sessions/${session.id}`)
+  check('session deleted', deleted.body.deleted === true)
+  check('its files were removed', deleted.body.files === 2)
+  const gone = await call('GET', `/api/sessions/${session.id}`)
+  check('session no longer readable', gone.status === 404)
+  const afterDelete = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
+    token: 'smoke-token',
+  })
+  check('its snippets are gone too', afterDelete.body.snippets.length === 0)
+
+  /* ============================================================ user admin */
+
+  console.log('\nscope')
+  const adminUserList = await call('GET', '/api/users', { token: adminToken })
+  check('admin sees everyone', adminUserList.body.users.length === 7)
+  check('admin scope reported as all', adminUserList.body.scope === 'all')
+
+  const managerUserList = await call('GET', '/api/users', { token: managerToken })
+  const managerIds = managerUserList.body.users.map((u) => u.id)
+  check('manager sees self, teachers and their students', managerUserList.body.users.length === 5)
   check('manager sees both their teachers', managerIds.includes(teacher.id) && managerIds.includes(otherTeacher.id))
   check('manager does not see the admin', !managerIds.includes(admin.id))
   check('manager does not see an unassigned student', !managerIds.includes(unassigned.body.user.id))
 
-  const teacherList = await call('GET', '/api/users', { token: teacherToken })
-  const teacherIds = teacherList.body.users.map((u) => u.id)
-  check('teacher sees self and own students only', teacherList.body.users.length === 2)
+  const teacherUserList = await call('GET', '/api/users', { token: teacherToken })
+  const teacherIds = teacherUserList.body.users.map((u) => u.id)
+  check('teacher sees self and own students only', teacherUserList.body.users.length === 2)
   check("teacher does not see another teacher's student", !teacherIds.includes(otherStudent.id))
 
   const studentList = await call('GET', '/api/users', { token: studentToken })
@@ -612,26 +1003,6 @@ try {
   check('own student is readable', readOwn.body.user.id === student.id)
   const readUp = await call('GET', `/api/users/${admin.id}`, { token: studentToken })
   check('a student cannot read the admin', readUp.status === 404)
-
-  console.log('\nsessions belong to the student who was signed in')
-  const anonSession = await call('POST', '/api/sessions', { body: { consent: true } })
-  check('anonymous sessions still work', anonSession.body.session.userId === null)
-
-  const ownedSession = await call('POST', '/api/sessions', {
-    token: studentToken,
-    body: { consent: true, topicId: 'transport' },
-  })
-  check('a signed-in session is linked', ownedSession.body.session.userId === student.id)
-
-  const teacherSees = await call('GET', `/api/users/${student.id}/sessions`, { token: teacherToken })
-  check("teacher sees their student's sessions", teacherSees.body.sessions.length === 1)
-  check('with counts attached', teacherSees.body.sessions[0].counts.messages === 0)
-  const teacherPries = await call('GET', `/api/users/${otherStudent.id}/sessions`, {
-    token: teacherToken,
-  })
-  check("teacher cannot see another teacher's student's sessions", teacherPries.status === 404)
-  const managerSees = await call('GET', `/api/users/${student.id}/sessions`, { token: managerToken })
-  check('manager reaches through the teacher', managerSees.body.sessions.length === 1)
 
   console.log('\nediting, reassigning, deactivating')
   const renamed = await call('PATCH', `/api/users/${student.id}`, {
@@ -759,7 +1130,7 @@ try {
   })
   check('a deactivated account cannot sign in', deactivatedLogin.status === 403)
 
-  console.log('\ndeleting is deliberately hard')
+  console.log('\ndeleting a user is deliberately hard')
   const deleteSelf = await call('DELETE', `/api/users/${admin.id}`, { token: adminToken })
   check('you cannot delete yourself', deleteSelf.status === 400)
 
@@ -788,15 +1159,13 @@ try {
   })
   check('the email is free again', emailFreed.status === 201)
 
-  console.log('\nan admin reaches everything')
-  const adminResearch = await call('GET', '/api/research/sessions', { token: adminToken })
-  check('admin reads research without the research token', adminResearch.status === 200)
-  const teacherResearch = await call('GET', '/api/research/sessions', { token: teacherToken })
-  check('a teacher does not', teacherResearch.status === 403)
-  const managerResearch = await call('GET', '/api/research/snippets', { token: managerToken })
-  check('nor does a manager', managerResearch.status === 403)
-  const stillWorks = await call('GET', '/api/research/sessions', { token: 'smoke-token' })
-  check('the research token still works', stillWorks.status === 200)
+  console.log('\nnot found')
+  const nowhere = await call('GET', '/api/nope')
+  check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))
+  const badSession = await call('GET', '/api/sessions/ses_missing')
+  check('unknown session is 404', badSession.status === 404)
+  const badActivity = await call('GET', '/api/activities/act_missing', { token: teacherToken })
+  check('unknown activity is 404', badActivity.status === 404)
 
   const finalHealth = await call('GET', '/api/health')
   check('health counts users', finalHealth.body.users === 8)

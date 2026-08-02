@@ -1,5 +1,5 @@
 import { MongoClient } from 'mongodb'
-import { DuplicateEmailError } from './errors.js'
+import { DuplicateCodeError, DuplicateEmailError } from './errors.js'
 
 /**
  * MongoDB-backed store.
@@ -72,7 +72,17 @@ const INDEXES = {
   // which routes/users.js reports as a 409.
   users: [[{ email: 1 }, { unique: true }], { role: 1, name: 1 }, { teacherId: 1 }, { managerId: 1 }],
   authTokens: [{ userId: 1 }],
-  sessions: [{ code: 1 }, { createdAt: -1 }, { userId: 1, createdAt: -1 }],
+  // A join code is typed in by a student off a whiteboard, so unlike a session
+  // code it has to resolve to exactly one activity — hence unique here. The
+  // route retries on the 11000 rather than surfacing it.
+  activities: [[{ code: 1 }, { unique: true }], { ownerId: 1, createdAt: -1 }, { status: 1 }],
+  questions: [{ activityId: 1, position: 1 }],
+  sessions: [
+    { code: 1 },
+    { createdAt: -1 },
+    { userId: 1, createdAt: -1 },
+    { activityId: 1, createdAt: -1 },
+  ],
   answers: [{ sessionId: 1 }],
   messages: [{ sessionId: 1, questionId: 1, seq: 1 }, { sessionId: 1, seq: 1 }],
   events: [{ sessionId: 1, at: 1 }, { type: 1 }],
@@ -255,6 +265,102 @@ export function createMongoStore({ uri, dbName } = {}) {
       },
     },
 
+    activities: {
+      async create(doc) {
+        try {
+          await (await col('activities')).insertOne({ _id: doc.id, ...doc })
+        } catch (error) {
+          // `code` is the only unique index on the collection.
+          if (error?.code === 11000) throw new DuplicateCodeError(doc.code)
+          throw error
+        }
+        return doc
+      },
+      async findById(id) {
+        return (await col('activities')).findOne({ _id: id }, BARE)
+      },
+      async findByCode(code) {
+        return (await col('activities')).findOne(
+          { code: String(code).trim().toUpperCase() },
+          BARE,
+        )
+      },
+      async update(id, patch) {
+        return (await col('activities')).findOneAndUpdate(
+          { _id: id },
+          { $set: patch },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async list({ ownerId, status, ids, limit = 200 } = {}) {
+        const filter = {}
+        const where = (field, value) => {
+          if (value === undefined) return
+          filter[field] = Array.isArray(value) ? { $in: value } : value
+        }
+
+        where('ownerId', ownerId)
+        where('status', status)
+        where('_id', ids)
+
+        return (await col('activities'))
+          .find(filter, { ...BARE, sort: { createdAt: -1 }, limit })
+          .toArray()
+      },
+      async remove(id) {
+        const { deletedCount } = await (await col('activities')).deleteOne({ _id: id })
+        return deletedCount > 0
+      },
+    },
+
+    /**
+     * `position` is a float rather than an index.
+     *
+     * Dropping a question between two others is then a single write — the
+     * midpoint of its neighbours — instead of renumbering everything after it,
+     * which on a shared activity is a write per question and a race for each
+     * one. routes/activities.js only ever rewrites the whole run on an explicit
+     * reorder.
+     */
+    questions: {
+      async create(doc) {
+        await (await col('questions')).insertOne({ _id: doc.id, ...doc })
+        return doc
+      },
+      async findById(id) {
+        return (await col('questions')).findOne({ _id: id }, BARE)
+      },
+      async update(id, patch) {
+        return (await col('questions')).findOneAndUpdate(
+          { _id: id },
+          { $set: patch },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async list({ activityId } = {}) {
+        const filter = {}
+        if (activityId !== undefined) {
+          filter.activityId = Array.isArray(activityId) ? { $in: activityId } : activityId
+        }
+        return (await col('questions'))
+          .find(filter, { ...BARE, sort: { position: 1, createdAt: 1 } })
+          .toArray()
+      },
+      async count({ activityId } = {}) {
+        const filter = {}
+        if (activityId !== undefined) filter.activityId = activityId
+        return (await col('questions')).countDocuments(filter)
+      },
+      async remove(id) {
+        const { deletedCount } = await (await col('questions')).deleteOne({ _id: id })
+        return deletedCount > 0
+      },
+      async removeByActivity(activityId) {
+        const { deletedCount } = await (await col('questions')).deleteMany({ activityId })
+        return deletedCount
+      },
+    },
+
     sessions: {
       async create(doc) {
         await (await col('sessions')).insertOne({ _id: doc.id, ...doc })
@@ -278,11 +384,16 @@ export function createMongoStore({ uri, dbName } = {}) {
           { ...BARE, returnDocument: 'after' },
         )
       },
-      async list({ limit = 100, userId } = {}) {
+      async list({ limit = 100, userId, activityId } = {}) {
         const filter = {}
-        if (userId !== undefined) {
-          filter.userId = Array.isArray(userId) ? { $in: userId } : userId
+        const where = (field, value) => {
+          if (value === undefined) return
+          filter[field] = Array.isArray(value) ? { $in: value } : value
         }
+
+        where('userId', userId)
+        where('activityId', activityId)
+
         return (await col('sessions'))
           .find(filter, { ...BARE, sort: { createdAt: -1 }, limit })
           .toArray()

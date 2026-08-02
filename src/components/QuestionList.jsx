@@ -12,6 +12,7 @@ export default function QuestionList({
   onSelect,
   onAskOwn,
   onCollapse,
+  onWithdraw,
 }) {
   const [ownDraft, setOwnDraft] = useState('')
 
@@ -165,6 +166,14 @@ export default function QuestionList({
             </li>
           ))}
         </ul>
+
+        {/* The withdrawal half of consent, where the student actually is
+            rather than in a policy page they will never open. */}
+        {onWithdraw ? (
+          <button type="button" className="ql-withdraw" onClick={onWithdraw}>
+            Delete everything I did
+          </button>
+        ) : null}
       </footer>
     </>
   )

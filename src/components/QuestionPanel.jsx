@@ -88,7 +88,7 @@ export default function QuestionPanel({
       <header className="qp-bar">
         <div className="qp-measure qp-bar-inner">
           <div className="qp-bar-meta">
-            <span className="eyebrow">{question.groupTitle}</span>
+            <span className="eyebrow">{question.activityTitle}</span>
             <p className="qp-bar-line">
               <span className="qp-code mono">{question.code}</span>
               <span className="qp-sep" aria-hidden="true" />
@@ -210,7 +210,7 @@ export default function QuestionPanel({
                   value={state.draft}
                   spellCheck="true"
                   placeholder={
-                    question.rubric.length
+                    question.markable
                       ? 'Write your answer here. The tutor marks it against the rubric, not against a model answer.'
                       : 'Write what you have tried so far, and the tutor will work through it with you.'
                   }
@@ -323,7 +323,7 @@ export default function QuestionPanel({
             ) : null}
 
             <div className="qp-actions">
-              {question.rubric.length ? (
+              {question.markable ? (
                 <button type="button" className="qp-btn qp-btn-primary" onClick={onCheck}>
                   Check my answer
                 </button>
