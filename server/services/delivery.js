@@ -50,28 +50,6 @@ export function publicActivity(activity, questions) {
 }
 
 /**
- * The join screen, before any session exists.
- *
- * Deliberately thin: a code typed into a public box returns a title and a count
- * and nothing else, so the box cannot be used to read question prompts out of
- * every activity in the system by trying codes.
- */
-export async function activityPreview(store, code) {
-  const activity = await store.activities.findByCode(code)
-  if (!activity || activity.status !== 'published') {
-    throw notFound('No activity with that code')
-  }
-
-  return {
-    id: activity.id,
-    code: activity.code,
-    title: activity.title,
-    blurb: activity.blurb,
-    questionCount: await store.questions.count({ activityId: activity.id }),
-  }
-}
-
-/**
  * Resolves a question id to the full stored question plus its activity.
  *
  * Every student route is scoped to a session and a question, and both have to
@@ -114,24 +92,31 @@ export async function resolveQuestion(store, session, questionId) {
 }
 
 /**
- * Activities a signed-in student may start on their own.
+ * What a student may start, given who — if anyone — they are.
  *
- * Published work from their own teacher only. A student with no teacher yet
- * sees an empty list rather than everything — the join code is the way in when
- * nobody has put them on a roster.
+ * There is no join code any more, so **published is the only gate**. An
+ * activity a teacher has published is startable by whoever is looking, and an
+ * anonymous visitor sees all of them. That is a deliberate consequence of
+ * dropping codes rather than an oversight: with no credential and no code,
+ * publishing is the entire access decision, which is why a draft is invisible
+ * and unpublishing is the way to close something down.
+ *
+ * A **signed-in student** is narrowed to their own teacher's work instead,
+ * because there is a roster to narrow by and a shorter list is a better list.
+ * A student nobody has assigned to a teacher yet falls back to the open list
+ * rather than an empty one — otherwise having an account would be worse than
+ * not having one.
  */
 export async function studentActivities(store, user) {
-  if (!user?.teacherId) return []
-
-  const activities = await store.activities.list({
-    ownerId: user.teacherId,
-    status: 'published',
-  })
+  const activities = await store.activities.list(
+    user?.teacherId
+      ? { ownerId: user.teacherId, status: 'published' }
+      : { status: 'published' },
+  )
 
   return Promise.all(
     activities.map(async (activity) => ({
       id: activity.id,
-      code: activity.code,
       title: activity.title,
       blurb: activity.blurb,
       questionCount: await store.questions.count({ activityId: activity.id }),

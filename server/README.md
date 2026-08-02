@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (243 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (247)
+npm run test:api         # end-to-end check over real HTTP, in-memory (245 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (249)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
@@ -64,7 +64,7 @@ the client and the API never disagree about which value won.
 ## What the server owns, and why
 
 - **Consent.** There is no route that creates a session without `consent: true`. The UI gate is a courtesy; this is the gate.
-- **The questions themselves.** Teachers author them; nothing is hard-coded. An activity is a set of questions behind one join code, and a student reaches it by typing that code — see [Activity endpoints](#activity-endpoints).
+- **The questions themselves.** Teachers author them; nothing is hard-coded. A student reaches an activity by picking it from `GET /api/activities/available` — there is no join code, so **publishing is the whole access decision**. See [Activity endpoints](#activity-endpoints).
 - **The mark scheme.** No student-facing route returns rubric keywords or tutor scripts; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
@@ -183,7 +183,7 @@ from another's list.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/activities` | Everything in scope, each with a `questionCount` |
-| `POST` | `/api/activities` | `{ title, blurb? }` → 201. Created as a **draft** with a join code |
+| `POST` | `/api/activities` | `{ title, blurb? }` → 201. Created as a **draft**, invisible to students until published |
 | `GET` | `/api/activities/:id` | The authoring view: full questions, **mark scheme and hints included** |
 | `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
 | `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
@@ -192,8 +192,7 @@ from another's list.
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
 | `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
 | `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
-| `GET` | `/api/activities/by-code/:code` | **Open.** The join box: title and count only, and only for a published activity |
-| `GET` | `/api/activities/available` | Published work from a signed-in student's own teacher |
+| `GET` | `/api/activities/available` | **Open — no token needed.** Published activities: every one of them for an anonymous visitor, narrowed to their own teacher's for a signed-in student. Titles and counts only, never the questions |
 
 **The rubric and the tutor script are optional, and that is the design.** A
 question with only a prompt still works: the chat answers from the system
@@ -207,9 +206,8 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/health` | |
-| `POST` | `/api/sessions` | `{ consent: true, code }` **or** `{ consent: true, activityId }` → `{ session, activity }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
+| `POST` | `/api/sessions` | `{ consent: true, activityId }` → `{ session, activity }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
 | `GET` | `/api/sessions/:id` | Resume: session, activity, answers, messages, own questions |
-| `GET` | `/api/sessions/by-code/:code` | Resolves a session's **own** code (not the activity's) to that session. **No screen uses this at the moment** — cross-device resume was taken back out, and the student doors are a join code or a password. Left standing, and still covered by the smoke test, because it is the seam that flow would return through |
 | `POST` | `/api/sessions/:id/end` | |
 | `DELETE` | `/api/sessions/:id` | "Delete my session" — also deletes the files |
 | `PUT` | `/api/sessions/:id/answers/:questionId` | `{ mode?, draft?, strokes?, selfMark? }` |

@@ -13,29 +13,36 @@ npm install
 cp .env.example .env          # then put MONGODB_URI in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 243 end-to-end assertions over real HTTP
+npm run test:api              # 245 end-to-end assertions over real HTTP
 ```
 
 ## Three audiences, one deployment
 
 | Route | Who | What they do |
 | --- | --- | --- |
-| `/` | students | Consent, then join an activity with a six-character code |
+| `/` | students | Consent, then anonymously or signed in, pick an activity |
 | `/work/:sessionId` | students | The workspace: question, answer, tutor chat |
 | `/teacher` | teachers, managers | Write activities, read student work, label snippets |
 | `/admin` | administrators | Accounts, and the system-wide AI prompt |
 
 ### Two ways in for a student
 
-- **Anonymously**, with the activity's six-character join code. One code per
-  activity, the same for the whole class, written on the board. No account, no
-  name, nothing asked. This is what the study is designed around.
-- **Signed in**, with an email and password their teacher set for them. They
-  pick from a list of their own teacher's published work instead of typing a
-  code, and their sessions carry their name.
+- **Anonymously** — no code, no password, nothing asked. Consent, then pick from
+  the list of published activities. This is the normal way in and what the study
+  is designed around.
+- **Signed in**, with an email and password their teacher set for them. The list
+  is narrowed to their own teacher's work, and the session carries their name so
+  it can be followed across visits.
 
-Both land in the same workspace, and the join code works for signed-in students
-too, since a class may be doing an activity set by someone else.
+There is no join code. **Publishing is the whole access decision**: a draft is
+invisible and cannot be started, a published activity is startable by whoever is
+looking. Closing an activity again is how a teacher shuts it down.
+
+**Anonymous is not invisible.** A session with no account still reaches the
+teacher, through the activity rather than through a user: they own the activity,
+so they see every session started from it, with its transcript and its snippets.
+`server/smoke.mjs` asserts that link directly, because it is the one thing that
+would quietly lose most of the data if it broke.
 
 ### There is no sign-up
 
@@ -57,7 +64,7 @@ they own.
 ## How the pieces fit
 
 ```
-activity ──< question          a teacher's set of questions, behind one join code
+activity ──< question          a teacher's set of questions; published or not
    │
    └──< session ──< answer     one student's run at it — anonymous or named
              │
@@ -66,7 +73,7 @@ activity ──< question          a teacher's set of questions, behind one join
                      └ snippet  one student turn + the reply — the unit of the dataset
 ```
 
-An **activity** starts as a draft with no reachable code. Publishing is the
+An **activity** starts as a draft, invisible to students. Publishing is the
 single act that opens it, and the server refuses to publish one with no
 questions. Unpublishing closes it again without touching anything recorded,
 which is why it is offered whenever a delete is refused.

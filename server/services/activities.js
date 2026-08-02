@@ -5,8 +5,7 @@ import {
   isActivityStatus,
   isQuestionKind,
 } from '../../shared/activity.js'
-import { isDuplicateCode } from '../store/errors.js'
-import { badRequest, forbidden, id, notFound, now, shortCode } from '../lib/http.js'
+import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
 import { scopeOf } from './users.js'
 
 /**
@@ -24,7 +23,7 @@ import { scopeOf } from './users.js'
  *   manager  their own, plus those of every teacher on their roster
  *   teacher  their own
  *   student  none through this path; a student reaches a *published* activity
- *            by join code, which is a different door entirely
+ *            through GET /api/activities/available, which is a different door
  */
 
 /* --------------------------------------------------------------------- scope */
@@ -275,11 +274,19 @@ export function parseActivityInput(body, { forCreate } = {}) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, blurb = '', ownerId, status = 'draft', code }) {
+/**
+ * No join code.
+ *
+ * There used to be one, and students typed it to get in. Entry is now either
+ * anonymous or a signed-in account, and in both cases the student picks from a
+ * list — so a code would be a second identifier for a thing that already has
+ * one, kept in step for nobody's benefit. Publishing is the whole access
+ * decision; see studentActivities in services/delivery.js.
+ */
+export function newActivity({ title, blurb = '', ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
-    code: code ?? shortCode(),
     title,
     blurb,
     ownerId,
@@ -289,24 +296,8 @@ export function newActivity({ title, blurb = '', ownerId, status = 'draft', code
   }
 }
 
-/**
- * Retries on a code collision rather than reporting one.
- *
- * shortCode() draws from 32^6, so this is luck, not a mistake anybody made, and
- * there is nothing useful to tell the caller — just take another card. Only a
- * run of collisions is real, and that means something is wrong with the
- * generator, which is worth surfacing.
- */
-export async function createActivity(store, fields, { attempts = 5 } = {}) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      return await store.activities.create(newActivity(fields))
-    } catch (error) {
-      if (!isDuplicateCode(error) || attempt === attempts - 1) throw error
-    }
-  }
-  // Unreachable: the loop either returns or throws on its last pass.
-  throw new Error('Could not allocate an activity code')
+export async function createActivity(store, fields) {
+  return store.activities.create(newActivity(fields))
 }
 
 /** Appended to the end. See store/mongo.js on why `position` is a float. */

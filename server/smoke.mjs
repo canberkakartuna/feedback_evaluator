@@ -14,7 +14,7 @@
  * hard-coded — a teacher authors them — so a teacher has to exist before there
  * is anything for a student to open. The anonymous path is still covered, and
  * still the default: every student assertion below runs against a session
- * created with no token, joined by code, exactly as a student with no account
+ * created with **no token at all**, exactly as a student who has never signed in
  * would. The signed-in student is the extra case, not the base one.
  */
 import { createApp } from './app.js'
@@ -401,7 +401,7 @@ try {
   check('teacher creates an activity', created.status === 201)
   const activity = created.body.activity
   check('it starts as a draft', activity.status === 'draft')
-  check('it has a join code', /^[A-Z2-9]{6}$/.test(activity.code))
+  check('it carries no join code', activity.code === undefined)
   check('it is owned by its author', activity.ownerId === teacher.id)
   check('it starts empty', activity.questionCount === 0)
 
@@ -556,14 +556,14 @@ try {
   check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
   check('a marked one says so too', preview.body.activity.questions[0].markable === true)
 
-  console.log('\npublishing')
-  const draftJoin = await call('GET', `/api/activities/by-code/${activity.code}`)
-  check('a draft is not reachable by code', draftJoin.status === 404)
+  console.log('\npublishing is the whole access decision')
+  const draftList = await call('GET', '/api/activities/available')
+  check('a draft is invisible to an anonymous visitor', draftList.body.activities.length === 0)
 
   const draftSession = await call('POST', '/api/sessions', {
-    body: { consent: true, code: activity.code },
+    body: { consent: true, activityId: activity.id },
   })
-  check('and cannot be started', draftSession.status === 404)
+  check('and cannot be started', draftSession.status === 400)
 
   const published = await call('PATCH', `/api/activities/${activity.id}`, {
     token: teacherToken,
@@ -571,35 +571,45 @@ try {
   })
   check('publishing works once it has questions', published.body.activity.status === 'published')
 
-  const join = await call('GET', `/api/activities/by-code/${activity.code}`)
-  check('now the code resolves', join.status === 200)
-  check('the join preview names it', join.body.activity.title === 'Membranes & transport')
-  check('and counts the questions', join.body.activity.questionCount === 3)
-  check('but carries no questions', !('questions' in join.body.activity))
-
-  const wrongCode = await call('GET', '/api/activities/by-code/ZZZZZZ')
-  check('an unknown code is 404', wrongCode.status === 404)
+  /**
+   * The open list. There is no join code and no account on this path, so
+   * "published" is the entire gate — which is exactly why the two assertions
+   * above matter.
+   */
+  const openList = await call('GET', '/api/activities/available')
+  check('now an anonymous visitor can see it', openList.body.activities.length === 1)
+  check('it is named', openList.body.activities[0].title === 'Membranes & transport')
+  check('and counted', openList.body.activities[0].questionCount === 3)
+  check('but carries no questions', !('questions' in openList.body.activities[0]))
+  check(
+    'and no mark scheme',
+    !JSON.stringify(openList.body).includes('water potential'),
+  )
 
   /* ================================================================== student */
 
   console.log('\nconsent gate')
-  const refused = await call('POST', '/api/sessions', { body: { code: activity.code } })
+  const refused = await call('POST', '/api/sessions', { body: { activityId: activity.id } })
   check('no session without consent', refused.status === 400)
   check('says which field is missing', refused.body.error.details?.field === 'consent')
 
   const declined = await call('POST', '/api/sessions', {
-    body: { consent: false, code: activity.code },
+    body: { consent: false, activityId: activity.id },
   })
   check('explicit refusal also rejected', declined.status === 400)
 
   const noActivity = await call('POST', '/api/sessions', { body: { consent: true } })
-  check('a session must name an activity', noActivity.status === 404)
+  check('a session must name an activity', noActivity.status === 400)
 
-  console.log('\njoining anonymously')
+  /**
+   * The anonymous door: no token, no code, no password. Everything that follows
+   * runs on this session, so if any of it needed an identity it would fail here.
+   */
+  console.log('\nstarting anonymously')
   const started = await call('POST', '/api/sessions', {
-    body: { consent: true, code: activity.code, device: 'smoke' },
+    body: { consent: true, activityId: activity.id, device: 'smoke' },
   })
-  check('session created by code', started.status === 201)
+  check('session created with no credentials at all', started.status === 201)
   const session = started.body.session
   check('it is anonymous', session.userId === null)
   check('consent recorded with a version', Boolean(session.consent.version))
@@ -611,13 +621,7 @@ try {
     !JSON.stringify(started.body).includes('water potential'),
   )
 
-  // No screen uses this at the moment — the student doors are a join code or a
-  // password, and resuming by session code was taken back out. The route is left
-  // standing because it is the seam a cross-device flow would go back through,
-  // so it stays covered rather than quietly rotting.
-  const byCode = await call('GET', `/api/sessions/by-code/${session.code}`)
-  check('a session code still resolves to its session', byCode.body.session.id === session.id)
-  check('and carries the activity', byCode.body.activity.id === activity.id)
+  check('it still has a short code, as a label for the teacher', /^[A-Z2-9]{6}$/.test(session.code))
 
   console.log('\nanswers + marking')
   const saved = await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
@@ -801,13 +805,25 @@ try {
 
   /* ================================================================ labelling */
 
+  /**
+   * Anonymous does not mean invisible.
+   *
+   * A student who came in with no code and no password still produced work a
+   * teacher has to be able to read — that is the whole point of collecting it.
+   * The session has no `userId` to scope by, so it reaches the teacher through
+   * the **activity** instead: they own it, so they see every session started
+   * from it. These four assertions are the ones that would break if that link
+   * were ever dropped.
+   */
   console.log('\nthe teacher labelling loop')
   const teacherSessions = await call('GET', '/api/research/sessions', { token: teacherToken })
   check('a teacher may now read transcripts', teacherSessions.status === 200)
-  check(
-    'they see the anonymous session on their own activity',
-    teacherSessions.body.sessions.some((row) => row.id === session.id),
-  )
+
+  const anonRow = teacherSessions.body.sessions.find((entry) => entry.id === session.id)
+  check('the anonymous session is visible to them', Boolean(anonRow))
+  check('it is still anonymous', anonRow.userId === null)
+  check('with its work counted', anonRow.counts.messages > 0 && anonRow.counts.snippets > 0)
+  check('and reached through the activity they own', anonRow.activityId === activity.id)
   check(
     "and their own student's",
     teacherSessions.body.sessions.some((row) => row.id === ownedSession.body.session.id),

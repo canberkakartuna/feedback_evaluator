@@ -1,5 +1,5 @@
 import { MongoClient } from 'mongodb'
-import { DuplicateCodeError, DuplicateEmailError } from './errors.js'
+import { DuplicateEmailError } from './errors.js'
 
 /**
  * MongoDB-backed store.
@@ -57,10 +57,9 @@ export function databaseName(uri, explicit) {
 /**
  * Created on first connect, and idempotent, so it costs nothing to repeat.
  *
- * `sessions.code` is deliberately *not* unique. shortCode() is random, and the
- * memory store lets a repeat overwrite the older entry rather than fail; a
- * unique index here would turn a one-in-a-billion collision into a 500. Both
- * stores answer findByCode with the newest match instead.
+ * `sessions.code` has no index: nothing looks a session up by it. It survives
+ * only as a short human label for an anonymous session on the teacher's roster,
+ * which has no other handle to show.
  */
 const INDEXES = {
   // `[keys, options]` where an index needs options; bare keys otherwise.
@@ -72,17 +71,9 @@ const INDEXES = {
   // which routes/users.js reports as a 409.
   users: [[{ email: 1 }, { unique: true }], { role: 1, name: 1 }, { teacherId: 1 }, { managerId: 1 }],
   authTokens: [{ userId: 1 }],
-  // A join code is typed in by a student off a whiteboard, so unlike a session
-  // code it has to resolve to exactly one activity — hence unique here. The
-  // route retries on the 11000 rather than surfacing it.
-  activities: [[{ code: 1 }, { unique: true }], { ownerId: 1, createdAt: -1 }, { status: 1 }],
+  activities: [{ ownerId: 1, createdAt: -1 }, { status: 1 }],
   questions: [{ activityId: 1, position: 1 }],
-  sessions: [
-    { code: 1 },
-    { createdAt: -1 },
-    { userId: 1, createdAt: -1 },
-    { activityId: 1, createdAt: -1 },
-  ],
+  sessions: [{ createdAt: -1 }, { userId: 1, createdAt: -1 }, { activityId: 1, createdAt: -1 }],
   answers: [{ sessionId: 1 }],
   messages: [{ sessionId: 1, questionId: 1, seq: 1 }, { sessionId: 1, seq: 1 }],
   events: [{ sessionId: 1, at: 1 }, { type: 1 }],
@@ -267,23 +258,11 @@ export function createMongoStore({ uri, dbName } = {}) {
 
     activities: {
       async create(doc) {
-        try {
-          await (await col('activities')).insertOne({ _id: doc.id, ...doc })
-        } catch (error) {
-          // `code` is the only unique index on the collection.
-          if (error?.code === 11000) throw new DuplicateCodeError(doc.code)
-          throw error
-        }
+        await (await col('activities')).insertOne({ _id: doc.id, ...doc })
         return doc
       },
       async findById(id) {
         return (await col('activities')).findOne({ _id: id }, BARE)
-      },
-      async findByCode(code) {
-        return (await col('activities')).findOne(
-          { code: String(code).trim().toUpperCase() },
-          BARE,
-        )
       },
       async update(id, patch) {
         return (await col('activities')).findOneAndUpdate(
@@ -368,14 +347,6 @@ export function createMongoStore({ uri, dbName } = {}) {
       },
       async findById(id) {
         return (await col('sessions')).findOne({ _id: id }, BARE)
-      },
-      async findByCode(code) {
-        // Newest wins, matching the memory store, where a repeated code
-        // overwrites the older mapping.
-        return (await col('sessions')).findOne(
-          { code: String(code).toUpperCase() },
-          { ...BARE, sort: { createdAt: -1 } },
-        )
       },
       async update(id, patch) {
         return (await col('sessions')).findOneAndUpdate(

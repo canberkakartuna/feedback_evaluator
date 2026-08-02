@@ -10,45 +10,25 @@ export function sessionRoutes(store) {
   /**
    * Which activity this session is for.
    *
-   * Two ways in, because there are two kinds of student: a join **code**, typed
-   * off the board by someone with no account, and an **activityId**, clicked
-   * from the list a signed-in student gets from their own teacher. They resolve
-   * to the same thing, and both refuse an unpublished activity — a draft is
-   * work in progress, and a student who reached one would be answering
-   * questions their teacher has not finished writing.
+   * One way in: an `activityId`, clicked from the list at
+   * `GET /api/activities/available`. There is no join code — publishing is the
+   * whole access decision, so an id that names a published activity is enough
+   * and an id that names a draft is refused.
+   *
+   * A draft is reported as "not open yet" rather than "no such activity",
+   * because the only way to be holding an id at all is to have been shown it in
+   * a list. The interesting case is a teacher unpublishing between the list and
+   * the click, and that student is entitled to know it was withdrawn rather
+   * than that it never existed.
    */
   async function resolveActivity(body) {
-    const byCode = typeof body?.code === 'string' && Boolean(body.code.trim())
-
-    const activity = byCode
-      ? await store.activities.findByCode(body.code)
-      : typeof body?.activityId === 'string'
-        ? await store.activities.findById(body.activityId)
-        : null
-
-    if (!activity) {
-      throw notFound(byCode ? 'No activity with that code' : 'No such activity')
+    if (typeof body?.activityId !== 'string' || !body.activityId.trim()) {
+      throw badRequest('"activityId" is required — choose an activity to start')
     }
 
-    /**
-     * An unpublished activity answers differently depending on how it was
-     * reached, and the difference is deliberate.
-     *
-     * A **code** is typed into a public box by someone with no account, so a
-     * draft has to be indistinguishable from a code that was never issued —
-     * anything else turns the box into a way to discover that a teacher is
-     * drafting something. This matches the preview route, which 404s on a draft
-     * for the same reason.
-     *
-     * An **activityId** only ever comes from the list a signed-in student was
-     * already shown, so the interesting case there is a teacher unpublishing
-     * between the list and the click. That student is entitled to know it was
-     * withdrawn rather than that it never existed.
-     */
-    if (activity.status !== 'published') {
-      if (byCode) throw notFound('No activity with that code')
-      throw badRequest('That activity is not open yet')
-    }
+    const activity = await store.activities.findById(body.activityId)
+    if (!activity) throw notFound('No such activity')
+    if (activity.status !== 'published') throw badRequest('That activity is not open yet')
 
     return activity
   }
@@ -106,11 +86,7 @@ export function sessionRoutes(store) {
           userId: session.userId,
           type: 'session_started',
           at: now(),
-          payload: {
-            activityId: activity.id,
-            signedIn: Boolean(session.userId),
-            joinedByCode: typeof req.body.code === 'string',
-          },
+          payload: { activityId: activity.id, signedIn: Boolean(session.userId) },
         },
       ])
 
@@ -153,16 +129,6 @@ export function sessionRoutes(store) {
       ])
 
       res.json({ ...payload, answers, messages, ownQuestions: own })
-    }),
-  )
-
-  /** Doc item 3: attach a phone to the session already open on a laptop. */
-  router.get(
-    '/by-code/:code',
-    route(async (req, res) => {
-      const session = await store.sessions.findByCode(req.params.code)
-      if (!session) throw notFound('No session with that code')
-      res.json(await sessionPayload(session))
     }),
   )
 

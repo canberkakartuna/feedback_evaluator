@@ -15,9 +15,12 @@ const when = (iso) =>
  * Everyone who has been in, and how much they produced.
  *
  * A row is a **session**, not a student, because most students here have no
- * account — they joined with a code. A signed-in student's name is shown when
- * there is one and the session's own short code stands in when there is not,
- * which is the only handle an anonymous session has.
+ * account at all — they came in anonymously, with no code and no password. Their
+ * work still has to be visible, and it is: an anonymous session is attached to
+ * the activity it was started from, so it reaches the teacher who owns that
+ * activity. A signed-in student's name is shown when there is one; the session's
+ * own short code stands in when there is not, which is the only handle an
+ * anonymous session has.
  *
  * `questionsWithChat` is the column the doc actually asks for: not which
  * questions were opened, but which ones produced a conversation. That is what
@@ -88,8 +91,7 @@ export default function Roster() {
         <p className="cs-note">Loading…</p>
       ) : rows.length === 0 ? (
         <p className="cs-empty">
-          Nothing yet. Publish an activity and give the class its join code — sessions appear here
-          as they work.
+          Nothing yet. Publish an activity and sessions appear here as students work through it.
         </p>
       ) : (
         <div className="cs-scroll-x">

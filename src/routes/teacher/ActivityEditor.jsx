@@ -5,13 +5,14 @@ import { useAsync } from '../../lib/useAsync'
 import QuestionForm from './QuestionForm'
 
 /**
- * One activity: its settings, its questions, and the code students join with.
+ * One activity: its settings and its questions.
  *
- * Publishing is the hinge. A draft has no reachable code and cannot be started,
- * so a teacher can build at their own pace; publishing is the single act that
- * opens it, and the server refuses to publish an activity with no questions.
- * Unpublishing closes it again without touching anything already recorded,
- * which is why it is offered as the answer whenever a delete is refused.
+ * Publishing is the hinge, and with no join code it is the *whole* access
+ * decision — a draft is invisible to students and cannot be started, so a
+ * teacher can build at their own pace. The server refuses to publish an
+ * activity with no questions. Unpublishing closes it again without touching
+ * anything already recorded, which is why it is offered as the answer whenever
+ * a delete is refused.
  */
 export default function ActivityEditor() {
   const { activityId } = useParams()
@@ -114,10 +115,11 @@ export default function ActivityEditor() {
       <section className="cs-card">
         {published ? (
           <>
-            <p className="eyebrow">Students join with</p>
-            <p className="cs-code">{activity.code}</p>
-            <p className="cs-hint">
-              They open the site, agree to the consent notice, and type this. No account needed.
+            <p className="eyebrow">Open to students</p>
+            <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
+              It appears in the list students see when they open the site and agree to the consent
+              notice. No code and no account needed — <strong>publishing is what opens it</strong>,
+              so close it again when the lesson is over.
             </p>
           </>
         ) : (
@@ -125,8 +127,8 @@ export default function ActivityEditor() {
             <p className="eyebrow">Not open yet</p>
             <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
               {questions.length === 0
-                ? 'Add at least one question, then publish to get a join code.'
-                : 'Publish to get a join code students can use.'}
+                ? 'Students cannot see this. Add at least one question, then publish it.'
+                : 'Students cannot see this yet. Publish it and it appears in their list.'}
             </p>
           </>
         )}

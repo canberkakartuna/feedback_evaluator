@@ -7,9 +7,8 @@ import { useAsync } from '../../lib/useAsync'
  * Every activity this teacher can reach, and the form that makes another.
  *
  * A new activity is created as a **draft** and stays invisible to students
- * until it is published — so the useful thing to show on each tile is the
- * status and the join code, which are the two facts a teacher needs when
- * standing in front of a class.
+ * until it is published, so open-or-draft is the fact worth putting on every
+ * tile: it is the difference between work a class can see and work they cannot.
  */
 export default function Activities() {
   const { data, error, loading, reload } = useAsync(() => api.activities(), [])
@@ -45,8 +44,9 @@ export default function Activities() {
           <p className="eyebrow">Authoring</p>
           <h1 className="cs-title">Activities</h1>
           <p className="cs-lede">
-            An activity is a set of questions with one join code. Students open it by typing that
-            code — no account needed — and everything they say to the tutor is recorded against it.
+            An activity is a set of questions. Publishing it is what puts it in front of students —
+            they open the site, agree to the consent notice, and pick it from a list. Everything
+            they say to the tutor is recorded against it.
           </p>
         </div>
       </header>
@@ -112,8 +112,8 @@ export default function Activities() {
           <p className="cs-note">Loading…</p>
         ) : activities.length === 0 ? (
           <p className="cs-empty">
-            Nothing yet. Create an activity above, add a question or two, then publish it to get a
-            join code students can use.
+            Nothing yet. Create an activity above, add a question or two, then publish it so
+            students can see it.
           </p>
         ) : (
           <div className="cs-grid">
@@ -127,16 +127,13 @@ export default function Activities() {
                   <span className="cs-pill" data-tone={activity.status === 'published' ? 'live' : 'draft'}>
                     {activity.status === 'published' ? 'Open' : 'Draft'}
                   </span>
-                  <span className="mono" style={{ fontSize: 'var(--t-12)' }}>
-                    {activity.code}
+                  <span className="cs-tile-meta mono">
+                    {activity.questionCount} {activity.questionCount === 1 ? 'question' : 'questions'}
                   </span>
                 </div>
 
                 <h3 className="cs-tile-name">{activity.title}</h3>
                 {activity.blurb ? <p className="cs-tile-meta">{activity.blurb}</p> : null}
-                <p className="cs-tile-meta" style={{ marginTop: 'var(--s-2)' }}>
-                  {activity.questionCount} {activity.questionCount === 1 ? 'question' : 'questions'}
-                </p>
               </Link>
             ))}
           </div>

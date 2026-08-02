@@ -11,7 +11,7 @@ import {
   parseActivityInput,
   parseQuestionInput,
 } from '../services/activities.js'
-import { activityPreview, studentActivities } from '../services/delivery.js'
+import { studentActivities } from '../services/delivery.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
 import { ApiError, badRequest, notFound, now, route } from '../lib/http.js'
 
@@ -25,8 +25,8 @@ import { ApiError, badRequest, notFound, now, route } from '../lib/http.js'
  * shared/activity.js `publicQuestion` leaves behind. Both live in this file so
  * the difference is visible in one screen rather than inferred from two.
  *
- * Route order is load-bearing: `/available` and `/by-code/:code` are declared
- * before `/:activityId`, or Express would read "available" as an activity id.
+ * Route order is load-bearing: `/available` is declared before `/:activityId`,
+ * or Express would read "available" as an activity id.
  */
 export function activityRoutes(store) {
   const router = express.Router()
@@ -40,27 +40,18 @@ export function activityRoutes(store) {
   /* ------------------------------------------------------------- student read */
 
   /**
-   * What a signed-in student may start on their own. Anonymous students do not
-   * reach this — they have no teacher to scope it to, and use a join code.
+   * What the person looking may start.
+   *
+   * **Open on purpose.** A student choosing this door has no account by
+   * definition, so requiring one would close the door. What comes back is a
+   * title, a blurb and a count — never the questions, and never a draft. See
+   * studentActivities in services/delivery.js for how a signed-in student is
+   * narrowed to their own teacher's work.
    */
   router.get(
     '/available',
-    requireAuth,
     route(async (req, res) => {
       res.json({ activities: await studentActivities(store, req.user) })
-    }),
-  )
-
-  /**
-   * The join box. Open on purpose — a student has no account at this point —
-   * and thin on purpose: a title and a count, never the questions. Otherwise
-   * the box is an oracle for reading every activity in the system by guessing
-   * six characters at a time.
-   */
-  router.get(
-    '/by-code/:code',
-    route(async (req, res) => {
-      res.json({ activity: await activityPreview(store, req.params.code) })
     }),
   )
 

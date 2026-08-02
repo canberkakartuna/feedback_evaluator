@@ -56,7 +56,6 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<StudentEntry />} />
-          <Route path="/join/:code" element={<StudentEntry />} />
           <Route path="/work/:sessionId" element={<Session />} />
           <Route path="/signin" element={<SignIn />} />
 

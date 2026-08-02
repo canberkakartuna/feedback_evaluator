@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import '../../components/Entry.css'
@@ -12,66 +12,60 @@ import '../console.css'
  * that does not create the consent record, on the server as well as here, so
  * the gate holds even against someone calling the API directly.
  *
- * After that there are two ways in, and the first is the common case:
+ * After that there are exactly two ways to be here, and the screen asks which:
  *
- * - **Anonymously**, with a join code typed off the board. No account, no name,
- *   nothing asked. This is what the study is designed around.
- * - **Signed in**, for a student whose teacher made them an account. They get a
- *   list of their own teacher's published work instead of typing a code.
+ * - **Anonymously.** No account, no name, nothing asked. The list shows every
+ *   published activity, because with no code and no credential, publishing is
+ *   the whole access decision. This is what the study is designed around.
+ * - **Signed in**, with an account their teacher made. Same screens, but the
+ *   list is narrowed to their own teacher's work and the session carries their
+ *   name so it can be followed across visits.
  *
- * Both end in the same place, and the join code is offered to signed-in
- * students too, since a class may be doing an activity set by someone else.
+ * There is deliberately **no join code**. It was a third identifier for
+ * something that already had one, and it put a typing task between a student
+ * and the work.
  *
  * The consent wording is a PLACEHOLDER. Replace it with the text your ethics
  * committee approves before this goes near a real student.
  */
 export default function StudentEntry() {
-  const { code: codeFromUrl } = useParams()
   const navigate = useNavigate()
   const { user, ready } = useAuth()
 
   const [step, setStep] = useState('consent')
-  const [agreed, setAgreed] = useState(false)
-  const [code, setCode] = useState(codeFromUrl ? codeFromUrl.toUpperCase() : '')
-  const [preview, setPreview] = useState(null)
-  const [available, setAvailable] = useState([])
+  const [activities, setActivities] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
-  const isStudentAccount = ready && user?.role === 'student'
+  const signedIn = ready && Boolean(user)
 
-  // Only for a signed-in student; anonymous students have no list to show.
   useEffect(() => {
-    if (step !== 'pick' || !isStudentAccount) return
+    if (step !== 'pick') return
+
+    let alive = true
     api
       .availableActivities()
-      .then((result) => setAvailable(result.activities))
-      .catch(() => setAvailable([]))
-  }, [isStudentAccount, step])
+      .then((result) => alive && setActivities(result.activities))
+      .catch((failure) => {
+        if (!alive) return
+        setActivities([])
+        setError(failure.message)
+      })
 
-  /** Looks the code up before committing, so a typo is caught before consent is recorded. */
-  const lookUp = async (event) => {
-    event?.preventDefault()
-    if (!code.trim()) return
-
-    setBusy(true)
-    setError(null)
-    try {
-      const { activity } = await api.activityByCode(code.trim())
-      setPreview(activity)
-    } catch (failure) {
-      setPreview(null)
-      setError(failure.message)
-    } finally {
-      setBusy(false)
+    return () => {
+      alive = false
     }
-  }
+  }, [step])
 
-  const begin = async (body) => {
+  const begin = async (activityId) => {
     setBusy(true)
     setError(null)
     try {
-      const { session } = await api.startSession({ ...body, device: navigator.userAgent.slice(0, 120) })
+      const { session } = await api.startSession({
+        activityId,
+        device: navigator.userAgent.slice(0, 120),
+      })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
       setError(failure.message)
@@ -101,98 +95,104 @@ export default function StudentEntry() {
     return (
       <main className="en-page">
         <div className="en-card">
-          <p className="eyebrow">Step 2 of 2</p>
-          <h1 className="en-title">Which activity?</h1>
+          <p className="eyebrow">Step 3 of 3</p>
+          <h1 className="en-title">What are you working on?</h1>
+          <p className="en-lede">
+            {signedIn
+              ? `Set by your teacher, and saved to your account.`
+              : 'Pick the one your teacher told you to open. You are working anonymously.'}
+          </p>
 
-          {isStudentAccount && available.length > 0 ? (
-            <>
-              <p className="en-lede">Set by your teacher.</p>
-              <div className="en-topics">
-                {available.map((activity) => (
-                  <button
-                    key={activity.id}
-                    type="button"
-                    className="en-topic"
-                    disabled={busy}
-                    onClick={() => begin({ activityId: activity.id })}
-                  >
-                    <span className="en-topic-name">{activity.title}</span>
-                    <span className="en-topic-meta mono">{activity.questionCount} questions</span>
-                  </button>
-                ))}
-              </div>
-              <p className="eyebrow" style={{ marginTop: 'var(--s-5)' }}>
-                Or use a code
-              </p>
-            </>
-          ) : (
-            <p className="en-lede">
-              Your teacher will have given you a six-character code. Type it in below.
+          {error ? (
+            <p className="cs-note" data-tone="bad" role="alert">
+              {error}
             </p>
+          ) : null}
+
+          {signedIn ? (
+            <p className="cs-hint" style={{ marginBottom: 'var(--s-4)' }}>
+              Signed in as <strong>{user.name}</strong>. To work anonymously instead,{' '}
+              <Link to="/signin">sign out first</Link> — while you are signed in, everything you do
+              is saved to your account.
+            </p>
+          ) : null}
+
+          {activities === null ? (
+            <p className="cs-note">Loading…</p>
+          ) : activities.length === 0 ? (
+            <p className="cs-empty">
+              Nothing is open yet. Your teacher has to publish an activity before it appears here.
+            </p>
+          ) : (
+            <div className="en-topics">
+              {activities.map((activity) => (
+                <button
+                  key={activity.id}
+                  type="button"
+                  className="en-topic"
+                  disabled={busy}
+                  onClick={() => begin(activity.id)}
+                >
+                  <span className="en-topic-name">{activity.title}</span>
+                  <span className="en-topic-meta mono">
+                    {activity.questionCount} {activity.questionCount === 1 ? 'question' : 'questions'}
+                  </span>
+                </button>
+              ))}
+            </div>
           )}
 
-          <form className="cs-form" onSubmit={lookUp}>
-            <div className="cs-field">
-              <label className="cs-label" htmlFor="join-code">
-                Join code
-              </label>
-              <input
-                id="join-code"
-                className="cs-input mono"
-                style={{ fontSize: 'var(--t-22)', letterSpacing: '0.16em', textAlign: 'center' }}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                maxLength={6}
-                placeholder="ABC123"
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value.toUpperCase())
-                  setPreview(null)
-                  setError(null)
-                }}
-              />
-            </div>
+          <div className="en-actions">
+            <button
+              type="button"
+              className="en-btn"
+              onClick={() => setStep(signedIn ? 'consent' : 'who')}
+            >
+              Back
+            </button>
+          </div>
+        </div>
+      </main>
+    )
+  }
 
-            {error ? (
-              <p className="cs-note" data-tone="bad" role="alert">
-                {error}
-              </p>
-            ) : null}
+  if (step === 'who') {
+    return (
+      <main className="en-page">
+        <div className="en-card">
+          <p className="eyebrow">Step 2 of 3</p>
+          <h1 className="en-title">How are you working today?</h1>
+          <p className="en-lede">
+            Either is fine. Anonymous is the normal way in — you only need an account if your
+            teacher set one up for you.
+          </p>
 
-            {preview ? (
-              <div className="cs-note" data-tone="good">
-                <strong>{preview.title}</strong>
-                {preview.blurb ? <> — {preview.blurb}</> : null}
-                <br />
-                {preview.questionCount} {preview.questionCount === 1 ? 'question' : 'questions'}
-              </div>
-            ) : null}
+          <div className="en-topics">
+            <button
+              type="button"
+              className="en-topic"
+              onClick={() => {
+                setActivities(null)
+                setStep('pick')
+              }}
+            >
+              <span className="en-topic-name">Continue anonymously</span>
+              <span className="en-topic-meta">No account. Nothing is asked for.</span>
+            </button>
 
-            <div className="en-actions">
-              {preview ? (
-                <button
-                  type="button"
-                  className="en-btn en-btn-primary"
-                  disabled={busy}
-                  onClick={() => begin({ code: preview.code })}
-                >
-                  {busy ? 'Starting…' : 'Start working'}
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="en-btn en-btn-primary"
-                  disabled={busy || code.trim().length < 4}
-                >
-                  {busy ? 'Checking…' : 'Find it'}
-                </button>
-              )}
-              <button type="button" className="en-btn" onClick={() => setStep('consent')}>
-                Back
-              </button>
-            </div>
-          </form>
+            <Link className="en-topic" to="/signin" state={{ from: '/' }}>
+              <span className="en-topic-name">Sign in</span>
+              <span className="en-topic-meta">
+                If your teacher gave you an email and password.
+              </span>
+            </Link>
+          </div>
+
+          <div className="en-actions">
+            <button type="button" className="en-btn" onClick={() => setStep('consent')}>
+              Back
+            </button>
+          </div>
         </div>
       </main>
     )
@@ -201,7 +201,7 @@ export default function StudentEntry() {
   return (
     <main className="en-page">
       <div className="en-card">
-        <p className="eyebrow">Step 1 of 2 · Consent</p>
+        <p className="eyebrow">Step 1 of 3 · Consent</p>
         <h1 className="en-title">Before you start</h1>
         <p className="en-lede">
           This workspace is part of a research study on how AI feedback helps students work through
@@ -247,7 +247,7 @@ export default function StudentEntry() {
             type="button"
             className="en-btn en-btn-primary"
             disabled={!agreed}
-            onClick={() => setStep('pick')}
+            onClick={() => setStep(signedIn ? 'pick' : 'who')}
           >
             Agree and continue
           </button>
@@ -255,10 +255,6 @@ export default function StudentEntry() {
             I do not agree
           </button>
         </div>
-
-        <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
-          Have an account? <Link to="/signin">Sign in</Link>.
-        </p>
       </div>
     </main>
   )

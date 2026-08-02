@@ -2,11 +2,11 @@
  * Activities and the questions inside them.
  *
  * An **activity** is what a teacher builds and hands to a class: a title and an
- * ordered list of questions, reached by a short join code. It replaces the
- * hard-coded course that used to live in shared/course.js — nothing here is
- * content, only the shape content has to take.
+ * ordered list of questions. It replaces the hard-coded course that used to
+ * live in shared/course.js — nothing here is content, only the shape content
+ * has to take.
  *
- *   activity  { id, code, title, blurb, ownerId, status, createdAt, updatedAt }
+ *   activity  { id, title, blurb, ownerId, status, createdAt, updatedAt }
  *   question  { id, activityId, code, kind, points, prompt, stimulus,
  *               workingExpected, rubric[], tutor{}, position, ... }
  *
@@ -53,7 +53,7 @@ export const LIMITS = {
   title: 200,
   blurb: 500,
   prompt: 5000,
-  code: 24,
+  code: 24, // a question's own label, e.g. "BIO-101" — activities have none
   criterionLabel: 300,
   criterionCoach: 1000,
   keyword: 100,

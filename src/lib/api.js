@@ -162,17 +162,19 @@ export const api = {
   reorderQuestions: (activityId, questionIds) =>
     call('POST', `/api/activities/${activityId}/questions/reorder`, { questionIds }),
 
-  /** The join box, and the list a signed-in student gets from their teacher. */
-  activityByCode: (code) => call('GET', `/api/activities/by-code/${encodeURIComponent(code)}`),
+  /**
+   * What the person looking may start. Sends the token when there is one, which
+   * narrows it to their own teacher's work; without one it is every published
+   * activity, which is the anonymous door.
+   */
   availableActivities: () => call('GET', '/api/activities/available'),
 
   /* ---------------------------------------------------------------- sessions */
 
   /** Consent is the session. There is no way to start one without it. */
-  startSession: ({ activityId, code, device } = {}) =>
-    call('POST', '/api/sessions', { consent: true, activityId, code, device }),
+  startSession: ({ activityId, device } = {}) =>
+    call('POST', '/api/sessions', { consent: true, activityId, device }),
   resumeSession: (sessionId) => call('GET', `/api/sessions/${sessionId}`),
-  sessionByCode: (code) => call('GET', `/api/sessions/by-code/${encodeURIComponent(code)}`),
   endSession: (sessionId) => call('POST', `/api/sessions/${sessionId}/end`),
   deleteSession: (sessionId) => call('DELETE', `/api/sessions/${sessionId}`),
 
