@@ -83,8 +83,10 @@ export default function App() {
               </Guard>
             }
           >
+            {/* Accounts only. The AI prompt lives in the teacher console,
+                which is where the brief puts it and where an admin can still
+                reach it from the sidebar. */}
             <Route index element={<People />} />
-            <Route path="prompt" element={<SystemPrompt />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

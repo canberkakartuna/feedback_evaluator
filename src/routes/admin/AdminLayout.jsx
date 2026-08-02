@@ -3,12 +3,14 @@ import { useAuth } from '../../lib/auth'
 import '../console.css'
 
 /**
- * The admin console: accounts, and the one system-wide setting.
+ * The admin console: accounts, and nothing else.
  *
  * Kept separate from the teacher console because the work is different in kind
  * — this is where the hierarchy itself is built, and it is the only place a
  * manager or teacher can be created. An admin still has the teacher console
- * available from the sidebar, since they can author and read everything too.
+ * available from the sidebar, since they can author and read everything too,
+ * and that is where the AI prompt is edited. It used to be mirrored here as
+ * well; one setting reachable from two places is one setting too many.
  */
 export default function AdminLayout() {
   const { user, signOut } = useAuth()
@@ -26,11 +28,6 @@ export default function AdminLayout() {
           <li>
             <NavLink className="cs-link" to="/admin" end>
               People
-            </NavLink>
-          </li>
-          <li>
-            <NavLink className="cs-link" to="/admin/prompt">
-              AI prompt
             </NavLink>
           </li>
           <li>
