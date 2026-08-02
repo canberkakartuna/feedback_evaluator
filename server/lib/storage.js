@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createReadStream } from 'node:fs'
 import {
-  CreateBucketCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
@@ -31,9 +30,22 @@ import { config } from '../config.js'
  * different endpoint rather than a DigitalOcean-specific client.
  */
 
-/** `sessionId/uploadId.ext` — one prefix per session, so a purge is one delete. */
-export const objectKey = (sessionId, uploadId, extension) =>
-  `${sessionId}/${uploadId}.${extension}`
+/**
+ * `dropshot/<scope>/<uploadId>.<ext>`.
+ *
+ * The bucket is shared with other applications, so everything this one writes
+ * lives under `config.spaces.prefix` and nothing else in the bucket is ever in
+ * reach. Inside that, one folder per session — or `activities/<id>` for a
+ * question image — so a purge is one prefix delete rather than a search.
+ *
+ * The full key including the prefix is what gets stored on the upload record,
+ * because that is the object's actual name; changing the prefix later must not
+ * silently orphan everything written before it.
+ */
+export const objectKey = (scope, uploadId, extension) => {
+  const prefix = config.spaces.prefix
+  return `${prefix ? `${prefix}/` : ''}${scope}/${uploadId}.${extension}`
+}
 
 /* ------------------------------------------------------------------ local disk */
 
@@ -94,7 +106,7 @@ function spacesBackend() {
 
   return {
     kind: 'spaces',
-    location: `${Bucket} @ ${config.spaces.endpoint}`,
+    location: `${Bucket}/${config.spaces.prefix} @ ${config.spaces.endpoint}`,
     client,
     bucket: Bucket,
 
@@ -151,23 +163,27 @@ function spacesBackend() {
       }
     },
 
-    /** Idempotent: an existing bucket you own is a success, not a failure. */
-    async ensureBucket() {
+    /**
+     * Confirms the bucket is there and this key can reach it.
+     *
+     * Deliberately does **not** create it. The bucket is shared with another
+     * application, so it already exists and is not ours to make — and a script
+     * that would create a bucket on a typo'd name is a script that silently
+     * writes a lesson's worth of student work somewhere nobody looks.
+     */
+    async requireBucket() {
       try {
         await client.send(new HeadBucketCommand({ Bucket }))
-        return { created: false, existed: true }
       } catch (error) {
         const status = error?.$metadata?.httpStatusCode
-        if (status !== 404 && status !== 403) throw error
-        if (status === 403) {
-          throw new Error(
-            `Bucket "${Bucket}" exists but this key cannot reach it. Check the key's permissions, or that the name is not taken by another account.`,
-          )
+        if (status === 404) {
+          throw new Error(`Bucket "${Bucket}" does not exist. Check SPACES_BUCKET.`)
         }
+        if (status === 403) {
+          throw new Error(`Bucket "${Bucket}" exists but this key cannot reach it.`)
+        }
+        throw error
       }
-
-      await client.send(new CreateBucketCommand({ Bucket, ACL: 'private' }))
-      return { created: true, existed: false }
     },
   }
 }

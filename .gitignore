@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# API uploads (local disk until GridFS/object storage)
-server/.uploads
+# Uploads never land in the repo. Spaces when configured, the system temp
+# directory otherwise — see server/config.js `uploadDir`.

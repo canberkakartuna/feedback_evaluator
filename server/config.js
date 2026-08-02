@@ -68,17 +68,16 @@ export const config = {
     .filter(Boolean),
 
   /**
-   * Uploaded photos and whiteboard exports, when they are going to local disk.
+   * The disk fallback, used only when Spaces is not configured.
    *
-   * Only used by the disk backend — see `spaces` below and lib/storage.js.
-   * Only the project directory is writable when running locally, and on a
-   * serverless host the temp directory is the only writable path, which is
-   * per-instance and short-lived. So disk is somewhere to land while
-   * developing, not somewhere to keep things: a deployment wants Spaces.
+   * **Never inside the repository.** It used to default to `server/.uploads`,
+   * which put student photographs in the working tree — gitignored, but one
+   * `git add -f` or a stray archive away from being shared, and confusing to
+   * find there at all. It is the system temp directory now, in both
+   * environments: somewhere to land while developing or running tests, never
+   * somewhere to keep anything. Real uploads go to Spaces.
    */
-  uploadDir:
-    process.env.UPLOAD_DIR ??
-    (serverless ? path.join(os.tmpdir(), 'dropshot-uploads') : path.join(here, '.uploads')),
+  uploadDir: process.env.UPLOAD_DIR ?? path.join(os.tmpdir(), 'dropshot-uploads'),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
 
   /**
@@ -96,7 +95,13 @@ export const config = {
   spaces: {
     key: process.env.SPACES_KEY?.trim() || null,
     secret: process.env.SPACES_SECRET?.trim() || null,
-    bucket: process.env.SPACES_BUCKET?.trim() || 'dropshot',
+    bucket: process.env.SPACES_BUCKET?.trim() || 'mezqr-bucket',
+    /**
+     * A folder inside a bucket shared with other applications, so everything
+     * this one writes sits under one prefix and can be found, listed or purged
+     * without touching anybody else's objects.
+     */
+    prefix: (process.env.SPACES_PREFIX ?? 'dropshot').replace(/^\/+|\/+$/g, ''),
     region: process.env.SPACES_REGION?.trim() || 'sfo3',
     endpoint:
       process.env.SPACES_ENDPOINT?.trim() ||
