@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useAsync } from '../../lib/useAsync'
 import { MANAGEABLE, PARENT } from '../../../shared/roles'
+import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
 
 /**
  * Accounts, and the hierarchy between them.
@@ -16,14 +17,14 @@ import { MANAGEABLE, PARENT } from '../../../shared/roles'
  * something that would be refused.
  *
  * Students can be created here too, but usually are not: most students never
- * get an account at all and join an activity with a code instead.
+ * get an account at all and start an activity anonymously instead.
  */
 
 const ROLE_BLURB = {
   admin: 'Everything, everywhere, including the dataset export.',
   manager: 'Their teachers, and those teachers’ students and activities.',
   teacher: 'Their own students, their own activities, their own transcripts.',
-  student: 'Only themselves. Most students need no account — they join by code.',
+  student: 'Only themselves. Most students need no account — they work anonymously.',
 }
 
 export default function People() {
@@ -217,11 +218,13 @@ export default function People() {
                 className="cs-input"
                 type="text"
                 required
-                minLength={12}
+                minLength={MIN_PASSWORD_LENGTH}
                 value={form.password}
                 onChange={(event) => set({ password: event.target.value })}
               />
-              <p className="cs-hint">At least 12 characters. Shown so you can pass it on.</p>
+              <p className="cs-hint">
+                At least {MIN_PASSWORD_LENGTH} characters. Shown so you can pass it on.
+              </p>
             </div>
           </div>
 

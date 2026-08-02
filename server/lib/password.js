@@ -27,8 +27,9 @@ const MAX_MEM = 64 * 1024 * 1024
 const KEY_BYTES = 32
 const SALT_BYTES = 16
 
-export const MIN_PASSWORD_LENGTH = 8
-export const MAX_PASSWORD_LENGTH = 200
+// Re-exported rather than redeclared: the admin form reads the same two
+// numbers from shared/password.js, and they drifted once already.
+export { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from '../../shared/password.js'
 
 /** Unicode-normalised, so the same typed password matches on any keyboard. */
 const normalise = (password) => String(password).normalize('NFKC')
