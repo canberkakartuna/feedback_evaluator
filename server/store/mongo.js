@@ -33,7 +33,7 @@ const CLIENT_OPTIONS = {
   serverSelectionTimeoutMS: 10_000,
 }
 
-const DEFAULT_DB = 'feedback_evaluator'
+const DEFAULT_DB = 'dropshot'
 
 /**
  * Atlas's copy-paste connection string carries no database name, and the driver

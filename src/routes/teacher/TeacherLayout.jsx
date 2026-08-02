@@ -26,7 +26,7 @@ export default function TeacherLayout() {
       <nav className="cs-nav" aria-label="Teacher sections">
         <Link className="cs-brand" to="/teacher">
           <p className="eyebrow">Teacher</p>
-          <h1 className="cs-brand-name">Feedback Evaluator</h1>
+          <h1 className="cs-brand-name">Dropshot</h1>
         </Link>
 
         <ul className="cs-links">

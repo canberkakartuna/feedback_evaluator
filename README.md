@@ -1,4 +1,4 @@
-# Feedback Evaluator
+# Dropshot
 
 A research workspace for studying how AI feedback helps students work through
 problems. Teachers write the questions, students work through them talking to a

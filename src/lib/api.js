@@ -17,7 +17,7 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
-const TOKEN_KEY = 'fe.token'
+const TOKEN_KEY = 'dropshot.token'
 
 export class ApiError extends Error {
   constructor(status, message, details) {

@@ -21,7 +21,7 @@ export default function AdminLayout() {
       <nav className="cs-nav" aria-label="Admin sections">
         <Link className="cs-brand" to="/admin">
           <p className="eyebrow">Administrator</p>
-          <h1 className="cs-brand-name">Feedback Evaluator</h1>
+          <h1 className="cs-brand-name">Dropshot</h1>
         </Link>
 
         <ul className="cs-links">

@@ -78,7 +78,7 @@ export const config = {
    */
   uploadDir:
     process.env.UPLOAD_DIR ??
-    (serverless ? path.join(os.tmpdir(), 'feedback-uploads') : path.join(here, '.uploads')),
+    (serverless ? path.join(os.tmpdir(), 'dropshot-uploads') : path.join(here, '.uploads')),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
 
   /**

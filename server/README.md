@@ -59,7 +59,7 @@ the client and the API never disagree about which value won.
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
-| `MONGODB_DB` | `feedback_evaluator` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
+| `MONGODB_DB` | `dropshot` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
 | `SPACES_KEY` / `SPACES_SECRET` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Both set means the Spaces backend; either missing means local disk. |
 | `SPACES_BUCKET` | `dropshot` | Just a name. |
 | `SPACES_REGION` | `sfo3` | Used for request signing; the endpoint does the routing. |
