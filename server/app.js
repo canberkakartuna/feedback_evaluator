@@ -1,6 +1,7 @@
 import express from 'express'
 import { config } from './config.js'
 import { createStore } from './store/index.js'
+import { storage } from './lib/storage.js'
 import { resolveQuestion as lookupQuestion } from './services/delivery.js'
 import { activityRoutes } from './routes/activities.js'
 import { sessionRoutes } from './routes/sessions.js'
@@ -104,9 +105,20 @@ export function createApp({ store = createStore() } = {}) {
         warnings.push(`MongoDB is configured but unreachable: ${database.error}`)
       }
 
-      if (config.serverless) {
+      /**
+       * Uploads outlive the instance only when they leave it. Disk is fine
+       * locally and is a data-loss bug on a serverless host, where the temp
+       * directory is per-instance and cleared without warning — so the same
+       * backend is a note in one place and a warning in the other.
+       */
+      const files = storage()
+      const filesReachable = await files.check()
+
+      if (!filesReachable.ok) {
+        warnings.push(`Upload storage is configured but unreachable: ${filesReachable.error}`)
+      } else if (files.kind === 'disk' && config.serverless) {
         warnings.push(
-          'Uploads are being written to the instance temp directory and will not survive. Move them to Vercel Blob or GridFS.',
+          'Uploads are going to the instance temp directory and will not survive. Set SPACES_KEY and SPACES_SECRET.',
         )
       }
 
@@ -138,6 +150,8 @@ export function createApp({ store = createStore() } = {}) {
         database: store.database ?? null,
         databaseReachable: database ? database.ok : null,
         serverless: config.serverless,
+        uploads: files.kind,
+        uploadsReachable: filesReachable.ok,
         researchEnabled: Boolean(config.researchToken),
         users,
         uptime: Math.round(process.uptime()),

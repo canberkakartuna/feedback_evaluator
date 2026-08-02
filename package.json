@@ -10,11 +10,14 @@
     "start:api": "node server/index.js",
     "test:api": "node server/smoke.mjs",
     "test:api:mongo": "SMOKE_MONGO=1 node server/smoke.mjs",
+    "setup:spaces": "node server/spaces.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
     "express": "^5.2.1",
     "mongodb": "^7.5.0",
     "react": "^19.2.7",

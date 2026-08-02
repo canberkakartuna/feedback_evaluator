@@ -1,6 +1,6 @@
 import express from 'express'
-import fs from 'node:fs/promises'
 import { config } from '../config.js'
+import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import { badRequest, id, notFound, now, route, shortCode } from '../lib/http.js'
 
@@ -160,12 +160,9 @@ export function sessionRoutes(store) {
         store.sessions.remove(session.id),
       ])
 
-      // Files too, or "delete" is a lie.
-      await Promise.all(
-        removedUploads
-          .filter((upload) => upload.path)
-          .map((upload) => fs.rm(upload.path, { force: true })),
-      )
+      // Files too, or "delete" is a lie. Goes through the storage backend so it
+      // reaches Spaces as well as disk — see removeBytes in routes/uploads.js.
+      await Promise.all(removedUploads.map(removeBytes))
 
       res.json({ deleted: true, sessionId: session.id, files: removedUploads.length })
     }),

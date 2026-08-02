@@ -1,7 +1,7 @@
 import express from 'express'
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { config } from '../config.js'
+import { objectKey, storage } from '../lib/storage.js'
 import { badRequest, id, notFound, now, route } from '../lib/http.js'
 
 const EXTENSIONS = {
@@ -49,10 +49,9 @@ export function uploadRoutes(store, { resolveQuestion }) {
           : `upload.${EXTENSIONS[type]}`
 
       const uploadId = id('upl')
-      const dir = path.join(config.uploadDir, session.id)
-      await fs.mkdir(dir, { recursive: true })
-      const filePath = path.join(dir, `${uploadId}.${EXTENSIONS[type]}`)
-      await fs.writeFile(filePath, bytes)
+      const files = storage()
+      const key = objectKey(session.id, uploadId, EXTENSIONS[type])
+      const written = await files.put(key, bytes, type)
 
       const upload = await store.uploads.insert({
         id: uploadId,
@@ -62,7 +61,15 @@ export function uploadRoutes(store, { resolveQuestion }) {
         type,
         size: bytes.length,
         source,
-        path: filePath,
+        /**
+         * Both recorded, and both may be null depending on the backend: `key`
+         * on Spaces, `path` on disk. Storing which one it went to is what lets
+         * a deployment that switches backends still read what came before,
+         * rather than losing every file written under the old one.
+         */
+        storage: files.kind,
+        key,
+        path: written.path,
         url: `/api/uploads/${uploadId}`,
         createdAt: now(),
       })
@@ -87,11 +94,12 @@ export function uploadRoutes(store, { resolveQuestion }) {
           questionId: question.id,
           type: 'student_uploaded_image',
           at: now(),
-          payload: { uploadId: upload.id, source, type, size: upload.size },
+          payload: { uploadId: upload.id, source, type, size: upload.size, storage: files.kind },
         },
       ])
 
-      res.status(201).json({ upload: { ...upload, path: undefined }, answer })
+      // `path` and `key` are internal placement, not the client's business.
+      res.status(201).json({ upload: { ...upload, path: undefined, key: undefined }, answer })
     }),
   )
 
@@ -107,7 +115,7 @@ export function uploadRoutes(store, { resolveQuestion }) {
         attachments: (stored?.attachments ?? []).filter((item) => item.id !== upload.id),
       })
 
-      await fs.rm(upload.path, { force: true })
+      await removeBytes(upload)
       res.json({ deleted: true, answer })
     }),
   )
@@ -115,7 +123,48 @@ export function uploadRoutes(store, { resolveQuestion }) {
   return router
 }
 
-/** Serving the bytes back. Public by id, which is unguessable. */
+/**
+ * Deleting the bytes behind an upload, whichever backend they went to.
+ *
+ * Exported because withdrawal — `DELETE /api/sessions/:id` — has to remove
+ * every file in a session too, or "delete my session" is a lie. Failing to
+ * unlink one file is logged rather than thrown: the records are already gone
+ * by then, and turning that into a 500 would tell the student their withdrawal
+ * failed when almost all of it succeeded.
+ */
+export async function removeBytes(upload) {
+  const files = storage()
+
+  try {
+    if (upload.key && files.kind === upload.storage) {
+      await files.remove(upload.key)
+      return true
+    }
+
+    // Written under a different backend than the one running now — fall back to
+    // whatever placement was recorded at the time.
+    if (upload.path) {
+      const fs = await import('node:fs/promises')
+      await fs.rm(upload.path, { force: true })
+      return true
+    }
+  } catch (error) {
+    console.error(`[api] could not delete upload ${upload.id}: ${error.message}`)
+    return false
+  }
+
+  return false
+}
+
+/**
+ * Serving the bytes back. Public by id, which is unguessable.
+ *
+ * On Spaces the object itself is private, so this hands out a short-lived
+ * signed URL and redirects to it rather than proxying the bytes through the
+ * function — a 10 MB photo streamed through a serverless invocation is paid
+ * for twice and slower both times. On disk there is no such thing, so the file
+ * is streamed directly.
+ */
 export function uploadFileRoutes(store) {
   const router = express.Router()
 
@@ -124,6 +173,20 @@ export function uploadFileRoutes(store) {
     route(async (req, res) => {
       const upload = await store.uploads.findById(req.params.uploadId)
       if (!upload) throw notFound('No such upload')
+
+      const files = storage()
+
+      if (files.kind === 'spaces' && upload.key && upload.storage === 'spaces') {
+        const url = await files.signedUrl(upload.key, {
+          expiresIn: config.spaces.urlTtl,
+          filename: upload.name,
+        })
+        // 302, not 301: the URL expires, so nothing about this may be cached.
+        res.redirect(302, url)
+        return
+      }
+
+      if (!upload.path) throw notFound('That file is no longer available')
 
       res.type(upload.type)
       res.setHeader('Content-Disposition', `inline; filename="${upload.name}"`)

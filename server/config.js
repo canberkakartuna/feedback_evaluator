@@ -68,17 +68,45 @@ export const config = {
     .filter(Boolean),
 
   /**
-   * Uploaded photos and whiteboard exports.
+   * Uploaded photos and whiteboard exports, when they are going to local disk.
    *
-   * Only the project directory is writable when running locally. On a
-   * serverless host the temp directory is the only writable path, and it is
-   * per-instance and short-lived — so this is somewhere to land, not somewhere
-   * to keep things. Vercel Blob or GridFS replaces it; see server/README.md.
+   * Only used by the disk backend — see `spaces` below and lib/storage.js.
+   * Only the project directory is writable when running locally, and on a
+   * serverless host the temp directory is the only writable path, which is
+   * per-instance and short-lived. So disk is somewhere to land while
+   * developing, not somewhere to keep things: a deployment wants Spaces.
    */
   uploadDir:
     process.env.UPLOAD_DIR ??
     (serverless ? path.join(os.tmpdir(), 'feedback-uploads') : path.join(here, '.uploads')),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
+
+  /**
+   * DigitalOcean Spaces, which is S3-compatible.
+   *
+   * `configured` is the switch lib/storage.js reads, and it takes **both**
+   * halves of the credential to flip: a key with no secret is a half-finished
+   * setup, and silently falling back to disk there would look like it worked
+   * right up until the instance recycled and the files were gone.
+   *
+   * The key and secret are credentials, so they belong in `.env.local` locally
+   * and in the host's environment settings once deployed — never in the
+   * committed `.env`. The bucket, region and endpoint are just names.
+   */
+  spaces: {
+    key: process.env.SPACES_KEY?.trim() || null,
+    secret: process.env.SPACES_SECRET?.trim() || null,
+    bucket: process.env.SPACES_BUCKET?.trim() || 'dropshot',
+    region: process.env.SPACES_REGION?.trim() || 'sfo3',
+    endpoint:
+      process.env.SPACES_ENDPOINT?.trim() ||
+      `https://${process.env.SPACES_REGION?.trim() || 'sfo3'}.digitaloceanspaces.com`,
+    /** How long a read URL stays valid, in seconds. */
+    urlTtl: Number(process.env.SPACES_URL_TTL ?? 300),
+    get configured() {
+      return Boolean(this.key && this.secret)
+    },
+  },
 
   /**
    * Researcher endpoints read every student's transcript, so they stay shut
