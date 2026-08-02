@@ -8,9 +8,35 @@ import fs from 'node:fs'
  * baked into the deployment, and the smoke test sets its own values before
  * importing config.js and expects them to stick.
  *
- * Supports `KEY=value`, `#` comments, blank lines, quoted values and `export`
+ * Supports `KEY=value`, comments, blank lines, quoted values and `export`
  * prefixes. Anything more exotic belongs in a real dotenv package.
+ *
+ * **Inline comments are stripped**, which they were not until a pasted
+ * credential arrived as `SPACES_KEY=DO00… # DigitalOcean Spaces Access Key` and
+ * the whole trailing label became part of the key. Nothing reported a problem:
+ * the value was set, `configured` went true, and the only symptom was every
+ * request to Spaces failing to authenticate.
+ *
+ * A `#` only starts a comment when whitespace precedes it, so a value may still
+ * contain one — `PASSWORD=hunter2#4` keeps its hash. To keep a value with a
+ * space before a hash, quote it.
  */
+
+/** Cuts an unquoted value at the first ` #`, and returns quoted values whole. */
+function parseValue(raw) {
+  const value = raw.trim()
+
+  const quote = value[0]
+  if (quote === '"' || quote === "'") {
+    const end = value.indexOf(quote, 1)
+    // Unterminated: hand back what is there rather than silently truncating.
+    if (end === -1) return value.slice(1)
+    return value.slice(1, end)
+  }
+
+  const comment = value.search(/\s#/)
+  return (comment === -1 ? value : value.slice(0, comment)).trim()
+}
 export function loadEnvFile(path) {
   if (!fs.existsSync(path)) return { loaded: false, applied: 0, skipped: 0 }
 
@@ -25,12 +51,7 @@ export function loadEnvFile(path) {
     if (eq < 1) continue
 
     const key = line.slice(0, eq).trim()
-    let value = line.slice(eq + 1).trim()
-
-    const quoted =
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    if (quoted && value.length > 1) value = value.slice(1, -1)
+    const value = parseValue(line.slice(eq + 1))
 
     if (process.env[key] === undefined) {
       process.env[key] = value
