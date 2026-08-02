@@ -2,7 +2,7 @@ import express from 'express'
 import { config } from '../config.js'
 import { objectKey, storage } from '../lib/storage.js'
 import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
-import { id, notFound, now, route } from '../lib/http.js'
+import { id, notFound, now, route, unavailable } from '../lib/http.js'
 
 export function uploadRoutes(store, { resolveQuestion }) {
   const router = express.Router()
@@ -152,6 +152,21 @@ export function uploadFileRoutes(store) {
         // 302, not 301: the URL expires, so nothing about this may be cached.
         res.redirect(302, url)
         return
+      }
+
+      /**
+       * The file is in Spaces but this instance cannot reach it.
+       *
+       * A deployment missing SPACES_KEY / SPACES_SECRET falls back to disk and
+       * then cannot serve anything written by an instance that had them — every
+       * image 404s while the bytes sit safely in the bucket. Reporting that as
+       * "no longer available" sent one person hunting for a deleted file that
+       * was never deleted, so it says what is actually wrong instead.
+       */
+      if (upload.storage === 'spaces') {
+        throw unavailable(
+          'This file is in object storage, but this server is not configured to reach it. Set SPACES_KEY and SPACES_SECRET.',
+        )
       }
 
       if (!upload.path) throw notFound('That file is no longer available')
