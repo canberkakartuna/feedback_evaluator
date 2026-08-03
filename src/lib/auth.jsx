@@ -80,3 +80,19 @@ export function homeFor(user) {
   if (user.role === 'manager' || user.role === 'teacher') return '/teacher'
   return '/'
 }
+
+/**
+ * Where to send someone the moment they sign in.
+ *
+ * `from` is only worth honouring when it is a page inside that person's own
+ * console — the Guard sets it when it turns a teacher away from, say,
+ * /teacher/students, and returning them there is the whole point. Anything else
+ * is a page they merely happened to be on: the student entry screen sets
+ * `from: '/'` for its "Sign in" link, and honouring that would land a teacher
+ * back on the student consent form instead of their console.
+ */
+export function landingFor(user, from) {
+  const home = homeFor(user)
+  if (!from || home === '/') return home
+  return from === home || from.startsWith(`${home}/`) ? from : home
+}

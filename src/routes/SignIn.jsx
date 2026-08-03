@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { homeFor, useAuth } from '../lib/auth'
+import { landingFor, useAuth } from '../lib/auth'
 import './console.css'
 import '../components/Entry.css'
 
@@ -27,7 +27,7 @@ export default function SignIn() {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  if (ready && user) return <Navigate to={location.state?.from ?? homeFor(user)} replace />
+  if (ready && user) return <Navigate to={landingFor(user, location.state?.from)} replace />
 
   const submit = async (event) => {
     event.preventDefault()
@@ -36,7 +36,7 @@ export default function SignIn() {
 
     try {
       const me = await signIn(email, password)
-      navigate(location.state?.from ?? homeFor(me), { replace: true })
+      navigate(landingFor(me, location.state?.from), { replace: true })
     } catch (problem) {
       setError(problem.message)
     } finally {
