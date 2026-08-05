@@ -8,6 +8,7 @@ import { useMediaQuery } from '../../lib/useMediaQuery'
 import { ownTutor } from '../../../shared/tutor-scripts'
 import QuestionList from '../../components/QuestionList'
 import QuestionPanel from '../../components/QuestionPanel'
+import TopBar from '../../components/TopBar'
 import TutorPanel from '../../components/TutorPanel'
 import '../../components/Workspace.css'
 import '../console.css'
@@ -516,6 +517,27 @@ export default function Session() {
         </div>
       ) : null}
 
+      {/* The one strip that belongs to the screen rather than to a pane: what
+          this is, who is working on it, and the way out. It stays put when
+          either side pane collapses, which is the reason it exists. */}
+      <header className="ws-head">
+        <div className="ws-head-id">
+          <h1 className="ws-head-title">
+            {loaded.activity?.title ?? t('ws.questionsFallback')}
+          </h1>
+          <span className="ws-head-sep" aria-hidden="true">
+            ·
+          </span>
+          {/* Their own nickname reads better than the session code, and it is
+              the same label their teacher sees on the roster. */}
+          <p className="eyebrow ws-head-who">
+            {loaded.session.nickname || loaded.session.code}
+          </p>
+        </div>
+
+        <TopBar layout="bar" who={false} join={false} />
+      </header>
+
       <aside className="ws-pane ws-list" aria-label={t('ws.questionSet')}>
         <button
           type="button"
@@ -542,12 +564,6 @@ export default function Session() {
 
         <div className="ws-list-inner">
           <QuestionList
-            course={{
-              title: loaded.activity?.title ?? t('ws.questionsFallback'),
-              // Their own nickname reads better than the session code, and it is
-              // the same label their teacher sees on the roster.
-              subtitle: loaded.session.nickname || loaded.session.code,
-            }}
             groups={groups}
             progress={progress}
             activeId={active.id}

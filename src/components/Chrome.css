@@ -157,21 +157,34 @@
 
 /* ── the workspace copy ──────────────────────────────────────── */
 
-/* The three-pane workspace has no page margins to hang a bar in, so its
-   copy sits in the question-list header and shrinks to fit. */
-.ch-bar[data-layout='inline'] {
-  margin: var(--s-3) 0 0;
+/* In the workspace header the bar is one item in a row rather than a block of
+   its own, so it claims no width and never wraps: the panes below need the
+   height more than the buttons need a second line. */
+.ch-bar[data-layout='bar'] {
+  flex: none;
+  flex-wrap: nowrap;
+  width: auto;
   max-width: none;
-  justify-content: flex-start;
-  gap: var(--s-1);
+  margin: 0;
 }
 
-.ch-bar[data-layout='inline'] .ch-btn {
-  padding: 3px var(--s-2);
+.ch-bar[data-layout='bar'] .ch-btn {
+  padding: 3px var(--s-3);
   font-size: var(--t-12);
+  white-space: nowrap;
 }
 
-.ch-bar[data-layout='inline'] .ch-lang-btn {
-  padding: 3px 6px;
-  min-width: 28px;
+.ch-bar[data-layout='bar'] .ch-lang-btn {
+  padding: 3px 7px;
+  min-width: 30px;
+}
+
+/* A staff walkthrough carries "My console" as well, which on a narrow phone is
+   one button more than the row holds. There it may wrap onto a second line —
+   a taller header for one screen, rather than buttons off the edge. */
+@media (max-width: 759px) {
+  .ch-bar[data-layout='bar'] {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }

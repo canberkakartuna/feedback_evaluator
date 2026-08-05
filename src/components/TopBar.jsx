@@ -21,8 +21,8 @@ import './Chrome.css'
  *   staff           Home · My console · Sign out
  *
  * `layout` picks the arrangement, not the contents: `page` is the centred row
- * above an entry card, `stack` is a console sidebar, `inline` is the cramped
- * strip in the workspace's question list. See Chrome.css.
+ * above an entry card, `stack` is a console sidebar, `bar` is the tight row at
+ * the right of the workspace header. See Chrome.css.
  */
 export default function TopBar({
   layout = 'page',

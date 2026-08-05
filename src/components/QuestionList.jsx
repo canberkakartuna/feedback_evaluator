@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import StatusMark from './StatusMark'
-import TopBar from './TopBar'
 import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { useT } from '../lib/i18n'
 import './QuestionList.css'
 
+/**
+ * The index pane.
+ *
+ * It used to carry the activity title and the global buttons as well, because
+ * it was the only pane with a heading. Both now live in the workspace header —
+ * a title next to a title reads as two different things, and buttons inside a
+ * pane that collapses are buttons that can vanish. What is left is what only
+ * this pane can say: how far through the set the student is, and where.
+ */
 export default function QuestionList({
-  course,
   groups,
   progress,
   activeId,
@@ -50,8 +57,14 @@ export default function QuestionList({
       <header className="ql-head">
         <div className="ql-head-top">
           <div className="ql-head-name">
-            <p className="eyebrow">{course.subtitle}</p>
-            <h1 className="ql-title">{course.title}</h1>
+            <h2 className="eyebrow ql-head-label">{t('ws.questionSet')}</h2>
+
+            <p className="ql-count">
+              <span className="mono">
+                {t('ql.tally', { done: tally.done, total: tally.total })}
+              </span>{' '}
+              {t('ql.tallyLabel')}
+            </p>
           </div>
 
           <button
@@ -73,15 +86,6 @@ export default function QuestionList({
             </svg>
           </button>
         </div>
-
-        {/* The workspace fills the viewport and has no page margins, so the
-            global buttons live here — it is the one pane with a heading. */}
-        <TopBar layout="inline" who={false} join={false} />
-
-        <p className="ql-count">
-          <span className="mono">{t('ql.tally', { done: tally.done, total: tally.total })}</span>{' '}
-          {t('ql.tallyLabel')}
-        </p>
 
         <ol className="ql-spine" aria-hidden="true">
           {groups.flatMap((group) =>

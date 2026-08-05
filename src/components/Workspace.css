@@ -1,6 +1,6 @@
-/* Three panes on a desk: index, page, tutor. Either side pane can collapse
-   to a rail, so the page can take the whole desk. Track widths live in
-   custom properties, which is what the collapse toggles animate. */
+/* A header, then three panes on a desk: index, page, tutor. Either side pane
+   can collapse to a rail, so the page can take the whole desk. Track widths
+   live in custom properties, which is what the collapse toggles animate. */
 
 /* Each collapse state spells out its own tracks. Verbose, but it keeps every
    state the same shape — three lengths, one flexible middle — which is what
@@ -8,10 +8,63 @@
 .ws {
   display: grid;
   grid-template-columns: 304px minmax(0, 1fr) 384px;
+  /* The header is a fixed strip; the panes take what is left and scroll
+     inside themselves, which is why the second row is minmax(0, 1fr). */
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   background: var(--paper-sunk);
   overflow: hidden;
   transition: grid-template-columns 0.24s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* ── The header ─────────────────────────────────────────────── */
+
+/* The buttons a student wants from a screen they are done with used to be
+   squeezed into the question-list heading, which put them inside a pane that
+   collapses — the way out disappeared with it. Across the top they belong to
+   the screen rather than to one pane, and they stay put whatever collapses. */
+.ws-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-4);
+  background: var(--paper);
+  border-bottom: 1px solid var(--edge);
+}
+
+.ws-head-id {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  /* Takes the slack, so the buttons sit hard against the right edge. */
+  flex: 1;
+  min-width: 0;
+}
+
+/* The activity title is content and can be any length, so it is the one thing
+   here that gives way. */
+.ws-head-title {
+  margin: 0;
+  font-family: var(--f-display);
+  font-size: var(--t-18);
+  font-weight: 700;
+  font-stretch: 92%;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-head-who {
+  flex: none;
+  margin: 0;
+}
+
+.ws-head-sep {
+  flex: none;
+  color: var(--graphite-faint);
 }
 
 .ws-pane {
@@ -171,14 +224,31 @@
     /* minmax(0, 1fr), not 1fr: a wide stimulus table must scroll inside its
        own container instead of widening the pane past the viewport. */
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 
   .ws-pane {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
     display: none;
     border: 0;
+  }
+
+  /* On a phone the buttons are what the header is for, so the title gives up
+     its second line of identity rather than pushing them onto a second row. */
+  .ws-head {
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    padding: var(--s-2) var(--s-3);
+  }
+
+  .ws-head-title {
+    font-size: var(--t-16);
+  }
+
+  .ws-head-sep,
+  .ws-head-who {
+    display: none;
   }
 
   .ws[data-view='list'] .ws-list,
@@ -202,7 +272,7 @@
   .ws-tabs {
     display: grid;
     grid-column: 1;
-    grid-row: 2;
+    grid-row: 3;
     grid-template-columns: repeat(3, 1fr);
     border-top: 1px solid var(--edge);
     background: var(--paper);

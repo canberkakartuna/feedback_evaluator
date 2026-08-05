@@ -1,6 +1,6 @@
 .ql-head {
   flex: none;
-  padding: var(--s-5) var(--s-4) var(--s-4);
+  padding: var(--s-4);
   border-bottom: 1px solid var(--edge);
 }
 
@@ -38,18 +38,13 @@
   }
 }
 
-.ql-title {
-  margin: 6px 0 0;
-  font-family: var(--f-display);
-  font-size: var(--t-22);
-  font-weight: 700;
-  font-stretch: 92%;
-  line-height: 1.14;
-  letter-spacing: -0.015em;
+.ql-head-label {
+  margin: 0;
+  font-weight: 500;
 }
 
 .ql-count {
-  margin: var(--s-3) 0 0;
+  margin: 6px 0 0;
   font-size: var(--t-12);
   color: var(--graphite);
 }
@@ -285,10 +280,6 @@
 }
 
 @media (max-width: 759px) {
-  .ql-head {
-    padding-top: var(--s-4);
-  }
-
   .ql-foot {
     display: none;
   }

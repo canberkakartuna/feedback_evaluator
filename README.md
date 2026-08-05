@@ -37,7 +37,10 @@ present in one language only.
 Every screen carries the same bar of direct buttons — **home, sign in or sign
 out, the console for whoever is signed in, and the language switch** — so the way
 out of a screen is never a link buried in a paragraph. See
-`src/components/TopBar.jsx`.
+`src/components/TopBar.jsx`. In the workspace that bar sits in a **header across
+the top**, alongside the activity title and the student's nickname: it belongs to
+the screen rather than to one pane, so collapsing the question list no longer
+takes the way out with it.
 
 ### Two ways in for a student
 
