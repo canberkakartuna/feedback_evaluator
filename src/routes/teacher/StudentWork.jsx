@@ -51,7 +51,8 @@ export default function StudentWork() {
     ? t('transcript.preview')
     : session.userId
       ? t('transcript.signedIn')
-      : t('transcript.anon')
+      : // What they called themselves, when they called themselves anything.
+        (session.nickname || t('transcript.anon'))
 
   return (
     <>

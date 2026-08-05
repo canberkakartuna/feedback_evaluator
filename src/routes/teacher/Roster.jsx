@@ -27,9 +27,9 @@ const when = (iso, lang) =>
  * account at all — they came in anonymously, with no code and no password. Their
  * work still has to be visible, and it is: an anonymous session is attached to
  * the activity it was started from, so it reaches the teacher who owns that
- * activity. A signed-in student's name is shown when there is one; the session's
- * own short code stands in when there is not, which is the only handle an
- * anonymous session has.
+ * activity. A signed-in student's name is shown when there is one, an anonymous
+ * student's **nickname** when they offered one, and the session's own short code
+ * when they did not — which used to be the only handle an anonymous session had.
  *
  * A teacher's **own walkthrough** shows here too and is labelled as one. It is
  * not a student's work and must not be read as one — see routes/sessions.js on
@@ -133,6 +133,10 @@ export default function Roster() {
                           <span className="cs-pill" data-tone="quiet">
                             {t('roster.anonymous')}
                           </span>{' '}
+                          {/* A nickname they made up, or the code as before. The
+                              code stays visible either way: it is the handle the
+                              student can read back off their own screen. */}
+                          {session.nickname ? <strong>{session.nickname}</strong> : null}{' '}
                           <span className="mono">{session.code}</span>
                         </>
                       ))

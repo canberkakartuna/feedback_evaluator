@@ -38,6 +38,7 @@ const en = {
     loading: 'Loading…',
     saving: 'Saving…',
     cancel: 'Cancel',
+    back: 'Back',
     remove: 'Remove',
     delete: 'Delete',
     optional: '(optional)',
@@ -106,7 +107,7 @@ const en = {
       usedHead: 'How it is used',
       used1: 'To build an anonymous dataset for research on AI feedback in teaching.',
       used2: 'Your teacher may read your conversations and label them for the study.',
-      used3: 'You are not asked for your name, your email or your school.',
+      used3: 'You are not asked for your real name, your email or your school — anonymous work is labelled with a nickname you make up.',
       warn: 'Do not type your name, anyone else’s name, or any other personal detail into the workspace. You can stop at any time, and delete everything you did, from inside the workspace.',
       agree: 'I have read this, and I agree to my answers and conversations being recorded for this research.',
       continue: 'Agree and continue',
@@ -123,10 +124,20 @@ const en = {
     who: {
       title: 'How are you working today?',
       lede: 'Either is fine. Anonymous is the normal way in — you only need an account if your teacher set one up for you.',
-      anon: 'Continue anonymously',
-      anonMeta: 'No account. Nothing is asked for.',
+      anon: 'Work anonymously',
+      anonMeta: 'No account, no email, no password.',
       signIn: 'Sign in',
       signInMeta: 'If your teacher gave you an email and password.',
+    },
+
+    /** The step after choosing to work anonymously. */
+    nickname: {
+      title: 'What should we call you?',
+      lede: 'Make one up. Your teacher sees it next to your work, so they can tell whose is whose — and it is the only thing here that names you at all.',
+      label: 'Nickname',
+      placeholder: 'Blue Fox',
+      hint: 'Not your real name, and not anyone else’s. You can leave it empty and stay unnamed.',
+      go: 'Continue anonymously',
     },
 
     pick: {
@@ -546,6 +557,7 @@ const tr = {
     loading: 'Yükleniyor…',
     saving: 'Kaydediliyor…',
     cancel: 'İptal',
+    back: 'Geri',
     remove: 'Kaldır',
     delete: 'Sil',
     optional: '(isteğe bağlı)',
@@ -614,7 +626,7 @@ const tr = {
       usedHead: 'Nasıl kullanılır',
       used1: 'Öğretimde yapay zekâ geri bildirimi araştırması için anonim bir veri kümesi oluşturmak üzere.',
       used2: 'Öğretmeniniz konuşmalarınızı okuyabilir ve çalışma için etiketleyebilir.',
-      used3: 'Adınız, e-postanız veya okulunuz sorulmaz.',
+      used3: 'Gerçek adınız, e-postanız veya okulunuz sorulmaz — anonim çalışmalar, kendinizin uydurduğu bir takma adla etiketlenir.',
       warn: 'Çalışma alanına adınızı, başka birinin adını veya başka bir kişisel bilgiyi yazmayın. Dilediğiniz an durabilir ve yaptığınız her şeyi çalışma alanının içinden silebilirsiniz.',
       agree: 'Bunu okudum; cevaplarımın ve konuşmalarımın bu araştırma için kaydedilmesini kabul ediyorum.',
       continue: 'Kabul et ve devam et',
@@ -631,10 +643,19 @@ const tr = {
     who: {
       title: 'Bugün nasıl çalışıyorsunuz?',
       lede: 'İkisi de olur. Olağan yol anonim çalışmaktır — hesap yalnızca öğretmeniniz size bir hesap açtıysa gerekir.',
-      anon: 'Anonim devam et',
-      anonMeta: 'Hesap yok. Hiçbir bilgi istenmez.',
+      anon: 'Anonim çalış',
+      anonMeta: 'Hesap yok, e-posta yok, şifre yok.',
       signIn: 'Giriş yap',
       signInMeta: 'Öğretmeniniz size e-posta ve şifre verdiyse.',
+    },
+
+    nickname: {
+      title: 'Size ne diyelim?',
+      lede: 'Bir takma ad uydurun. Öğretmeniniz bunu çalışmanızın yanında görür, böylece hangisinin kime ait olduğunu ayırt eder — ve burada sizi adlandıran tek şey budur.',
+      label: 'Takma ad',
+      placeholder: 'Mavi Tilki',
+      hint: 'Gerçek adınız değil, başkasının adı da değil. Boş bırakıp adsız kalabilirsiniz.',
+      go: 'Anonim devam et',
     },
 
     pick: {

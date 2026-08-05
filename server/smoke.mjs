@@ -823,6 +823,41 @@ try {
    * runs on this session, so if any of it needed an identity it would fail here.
    */
   console.log('\nstarting anonymously')
+
+  /**
+   * The nickname: what an anonymous session is called on a teacher's roster.
+   * Optional, capped, and ignored for a session that already has an account
+   * naming it.
+   */
+  const nicknamed = await call('POST', '/api/sessions', {
+    body: { consent: true, activityId: activity.id, nickname: '  Blue Fox  ' },
+  })
+  check('an anonymous session can carry a nickname', nicknamed.body.session.nickname === 'Blue Fox')
+
+  const longNickname = await call('POST', '/api/sessions', {
+    body: { consent: true, activityId: activity.id, nickname: 'x'.repeat(200) },
+  })
+  check('a long one is cut, not refused', longNickname.body.session.nickname.length === 40)
+
+  const blankNickname = await call('POST', '/api/sessions', {
+    body: { consent: true, activityId: activity.id, nickname: '   ' },
+  })
+  check('a blank one is null, not an empty string', blankNickname.body.session.nickname === null)
+
+  const namedAccount = await call('POST', '/api/sessions', {
+    token: studentToken,
+    body: { consent: true, activityId: activity.id, nickname: 'Sneaky' },
+  })
+  check(
+    'a signed-in session ignores it — the account names it',
+    namedAccount.body.session.nickname === null,
+  )
+
+  // Removed again: everything below this point counts sessions.
+  for (const spare of [nicknamed, longNickname, blankNickname, namedAccount]) {
+    await call('DELETE', `/api/sessions/${spare.body.session.id}`)
+  }
+
   const started = await call('POST', '/api/sessions', {
     body: { consent: true, activityId: activity.id, device: 'smoke' },
   })

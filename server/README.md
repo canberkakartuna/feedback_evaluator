@@ -222,7 +222,7 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/health` | |
-| `POST` | `/api/sessions` | `{ consent: true, activityId }` or `{ consent: true, code }` → `{ session, activity }`. **400 without consent**, unless the token belongs to staff — then the session is a `staffPreview` and records no agreement. Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
+| `POST` | `/api/sessions` | `{ consent: true, activityId, nickname? }` or `{ consent: true, code, nickname? }` → `{ session, activity }`. **400 without consent**, unless the token belongs to staff — then the session is a `staffPreview` and records no agreement. Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous. `nickname` labels an anonymous session on the teacher's roster — trimmed, capped at 40, `null` when blank, and ignored entirely when a token is sent, since an account already names it |
 | `GET` | `/api/sessions/:id` | Resume: session, activity, answers, messages, own questions |
 | `POST` | `/api/sessions/:id/end` | |
 | `DELETE` | `/api/sessions/:id` | "Delete my session" — also deletes the files |

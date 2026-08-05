@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import { NICKNAME_MAX } from '../../../shared/session'
 import { isStaff } from '../../../shared/roles'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
@@ -14,8 +15,9 @@ import '../console.css'
  * to be asked:
  *
  *   1  who are you    anonymously, or signed in with a password
- *   2  consent        the research notice — only for the people from (1)
- *   3  the work       pick from the list, or the activity a class code named
+ *   2  a nickname     anonymous only, and optional — see ./nickname below
+ *   3  consent        the research notice — only for the people from (1)
+ *   4  the work       pick from the list, or the activity a class code named
  *
  * **The order is the point.** The notice used to be first, which meant everyone
  * who opened the site met a research consent form before they could say who they
@@ -53,6 +55,8 @@ export default function StudentLayout() {
   const { user, ready, problem, refresh, setUser } = useAuth()
 
   const [working, setWorking] = useState(null) // 'anon' once they choose
+  const [nickname, setNickname] = useState('')
+  const [named, setNamed] = useState(false) // the nickname step is behind them
   const [consented, setConsented] = useState(false)
   const [declined, setDeclined] = useState(false)
 
@@ -79,7 +83,11 @@ export default function StudentLayout() {
    * Which steps this person's flow has, so the numbering is theirs rather than a
    * constant that would be wrong for three of the four cases above.
    */
-  const steps = [...(needsWho ? ['who'] : []), ...(staff ? [] : ['consent']), 'work']
+  const steps = [
+    ...(needsWho ? ['who', 'nickname'] : []),
+    ...(staff ? [] : ['consent']),
+    'work',
+  ]
   const stepOf = (name) => steps.indexOf(name) + 1
 
   const agree = async () => {
@@ -145,6 +153,7 @@ export default function StudentLayout() {
             onClick={() => {
               setDeclined(false)
               setWorking(null)
+              setNamed(false)
             }}
           >
             {t('entry.declined.back')}
@@ -184,7 +193,78 @@ export default function StudentLayout() {
     )
   }
 
-  /* 2 — consent, for whoever has just said they are a student. */
+  /**
+   * 2 — the nickname, asked once they have chosen to work anonymously.
+   *
+   * "Anonymously" otherwise leaves a teacher with nothing to call the work but a
+   * six-character session code, which tells them nothing about whose it is. A
+   * nickname answers that, and every property of it follows from the study being
+   * anonymous: made up, **optional**, and never checked against anything.
+   * Requiring one would push a child into typing their real name — the single
+   * thing the notice on the next step asks them not to do.
+   *
+   * It is asked before the notice and held in this component until a session
+   * starts, so nothing about them reaches the server ahead of their agreement.
+   */
+  if (needsWho && !named) {
+    return (
+      <main className="en-page">
+        <TopBar join />
+        <div className="en-card">
+          <p className="eyebrow">
+            {t('entry.step', { current: stepOf('nickname'), total: steps.length })}
+          </p>
+          <h1 className="en-title">{t('entry.nickname.title')}</h1>
+          <p className="en-lede">{t('entry.nickname.lede')}</p>
+
+          <form
+            className="cs-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setNamed(true)
+            }}
+          >
+            <div className="cs-field">
+              <label className="cs-label" htmlFor="nickname">
+                {t('entry.nickname.label')}
+              </label>
+              <input
+                id="nickname"
+                className="cs-input"
+                autoFocus
+                autoComplete="off"
+                maxLength={NICKNAME_MAX}
+                placeholder={t('entry.nickname.placeholder')}
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+              />
+              <p className="cs-hint">{t('entry.nickname.hint')}</p>
+            </div>
+
+            <div className="en-actions">
+              {/* Enabled with the field empty: staying unnamed is a choice, and
+                  the session code labels the work as it always did. */}
+              <button type="submit" className="en-btn en-btn-primary">
+                {t('entry.nickname.go')}
+              </button>
+              <button
+                type="button"
+                className="en-btn"
+                onClick={() => {
+                  setWorking(null)
+                  setNickname('')
+                }}
+              >
+                {t('common.back')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </main>
+    )
+  }
+
+  /* 3 — consent, for whoever has just said they are a student. */
   if (!staff && !agreed) {
     return (
       <main className="en-page">
@@ -204,7 +284,7 @@ export default function StudentLayout() {
     )
   }
 
-  /* 3 — the work. */
+  /* 4 — the work. */
   return (
     <main className="en-page">
       <TopBar join />
@@ -215,7 +295,14 @@ export default function StudentLayout() {
        * answered in one place — this one.
        */}
       <Outlet
-        context={{ staff, consent: !staff, step: stepOf('work'), totalSteps: steps.length }}
+        context={{
+          staff,
+          consent: !staff,
+          /** Anonymous only: a signed-in session is labelled by its account. */
+          nickname: user ? '' : nickname.trim(),
+          step: stepOf('work'),
+          totalSteps: steps.length,
+        }}
       />
     </main>
   )

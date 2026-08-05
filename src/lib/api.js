@@ -194,10 +194,12 @@ export const api = {
    * for everybody would be one line shorter and would quietly corrupt the one
    * field in the study nobody may fudge.
    *
-   * `activityId` or `code`: whichever door they came through.
+   * `activityId` or `code`: whichever door they came through. `nickname` is what
+   * an anonymous session is called on a teacher's roster; the server ignores it
+   * for a signed-in one, which already has a name.
    */
-  startSession: ({ activityId, code, device, consent = true } = {}) =>
-    call('POST', '/api/sessions', { consent, activityId, code, device }),
+  startSession: ({ activityId, code, device, nickname, consent = true } = {}) =>
+    call('POST', '/api/sessions', { consent, activityId, code, device, nickname }),
   resumeSession: (sessionId) => call('GET', `/api/sessions/${sessionId}`),
   endSession: (sessionId) => call('POST', `/api/sessions/${sessionId}/end`),
   deleteSession: (sessionId) => call('DELETE', `/api/sessions/${sessionId}`),

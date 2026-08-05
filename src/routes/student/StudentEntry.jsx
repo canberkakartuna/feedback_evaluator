@@ -29,7 +29,7 @@ export default function StudentEntry() {
   const navigate = useNavigate()
   const t = useT()
   const { user, ready } = useAuth()
-  const { staff, consent, step, totalSteps } = useOutletContext()
+  const { staff, consent, nickname, step, totalSteps } = useOutletContext()
 
   const [activities, setActivities] = useState(null)
   const [topic, setTopic] = useState('all')
@@ -61,6 +61,7 @@ export default function StudentEntry() {
       const { session } = await api.startSession({
         activityId,
         device: navigator.userAgent.slice(0, 120),
+        nickname,
         consent,
       })
       navigate(`/work/${session.id}`, { replace: true })

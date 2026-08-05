@@ -41,9 +41,12 @@ out of a screen is never a link buried in a paragraph. See
 
 ### Two ways in for a student
 
-- **Anonymously** — no code, no password, nothing asked. Consent, then pick from
-  the list of published activities. This is the normal way in and what the study
-  is designed around.
+- **Anonymously** — no account, no email, no password. Choosing this asks for a
+  **nickname** on the next step: optional, and made up. It gives a teacher
+  something to call the work on their roster, where the only handle used to be a
+  six-character session code. Requiring one would push a child into typing their
+  real name, which is the single thing the notice asks them not to do. This is the
+  normal way in and what the study is designed around.
 - **Signed in**, with an email and password their teacher set for them. The list
   is narrowed to their own teacher's work, and the session carries their name so
   it can be followed across visits.
@@ -64,10 +67,17 @@ students' list and the teacher's are filtered by it. The list is `TOPICS` in
 `shared/activity.js`, and adding one is a line there plus a translation in
 `src/lib/strings.js`.
 
-### Who sees the consent notice, and how often
+### Who sees the consent notice, and when
+
+**Who you are is asked first, the notice second.** Opening the site asks how you
+are working — anonymously (then a nickname), or signed in — and only somebody who
+has just said they are a student is shown the research notice. That ordering is what keeps it out of
+the way of a teacher who has not signed in yet: their route to the sign-in screen
+no longer runs through a consent form written for somebody else.
 
 | Who | Sees it |
 | --- | --- |
+| Nobody yet | Nothing, until they say which of the two they are |
 | Anonymous student | Every visit — there is no account to remember it against |
 | Student with a password | **Once, ever.** Agreeing records it on the account (`POST /api/auth/consent`), and `user.consented` is what later visits read |
 | Teacher, manager, admin | Never — see below |

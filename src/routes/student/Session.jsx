@@ -544,7 +544,9 @@ export default function Session() {
           <QuestionList
             course={{
               title: loaded.activity?.title ?? t('ws.questionsFallback'),
-              subtitle: loaded.session.code,
+              // Their own nickname reads better than the session code, and it is
+              // the same label their teacher sees on the roster.
+              subtitle: loaded.session.nickname || loaded.session.code,
             }}
             groups={groups}
             progress={progress}

@@ -1,6 +1,7 @@
 import express from 'express'
 import { config } from '../config.js'
 import { isStaff } from '../../shared/roles.js'
+import { cleanNickname } from '../../shared/session.js'
 import { hasCurrentConsent } from '../services/users.js'
 import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
@@ -122,6 +123,20 @@ export function sessionRoutes(store) {
         },
         /** Flat and boolean, because every reader of it is a filter. */
         staffPreview: staff && !consented,
+        /**
+         * What to call this session on a teacher's roster.
+         *
+         * Only for work with no account behind it: a signed-in session is already
+         * named by its user, and a nickname on top would be a second, editable
+         * name for the same person. Null when they did not offer one, in which
+         * case `code` above is still the handle it always was.
+         *
+         * Free text, so it is possible for a student to type their real name into
+         * it despite being asked not to. That is a risk the consent notice names
+         * explicitly rather than one this field can prevent — nothing here can
+         * tell a made-up name from a real one.
+         */
+        nickname: req.user ? null : cleanNickname(req.body?.nickname),
         // Room for the study design: which model/prompt this session ran on.
         conditionId: req.body.conditionId ?? 'default',
         promptVersion: active?.versionId ?? null,

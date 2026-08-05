@@ -28,7 +28,7 @@ export default function Join() {
   const { code: fromUrl } = useParams()
   const navigate = useNavigate()
   const t = useT()
-  const { staff, consent, step, totalSteps } = useOutletContext()
+  const { staff, consent, nickname, step, totalSteps } = useOutletContext()
 
   const [code, setCode] = useState(fromUrl ?? '')
   const [activity, setActivity] = useState(null)
@@ -69,6 +69,7 @@ export default function Join() {
       const { session } = await api.startSession({
         code: activity.code,
         device: navigator.userAgent.slice(0, 120),
+        nickname,
         consent,
       })
       navigate(`/work/${session.id}`, { replace: true })
