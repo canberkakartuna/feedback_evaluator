@@ -87,7 +87,7 @@ no longer runs through a consent form written for somebody else.
 | Nobody yet | Nothing, until they say which of the two they are |
 | Anonymous student | Every visit — there is no account to remember it against |
 | Student with a password | **Once, ever.** Agreeing records it on the account (`POST /api/auth/consent`), and `user.consented` is what later visits read |
-| Teacher, manager, admin | Never — see below |
+| Teacher, manager, admin | Never — they are sent to their console instead, see below |
 
 Bumping `CONSENT_VERSION` asks everybody again, which is the point of having a
 version: an agreement to last term's wording is not an agreement to this term's.
@@ -101,25 +101,32 @@ A token that cannot be checked — the API down, a proxy 502 — is **not** trea
 for a research subject, so the screen says it cannot tell who is asking and offers
 a retry instead.
 
-### Staff are not participants
+### The student side is students only
 
-A teacher, manager or admin opening the student side **never sees the consent
-notice**, and is not asked to agree to it. The notice asks a research subject to
-agree to their answers and conversations being kept for the study; a teacher
-checking what their class will see is not one, and ticking it on their behalf
-would put staff clicks and student consent in the same field.
+A teacher, manager or admin **cannot start a session**. Signed in as staff, the
+entry screens do not open at all — `StudentLayout` sends them to their own
+console — and `POST /api/sessions` refuses a staff account outright, with or
+without a consent flag on the request, so the rule holds against a hand-typed
+URL as well as against the buttons.
 
-Such a session is stamped `staffPreview` instead, with `consent.given: false` and
-`waived: 'staff-preview'` — recorded honestly rather than fudged — and the roster
-labels it so it cannot be read as a student's work. `routes/sessions.js` is where
-that holds. A **student** with an account is not staff and is asked every time.
+They used to be able to: a staff walkthrough was allowed and stamped
+`staffPreview`, with `consent.given: false` and `waived: 'staff-preview'`, so the
+roster could tell it from a student's work. That is gone, and what it bought was
+never the walkthrough — it was the filtering afterwards. Every session the study
+is read from is now a student's, with a consent record behind it, and nothing has
+to be excluded before it can be counted.
 
-A teacher does not have to go looking for the student side to do this. **Open as
-a student** sits on the activity itself, in the console, and goes straight to the
-workspace — the entry screens exist to ask who somebody is and whether they agree,
-and a signed-in teacher has already answered both. It is offered once the activity
-is published, because a preview is a real session and the server will not start
-one on a draft.
+Sessions recorded while previews existed keep the flag, and the roster and the
+transcript still label them. A reader that stopped checking would quietly recount
+a teacher's clicking as somebody's work.
+
+A **student** with an account is not staff, and is asked in the ordinary way.
+
+To see the workspace as a class sees it, open the activity's link in a browser
+where you are not signed in. That is a real anonymous session with real consent
+behind it — so use a throwaway activity, or delete the session afterwards from
+the roster, rather than leaving a walkthrough in the data with nothing to mark it
+as one.
 
 **Anonymous is not invisible.** A session with no account still reaches the
 teacher, through the activity rather than through a user: they own the activity,

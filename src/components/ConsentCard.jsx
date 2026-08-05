@@ -11,10 +11,11 @@ import './Entry.css'
  * doors render this, and the server refuses a session either way without it (see
  * routes/sessions.js).
  *
- * **Staff never see this.** They are not participants, so neither caller renders
- * it for a teacher, manager or admin; the same rule holds server-side, where a
- * staff session is stamped as a preview instead of carrying a consent record it
- * did not collect.
+ * **Staff never see this**, because staff never get this far. They are not
+ * participants and cannot start a session at all: StudentLayout sends them to
+ * their console, and routes/sessions.js refuses a staff account. Nobody is shown
+ * a form addressed to somebody else, and nobody has a record written for them
+ * that says they agreed to something they were never asked.
  *
  * The wording is a PLACEHOLDER in both languages. Replace it with the text your
  * ethics committee approves — in src/lib/strings.js, under `entry.consent` —

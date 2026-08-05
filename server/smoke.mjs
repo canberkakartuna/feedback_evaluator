@@ -757,18 +757,29 @@ try {
   check('a signed-in student is still asked', studentNoConsent.status === 400)
 
   /**
-   * Staff are exempt: the notice is addressed to a research participant, and a
-   * teacher checking their own activity is not one. The session records that
-   * honestly rather than claiming an agreement nobody gave.
+   * Staff are refused rather than exempted. There is no preview any more, so
+   * there is no session a teacher can start — with consent or without it, which
+   * is why both are tried here. The workspace is students' only.
    */
-  const staffPreview = await call('POST', '/api/sessions', {
+  const staffSession = await call('POST', '/api/sessions', {
     token: teacherToken,
     body: { activityId: activity.id },
   })
-  check('a teacher starts one without consenting', staffPreview.status === 201)
-  check('and it is stamped as a preview', staffPreview.body.session.staffPreview === true)
-  check('with consent recorded as not given', staffPreview.body.session.consent.given === false)
-  check('and why', staffPreview.body.session.consent.waived === 'staff-preview')
+  check('a teacher cannot start a session', staffSession.status === 403)
+
+  const staffConsenting = await call('POST', '/api/sessions', {
+    token: teacherToken,
+    body: { consent: true, activityId: activity.id },
+  })
+  check('nor by agreeing to a notice not addressed to them', staffConsenting.status === 403)
+
+  check(
+    'an admin cannot either',
+    (await call('POST', '/api/sessions', {
+      token: adminToken,
+      body: { consent: true, activityId: activity.id },
+    })).status === 403,
+  )
 
   /**
    * A student with a password is asked once. The agreement goes on the account,
@@ -800,23 +811,11 @@ try {
   check('a returning student is not asked again', returning.status === 201)
   check('the session records consent', returning.body.session.consent.given === true)
   check('and when it was first given', returning.body.session.consent.firstGivenAt === firstAt)
-  check('it is not a staff preview', returning.body.session.staffPreview === false)
+  check('and no session is a staff preview any more', returning.body.session.staffPreview === false)
+  // Taken back out again: everything below counts rows, and a session left
+  // lying in the store would make the roster assertions about a student's work
+  // be about this one instead.
   await call('DELETE', `/api/sessions/${returning.body.session.id}`)
-
-  const consentedTeacher = await call('POST', '/api/sessions', {
-    token: teacherToken,
-    body: { consent: true, activityId: activity.id },
-  })
-  check(
-    'a teacher who does consent is not a preview',
-    consentedTeacher.body.session.staffPreview === false,
-  )
-
-  // Taken back out again: everything below counts rows, and two walkthroughs
-  // left lying in the store would make the roster assertions about a student's
-  // work be about a teacher's clicking instead.
-  await call('DELETE', `/api/sessions/${staffPreview.body.session.id}`)
-  await call('DELETE', `/api/sessions/${consentedTeacher.body.session.id}`)
 
   /**
    * The anonymous door: no token, no code, no password. Everything that follows

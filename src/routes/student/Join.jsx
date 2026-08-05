@@ -17,7 +17,8 @@ import { useT } from '../../lib/i18n'
  * does not mount, and so asks the API nothing, until the notice has been agreed
  * to. There is no "how are you working" step on this path — arriving with a code
  * is already a declaration — so the notice is the first thing a student sees here.
- * Staff are not asked at all, and land straight on the form.
+ * A signed-in teacher following a class code link never arrives: StudentLayout
+ * sends staff to their console, since there is no session here for them to start.
  *
  * The code is **not a password**. It only opens an activity its teacher has
  * published; a draft says so rather than opening. That rule lives in
@@ -28,7 +29,7 @@ export default function Join() {
   const { code: fromUrl } = useParams()
   const navigate = useNavigate()
   const t = useT()
-  const { staff, consent, nickname, step, totalSteps } = useOutletContext()
+  const { nickname, step, totalSteps } = useOutletContext()
 
   const [code, setCode] = useState(fromUrl ?? '')
   const [activity, setActivity] = useState(null)
@@ -70,7 +71,7 @@ export default function Join() {
         code: activity.code,
         device: navigator.userAgent.slice(0, 120),
         nickname,
-        consent,
+        consent: true,
       })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
@@ -86,10 +87,8 @@ export default function Join() {
     return (
       <div className="en-card">
         <p className="eyebrow">
-          {staff
-            ? t('entry.staff.eyebrow')
-            : t('entry.step', { current: step, total: totalSteps })}{' '}
-          · <span className="mono">{activity.code}</span>
+          {t('entry.step', { current: step, total: totalSteps })} ·{' '}
+          <span className="mono">{activity.code}</span>
         </p>
         <h1 className="en-title">{activity.title}</h1>
         <p className="en-lede">{t('join.found')}</p>
@@ -136,10 +135,7 @@ export default function Join() {
   return (
     <div className="en-card">
       <p className="eyebrow">
-        {staff
-          ? t('entry.staff.eyebrow')
-          : t('entry.step', { current: step, total: totalSteps })}{' '}
-        · {t('join.eyebrow')}
+        {t('entry.step', { current: step, total: totalSteps })} · {t('join.eyebrow')}
       </p>
       <h1 className="en-title">{t('join.title')}</h1>
       <p className="en-lede">{t('join.lede')}</p>

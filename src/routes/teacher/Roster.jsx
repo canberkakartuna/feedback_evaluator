@@ -120,6 +120,10 @@ export default function Roster() {
               {rows.map((session) => (
                 <tr key={session.id}>
                   <td>
+                    {/* Only ever an old row: staff cannot start a session now.
+                        The ones they started before that are still here, and a
+                        walkthrough that stopped being labelled would be counted
+                        as somebody's work. */}
                     {session.staffPreview ? (
                       <>
                         <span className="cs-pill" data-tone="draft">

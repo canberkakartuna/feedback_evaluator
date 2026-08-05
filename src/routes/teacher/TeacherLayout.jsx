@@ -55,13 +55,9 @@ export default function TeacherLayout() {
         <div className="cs-who">
           <p className="cs-who-name">{user.name}</p>
           <p className="cs-who-role eyebrow">{t(roleStringKey(user.role))}</p>
-          <TopBar
-            layout="stack"
-            homeKey="nav.studentView"
-            who={false}
-            console={false}
-            signOutTo="/signin"
-          />
+          {/* No "Student view" button any more: / is not a place staff can go,
+              and TopBar leaves Home out for them. */}
+          <TopBar layout="stack" who={false} console={false} signOutTo="/signin" />
         </div>
       </nav>
 

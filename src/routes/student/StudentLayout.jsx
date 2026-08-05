@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { NICKNAME_MAX } from '../../../shared/session'
 import { isStaff } from '../../../shared/roles'
 import { api } from '../../lib/api'
-import { useAuth } from '../../lib/auth'
+import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
 import ConsentCard from '../../components/ConsentCard'
 import TopBar from '../../components/TopBar'
@@ -31,7 +31,7 @@ import '../console.css'
  *   nobody yet               nothing, until they say which they are
  *   anonymous student        every visit — nothing to remember it against
  *   student with an account  once, ever; see `agreed` below
- *   teacher, manager, admin  never; what they start is recorded as a preview
+ *   teacher, manager, admin  nothing: they are sent to their console instead
  *
  * **Asked once.** Every screen in (3) is a child of one layout element (see
  * App.jsx), so agreeing and then walking between them does not ask again — the
@@ -60,8 +60,6 @@ export default function StudentLayout() {
   const [consented, setConsented] = useState(false)
   const [declined, setDeclined] = useState(false)
 
-  const staff = ready && isStaff(user?.role)
-
   /**
    * Only the list flow asks who.
    *
@@ -81,13 +79,9 @@ export default function StudentLayout() {
 
   /**
    * Which steps this person's flow has, so the numbering is theirs rather than a
-   * constant that would be wrong for three of the four cases above.
+   * constant that would be wrong for the other two cases above.
    */
-  const steps = [
-    ...(needsWho ? ['who', 'nickname'] : []),
-    ...(staff ? [] : ['consent']),
-    'work',
-  ]
+  const steps = [...(needsWho ? ['who', 'nickname'] : []), 'consent', 'work']
   const stepOf = (name) => steps.indexOf(name) + 1
 
   const agree = async () => {
@@ -138,6 +132,27 @@ export default function StudentLayout() {
       </main>
     )
   }
+
+  /**
+   * Staff do not come in here at all.
+   *
+   * They used to: the same list, minus the notice, with a line explaining that
+   * whatever they started was a preview rather than a student's work. That door
+   * is closed — the server refuses a session to a staff account (see
+   * routes/sessions.js), so leaving the screens up would be offering a walk
+   * through four steps that ends in a refusal.
+   *
+   * Sent to their own console rather than to sign-in, which they would read as
+   * "my password stopped working" — the same choice Guard makes in App.jsx for
+   * the mirror-image case. It is after `problem` on purpose: a token that could
+   * not be checked means nobody knows what this person is yet, and redirecting
+   * on a guess is how a signed-in teacher ends up somewhere unexplained.
+   *
+   * Every role in `STAFF_ROLES` has a console in `homeFor`, so this always goes
+   * somewhere other than `/`. A staff role added without one would bounce here
+   * for ever — give it a console in the same commit.
+   */
+  if (isStaff(user?.role)) return <Navigate to={homeFor(user)} replace />
 
   if (declined) {
     return (
@@ -264,8 +279,8 @@ export default function StudentLayout() {
     )
   }
 
-  /* 3 — consent, for whoever has just said they are a student. */
-  if (!staff && !agreed) {
+  /* 3 — consent. Everyone who reaches this point is a student. */
+  if (!agreed) {
     return (
       <main className="en-page">
         {/* The class-code button is offered here too. Following it does not skip
@@ -289,15 +304,13 @@ export default function StudentLayout() {
     <main className="en-page">
       <TopBar join />
       {/**
-       * `consent` is the value the child sends to `POST /api/sessions`: true for
-       * somebody who has agreed, false for staff who were never shown the notice.
-       * It is passed rather than recomputed so that "did this person consent?" is
-       * answered in one place — this one.
+       * Nothing below this line runs for anybody who has not agreed, which is
+       * why the children send `consent: true` flatly rather than being handed a
+       * value that could be either: the branch above is the only way past, and
+       * it is the one place "did this person consent?" is answered.
        */}
       <Outlet
         context={{
-          staff,
-          consent: !staff,
           /** Anonymous only: a signed-in session is labelled by its account. */
           nickname: user ? '' : nickname.trim(),
           step: stepOf('work'),

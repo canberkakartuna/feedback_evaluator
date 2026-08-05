@@ -35,6 +35,11 @@ export default function StudentWork() {
    * The three facts worth knowing before reading a word of it: when, how much,
    * and under which consent and prompt. Assembled from parts rather than one
    * sentence, since a staff preview has no consent version to name.
+   *
+   * No new session is one — staff cannot start a session at all now — but the
+   * ones recorded while they could are still in the store and still have to
+   * read as what they are. Reading the flag costs a branch; dropping it would
+   * relabel a teacher's walkthrough as a student's work.
    */
   const meta = [
     t('transcript.started', { when: new Date(session.createdAt).toLocaleString(lang) }),

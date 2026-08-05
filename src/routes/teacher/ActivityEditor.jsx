@@ -30,7 +30,6 @@ export default function ActivityEditor() {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [opening, setOpening] = useState(false)
   const [notice, setNotice] = useState(null)
 
   if (loading) return <p className="cs-note">{t('common.loading')}</p>
@@ -67,36 +66,6 @@ export default function ActivityEditor() {
     return act(() => api.reorderQuestions(activity.id, next.map((question) => question.id)))
   }
 
-  /**
-   * The teacher's own way into their activity.
-   *
-   * Checking what a class will see used to mean leaving the console for the
-   * student entry screen and finding this activity again in the list students
-   * read — a door built for somebody with no account, walked through by
-   * somebody who is signed in, past a step that asks who they are. The session
-   * it starts is identical either way: `consent: false`, which is what stamps
-   * it `staffPreview` rather than filing a walkthrough as a student's work.
-   *
-   * Not `replace`, unlike the student flow: a student going back would be
-   * restarting, but a teacher going back is returning to the questions they
-   * came to check.
-   */
-  const preview = async () => {
-    setOpening(true)
-    setNotice(null)
-    try {
-      const { session } = await api.startSession({
-        activityId: activity.id,
-        device: navigator.userAgent.slice(0, 120),
-        consent: false,
-      })
-      navigate(`/work/${session.id}`)
-    } catch (failure) {
-      setNotice({ tone: 'bad', text: failure.message })
-      setOpening(false)
-    }
-  }
-
   const remove = async () => {
     try {
       await api.deleteActivity(activity.id)
@@ -122,17 +91,6 @@ export default function ActivityEditor() {
         </div>
 
         <div className="cs-actions">
-          {/* Refused on a draft by the server, so it is refused here too, with
-              the reason on the button rather than as an error after the click. */}
-          <button
-            type="button"
-            className="cs-btn"
-            disabled={opening || !published}
-            title={published ? undefined : t('editor.previewDraft')}
-            onClick={preview}
-          >
-            {opening ? t('editor.previewOpening') : t('editor.preview')}
-          </button>
           <Link className="cs-btn" to={`/teacher/students?activity=${activity.id}`}>
             {t('editor.seeWork')}
           </Link>

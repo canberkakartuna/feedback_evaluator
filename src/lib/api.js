@@ -187,12 +187,11 @@ export const api = {
   /**
    * Consent is the session, and it is passed explicitly rather than hard-coded.
    *
-   * A student reaches this having ticked the box, so it is `true`. Staff reach it
-   * having never been shown the box — the notice is addressed to a research
-   * participant, which they are not — so it is `false`, and the server records
-   * that session as a preview instead of inventing an agreement. Sending `true`
-   * for everybody would be one line shorter and would quietly corrupt the one
-   * field in the study nobody may fudge.
+   * Everyone who gets this far has ticked the box, so every caller sends `true`
+   * — and still sends it, rather than leaning on a default, because this is the
+   * one field in the study nobody may fudge and it should be readable at the
+   * call site. Staff no longer reach it at all: the entry screens send them to
+   * their console, and `POST /api/sessions` refuses a staff account outright.
    *
    * `activityId` or `code`: whichever door they came through. `nickname` is what
    * an anonymous session is called on a teacher's roster; the server ignores it

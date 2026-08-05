@@ -66,7 +66,6 @@ const en = {
     signOut: 'Sign out',
     signingOut: 'Signing out…',
     myConsole: 'My console',
-    studentView: 'Student view',
     joinWithCode: 'Class code',
     language: 'Language',
     signedInAs: 'Signed in as {name}',
@@ -158,14 +157,6 @@ const en = {
       retry: 'Try again',
     },
 
-    /**
-     * Shown to a teacher, manager or admin, in place of the consent form.
-     * See routes/sessions.js on why they are not asked to agree to it.
-     */
-    staff: {
-      eyebrow: 'Staff preview',
-      notice: 'You are signed in as {role}, so the research consent notice does not apply to you. Anything you start here is recorded as a preview rather than as a student’s work.',
-    },
   },
 
   join: {
@@ -376,9 +367,6 @@ const en = {
 
   editor: {
     breadcrumb: 'Activities',
-    preview: 'Open as a student',
-    previewOpening: 'Opening…',
-    previewDraft: 'Publish it first. A preview is a real session, and nothing starts one on an activity that is not open.',
     seeWork: 'See their work',
     publish: 'Publish',
     closeToStudents: 'Close to students',
@@ -604,7 +592,6 @@ const tr = {
     signOut: 'Çıkış yap',
     signingOut: 'Çıkılıyor…',
     myConsole: 'Konsolum',
-    studentView: 'Öğrenci görünümü',
     joinWithCode: 'Sınıf kodu',
     language: 'Dil',
     signedInAs: '{name} olarak giriş yapıldı',
@@ -695,11 +682,6 @@ const tr = {
       retry: 'Yeniden dene',
     },
 
-    staff: {
-      eyebrow: 'Öğretmen önizlemesi',
-      notice:
-        '{role} olarak giriş yaptınız; bu yüzden araştırma onay metni sizin için geçerli değil. Burada başlattığınız her şey öğrenci çalışması değil, önizleme olarak kaydedilir.',
-    },
   },
 
   join: {
@@ -898,9 +880,6 @@ const tr = {
 
   editor: {
     breadcrumb: 'Etkinlikler',
-    preview: 'Öğrenci olarak aç',
-    previewOpening: 'Açılıyor…',
-    previewDraft: 'Önce yayımlayın. Önizleme gerçek bir oturumdur; açık olmayan bir etkinlikte oturum başlatılamaz.',
     seeWork: 'Çalışmalarını gör',
     publish: 'Yayımla',
     closeToStudents: 'Öğrencilere kapat',

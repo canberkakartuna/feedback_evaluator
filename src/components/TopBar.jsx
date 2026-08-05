@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { isStaff } from '../../shared/roles'
 import { homeFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import LanguageToggle from './LanguageToggle'
@@ -18,7 +19,7 @@ import './Chrome.css'
  *
  *   nobody          Home · Class code · Sign in
  *   a student       Home · Class code · Sign out
- *   staff           Home · My console · Sign out
+ *   staff           My console · Sign out
  *
  * `layout` picks the arrangement, not the contents: `page` is the centred row
  * above an entry card, `stack` is a console sidebar, `bar` is the tight row at
@@ -41,6 +42,19 @@ export default function TopBar({
   const consoleHref = user ? homeFor(user) : '/'
   const hasConsole = showConsole && consoleHref !== '/'
 
+  /**
+   * Staff are not offered Home, wherever this bar is drawn.
+   *
+   * Home is `/`, the student entry screen, and StudentLayout sends a teacher,
+   * manager or admin straight back out of it — so for them the button's only
+   * effect would be a round trip to the console they were already in. "My
+   * console" is the way home for staff, and it sits in the same row.
+   *
+   * Waited on `ready` rather than guessed: showing it and then taking it away a
+   * moment later moves everything beside it under whoever was aiming at it.
+   */
+  const hasHome = home && ready && !isStaff(user?.role)
+
   const leave = async () => {
     setBusy(true)
     try {
@@ -61,10 +75,9 @@ export default function TopBar({
         </p>
       ) : null}
 
-      {/* "Home" is the student entry screen for everybody. From inside a console
-          that is a different journey than it is for a student, so the label is
-          the caller's to set — the destination is not. */}
-      {home ? (
+      {/* "Home" is the student entry screen, and the label is the caller's to
+          set — the destination is not. */}
+      {hasHome ? (
         <Link className="ch-btn" to="/">
           {t(homeKey)}
         </Link>

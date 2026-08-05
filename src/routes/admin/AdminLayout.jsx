@@ -44,13 +44,8 @@ export default function AdminLayout() {
         <div className="cs-who">
           <p className="cs-who-name">{user.name}</p>
           <p className="cs-who-role eyebrow">{t(roleStringKey(user.role))}</p>
-          <TopBar
-            layout="stack"
-            homeKey="nav.studentView"
-            who={false}
-            console={false}
-            signOutTo="/signin"
-          />
+          {/* As in the teacher console: / is not a place staff can go. */}
+          <TopBar layout="stack" who={false} console={false} signOutTo="/signin" />
         </div>
       </nav>
 

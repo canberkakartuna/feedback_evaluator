@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { roleStringKey, useT } from '../../lib/i18n'
+import { useT } from '../../lib/i18n'
 import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
 
 /**
@@ -18,13 +18,11 @@ import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
  * - **Signed in**, with an account their teacher made. Same screen, but narrowed
  *   to their own teacher's work, and the session carries their name so it can be
  *   followed across visits.
- * - **Staff** get the same list with a line saying that anything they start is
- *   recorded as a preview rather than as a student's work. This is no longer the
- *   way they are meant to arrive, though: "Open as a student" on the activity
- *   itself starts the same preview from the console, without walking a teacher
- *   through screens that exist to ask a question they have already answered.
- *   The list still shows them, because a signed-in teacher landing on / has to
- *   see something, and what they see should be what their class sees.
+ * - **Staff** never see this screen. A teacher, manager or admin is sent to
+ *   their own console by StudentLayout before it renders, and the server would
+ *   refuse them a session anyway. They used to get the list with a line saying
+ *   that anything they started was a preview; there is no preview now, so there
+ *   is nothing here for them to be shown.
  *
  * A **class code** is the other door — see ./Join.jsx. It is a shortcut to one
  * activity rather than a second identity: same consent, same session, one less
@@ -34,7 +32,7 @@ export default function StudentEntry() {
   const navigate = useNavigate()
   const t = useT()
   const { user, ready } = useAuth()
-  const { staff, consent, nickname, step, totalSteps } = useOutletContext()
+  const { nickname, step, totalSteps } = useOutletContext()
 
   const [activities, setActivities] = useState(null)
   const [topic, setTopic] = useState('all')
@@ -67,7 +65,7 @@ export default function StudentEntry() {
         activityId,
         device: navigator.userAgent.slice(0, 120),
         nickname,
-        consent,
+        consent: true,
       })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
@@ -80,10 +78,7 @@ export default function StudentEntry() {
 
   return (
     <div className="en-card">
-      {/* Staff skipped the notice, so they are not on a numbered step at all. */}
-      <p className="eyebrow">
-        {staff ? t('entry.staff.eyebrow') : t('entry.step', { current: step, total: totalSteps })}
-      </p>
+      <p className="eyebrow">{t('entry.step', { current: step, total: totalSteps })}</p>
       <h1 className="en-title">{t('entry.pick.title')}</h1>
       <p className="en-lede">
         {signedIn ? t('entry.pick.ledeSignedIn') : t('entry.pick.ledeAnon')}
@@ -95,11 +90,7 @@ export default function StudentEntry() {
         </p>
       ) : null}
 
-      {staff ? (
-        <p className="cs-note" data-tone="warn">
-          {t('entry.staff.notice', { role: t(roleStringKey(user.role)) })}
-        </p>
-      ) : signedIn ? (
+      {signedIn ? (
         <p className="cs-hint" style={{ marginBottom: 'var(--s-4)' }}>
           {t('entry.pick.signedInAs', { name: user.name })}
         </p>

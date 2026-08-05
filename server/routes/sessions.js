@@ -5,7 +5,7 @@ import { cleanNickname } from '../../shared/session.js'
 import { hasCurrentConsent } from '../services/users.js'
 import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
-import { badRequest, id, notFound, now, route, shortCode } from '../lib/http.js'
+import { badRequest, forbidden, id, notFound, now, route, shortCode } from '../lib/http.js'
 
 export function sessionRoutes(store) {
   const router = express.Router()
@@ -53,31 +53,34 @@ export function sessionRoutes(store) {
    * session without it, so the gate cannot be bypassed by calling the API
    * directly — which is the only place a gate actually holds.
    *
-   * **Staff are exempt, and that is the point of the exemption.** The notice
-   * asks a research participant to agree to their answers and conversations
-   * being kept for the study. A teacher opening their own activity to see what
-   * their class will see is not a participant, so asking them to agree makes the
-   * consent record meaningless: it would then contain a mix of subjects who
-   * consented and staff who clicked past a form addressed to somebody else. Such
-   * a session is stamped `staffPreview` instead, which is what lets the roster
-   * and the export tell a walkthrough apart from a student's work.
+   * **Staff cannot start one at all.** A teacher, manager or admin is refused
+   * here rather than exempted, and the two are not the same thing. The exemption
+   * used to let them walk their own activity as a preview, stamped
+   * `staffPreview` so the roster could tell it apart; every session the study is
+   * read from is now a student's, and nothing has to be filtered before it can
+   * be counted. Sessions recorded while previews existed keep the flag and are
+   * still labelled wherever they are read — see roster and transcript.
    *
-   * A student with an account is *not* staff, and is asked — but **once**, not
-   * every time. Their agreement is recorded on the account by
-   * `POST /api/auth/consent`, and a session started later carries that consent
-   * forward with the date it was first given rather than pretending it was given
-   * just now. An anonymous student has no account to remember it against, so
-   * they are asked every visit; that is a property of being anonymous, not a
-   * different rule.
+   * A student with an account is asked — but **once**, not every time. Their
+   * agreement is recorded on the account by `POST /api/auth/consent`, and a
+   * session started later carries that consent forward with the date it was
+   * first given rather than pretending it was given just now. An anonymous
+   * student has no account to remember it against, so they are asked every
+   * visit; that is a property of being anonymous, not a different rule.
    */
   router.post(
     '/',
     route(async (req, res) => {
-      const staff = isStaff(req.user?.role)
+      if (isStaff(req.user?.role)) {
+        throw forbidden(
+          'Staff accounts cannot start a session — the workspace is for students',
+        )
+      }
+
       const onAccount = hasCurrentConsent(req.user)
       const consented = req.body?.consent === true || onAccount
 
-      if (!staff && !consented) {
+      if (!consented) {
         throw badRequest('Consent is required to start a session', {
           field: 'consent',
           expected: true,
@@ -105,9 +108,10 @@ export function sessionRoutes(store) {
          */
         userId: req.user?.id ?? null,
         /**
-         * `given: false` for a staff walkthrough, rather than a polite `true`
-         * nobody actually said. A consent record that claims agreement it never
-         * collected is the one field in this schema it would be worst to fudge.
+         * Always `true` now, and it is written rather than assumed: this object
+         * is the consent record, and the check above is the only thing that can
+         * reach it. A record that claimed agreement it never collected is the
+         * one field in this schema it would be worst to fudge.
          */
         consent: {
           given: consented,
@@ -119,10 +123,14 @@ export function sessionRoutes(store) {
            * would put a date on an agreement that was given weeks earlier.
            */
           ...(onAccount ? { firstGivenAt: req.user.consent.at } : {}),
-          ...(staff && !consented ? { waived: 'staff-preview' } : {}),
         },
-        /** Flat and boolean, because every reader of it is a filter. */
-        staffPreview: staff && !consented,
+        /**
+         * Never true from here on: staff are refused above. The field stays on
+         * the shape because sessions started before previews were removed still
+         * carry it, and a reader that has to cope with both is better than one
+         * that finds it missing on half the rows.
+         */
+        staffPreview: false,
         /**
          * What to call this session on a teacher's roster.
          *
@@ -155,7 +163,6 @@ export function sessionRoutes(store) {
             signedIn: Boolean(session.userId),
             // How they got here, which is worth knowing once there are two doors.
             via: req.body?.code ? 'code' : 'list',
-            staffPreview: session.staffPreview,
           },
         },
       ])
