@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider, homeFor, useAuth } from './lib/auth'
 import { useT } from './lib/i18n'
 import SignIn from './routes/SignIn'
+import StudentLayout from './routes/student/StudentLayout'
 import StudentEntry from './routes/student/StudentEntry'
 import Join from './routes/student/Join'
 import Session from './routes/student/Session'
@@ -60,11 +61,27 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<StudentEntry />} />
+          {/**
+           * The consent notice belongs to StudentLayout, so it is declared once
+           * per entry route rather than once per screen — a route nested under
+           * it cannot render until the notice has been agreed to. `totalSteps`
+           * is how many steps that route's flow has including the notice, which
+           * is the only thing the two branches disagree about.
+           */}
+          <Route element={<StudentLayout totalSteps={3} />}>
+            <Route path="/" element={<StudentEntry />} />
+          </Route>
+
           {/* Both spellings, because a code is read out as often as it is
               clicked: /join asks for one, /join/ABC234 resolves it. */}
-          <Route path="/join" element={<Join />} />
-          <Route path="/join/:code" element={<Join />} />
+          <Route element={<StudentLayout totalSteps={2} />}>
+            <Route path="/join" element={<Join />} />
+            <Route path="/join/:code" element={<Join />} />
+          </Route>
+
+          {/* Outside the layout on purpose: this session's consent was recorded
+              when it was created, so asking again on every reload would be
+              asking a question that has an answer. */}
           <Route path="/work/:sessionId" element={<Session />} />
           <Route path="/signin" element={<SignIn />} />
 
