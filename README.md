@@ -64,6 +64,26 @@ students' list and the teacher's are filtered by it. The list is `TOPICS` in
 `shared/activity.js`, and adding one is a line there plus a translation in
 `src/lib/strings.js`.
 
+### Who sees the consent notice, and how often
+
+| Who | Sees it |
+| --- | --- |
+| Anonymous student | Every visit — there is no account to remember it against |
+| Student with a password | **Once, ever.** Agreeing records it on the account (`POST /api/auth/consent`), and `user.consented` is what later visits read |
+| Teacher, manager, admin | Never — see below |
+
+Bumping `CONSENT_VERSION` asks everybody again, which is the point of having a
+version: an agreement to last term's wording is not an agreement to this term's.
+
+The gate itself lives in one place, `src/routes/student/StudentLayout.jsx`, which
+wraps every entry screen — so it is shown on the way *into* the student side
+rather than on the way into each screen, and a new entry screen inherits it.
+
+A token that cannot be checked — the API down, a proxy 502 — is **not** treated as
+"anonymous". That fallback would quietly show a signed-in teacher a form written
+for a research subject, so the screen says it cannot tell who is asking and offers
+a retry instead.
+
 ### Staff are not participants
 
 A teacher, manager or admin opening the student side **never sees the consent

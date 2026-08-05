@@ -159,6 +159,7 @@ curl -X POST localhost:4000/api/auth/bootstrap \
 | --- | --- | --- |
 | `POST` | `/api/auth/bootstrap` | The first admin. Needs the bootstrap token; refused once any user exists |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token, expiresAt }`. A wrong password and an unknown address answer identically, and take the same time to |
+| `POST` | `/api/auth/consent` | No body. Records the research consent against the caller's own account and returns the updated user. Idempotent: a repeat on a still-current version answers `recorded: false` and keeps the original date. This is what lets a student with a password be asked **once** instead of every visit |
 | `GET` | `/api/auth/me` | The signed-in user |
 | `POST` | `/api/auth/logout` | Revokes the calling token. Other devices stay signed in |
 | `POST` | `/api/auth/password` | `{ currentPassword, newPassword }`. Revokes every other token and returns a fresh one |

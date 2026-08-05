@@ -111,6 +111,12 @@ export const api = {
     }
   },
   me: () => call('GET', '/api/auth/me'),
+  /**
+   * "I agree to the research notice", recorded against the account so a student
+   * with a password is asked once rather than every visit. No body: the date and
+   * the wording version are the server's to know. Returns the updated user.
+   */
+  recordConsent: () => call('POST', '/api/auth/consent'),
   changePassword: async (currentPassword, newPassword) => {
     const result = await call('POST', '/api/auth/password', { currentPassword, newPassword })
     setToken(result.token)

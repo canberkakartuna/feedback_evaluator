@@ -770,6 +770,39 @@ try {
   check('with consent recorded as not given', staffPreview.body.session.consent.given === false)
   check('and why', staffPreview.body.session.consent.waived === 'staff-preview')
 
+  /**
+   * A student with a password is asked once. The agreement goes on the account,
+   * and a later session carries it forward — with the date it was *first* given,
+   * not the date the session started.
+   */
+  const beforeConsent = await call('GET', '/api/auth/me', { token: studentToken })
+  check('a new account has not consented', beforeConsent.body.user.consented === false)
+
+  const recorded = await call('POST', '/api/auth/consent', { token: studentToken })
+  check('a student can record consent on their account', recorded.status === 201 || recorded.status === 200)
+  check('and it says so', recorded.body.user.consented === true)
+  check('with the version it agreed to', Boolean(recorded.body.user.consent.version))
+  const firstAt = recorded.body.user.consent.at
+
+  const reconsent = await call('POST', '/api/auth/consent', { token: studentToken })
+  check('recording it twice is a no-op', reconsent.body.recorded === false)
+  check('so the first date survives', reconsent.body.user.consent.at === firstAt)
+
+  check(
+    'consent needs an account to be recorded against',
+    (await call('POST', '/api/auth/consent')).status === 401,
+  )
+
+  const returning = await call('POST', '/api/sessions', {
+    token: studentToken,
+    body: { activityId: activity.id },
+  })
+  check('a returning student is not asked again', returning.status === 201)
+  check('the session records consent', returning.body.session.consent.given === true)
+  check('and when it was first given', returning.body.session.consent.firstGivenAt === firstAt)
+  check('it is not a staff preview', returning.body.session.staffPreview === false)
+  await call('DELETE', `/api/sessions/${returning.body.session.id}`)
+
   const consentedTeacher = await call('POST', '/api/sessions', {
     token: teacherToken,
     body: { consent: true, activityId: activity.id },

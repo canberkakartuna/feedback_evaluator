@@ -1,6 +1,7 @@
 import express from 'express'
 import { config } from '../config.js'
 import { isStaff } from '../../shared/roles.js'
+import { hasCurrentConsent } from '../services/users.js'
 import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import { badRequest, id, notFound, now, route, shortCode } from '../lib/http.js'
@@ -60,13 +61,20 @@ export function sessionRoutes(store) {
    * a session is stamped `staffPreview` instead, which is what lets the roster
    * and the export tell a walkthrough apart from a student's work.
    *
-   * A student with an account is *not* staff and is still asked, every time.
+   * A student with an account is *not* staff, and is asked — but **once**, not
+   * every time. Their agreement is recorded on the account by
+   * `POST /api/auth/consent`, and a session started later carries that consent
+   * forward with the date it was first given rather than pretending it was given
+   * just now. An anonymous student has no account to remember it against, so
+   * they are asked every visit; that is a property of being anonymous, not a
+   * different rule.
    */
   router.post(
     '/',
     route(async (req, res) => {
       const staff = isStaff(req.user?.role)
-      const consented = req.body?.consent === true
+      const onAccount = hasCurrentConsent(req.user)
+      const consented = req.body?.consent === true || onAccount
 
       if (!staff && !consented) {
         throw badRequest('Consent is required to start a session', {
@@ -104,6 +112,12 @@ export function sessionRoutes(store) {
           given: consented,
           at: now(),
           version: config.consentVersion,
+          /**
+           * When they first agreed, for a student whose account carries it. The
+           * `at` above is when *this session* started, and conflating the two
+           * would put a date on an agreement that was given weeks earlier.
+           */
+          ...(onAccount ? { firstGivenAt: req.user.consent.at } : {}),
           ...(staff && !consented ? { waived: 'staff-preview' } : {}),
         },
         /** Flat and boolean, because every reader of it is a filter. */

@@ -6,21 +6,20 @@ import { roleStringKey, useT } from '../../lib/i18n'
 import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
 
 /**
- * What to work on — the screen after consent.
+ * What to work on — the last step, and the only one this file owns.
  *
- * Consent itself is not here: StudentLayout owns it, and this screen cannot be
- * reached without having passed it. What is left is the question that actually
- * belongs to this screen, and there are two ways to answer it:
+ * Who they are and whether they have consented were both settled by
+ * StudentLayout, which is why neither appears here: this screen cannot be reached
+ * without having passed them. What is left is the list, and how it is narrowed:
  *
- * - **Anonymously.** No account, no name, nothing asked. The list shows every
- *   published activity, because with no code and no credential, publishing is
- *   the whole access decision. This is what the study is designed around.
- * - **Signed in**, with an account their teacher made. Same screens, but the
- *   list is narrowed to their own teacher's work and the session carries their
- *   name so it can be followed across visits.
- *
- * Staff arrive here directly, since the layout does not stop them, and see a line
- * saying that what they start will be recorded as a preview.
+ * - **Anonymously.** No account, no name, nothing asked. Every published activity
+ *   is shown, because with no code and no credential, publishing is the whole
+ *   access decision. This is what the study is designed around.
+ * - **Signed in**, with an account their teacher made. Same screen, but narrowed
+ *   to their own teacher's work, and the session carries their name so it can be
+ *   followed across visits.
+ * - **Staff** get the same list with a line saying that anything they start is
+ *   recorded as a preview rather than as a student's work.
  *
  * A **class code** is the other door — see ./Join.jsx. It is a shortcut to one
  * activity rather than a second identity: same consent, same session, one less
@@ -30,9 +29,8 @@ export default function StudentEntry() {
   const navigate = useNavigate()
   const t = useT()
   const { user, ready } = useAuth()
-  const { staff, consent, totalSteps } = useOutletContext()
+  const { staff, consent, step, totalSteps } = useOutletContext()
 
-  const [step, setStep] = useState('who')
   const [activities, setActivities] = useState(null)
   const [topic, setTopic] = useState('all')
   const [error, setError] = useState(null)
@@ -40,17 +38,7 @@ export default function StudentEntry() {
 
   const signedIn = ready && Boolean(user)
 
-  /**
-   * Asking an anonymous visitor how they are working is worth a step; asking
-   * someone who is already signed in is asking a question they have answered by
-   * being here. Derived rather than stored, so signing out from the bar above
-   * puts the choice back rather than leaving them on a list they skipped it from.
-   */
-  const showing = signedIn && step === 'who' ? 'pick' : step
-
   useEffect(() => {
-    if (showing !== 'pick') return
-
     let alive = true
     api
       .availableActivities()
@@ -64,7 +52,7 @@ export default function StudentEntry() {
     return () => {
       alive = false
     }
-  }, [showing])
+  }, [])
 
   const begin = async (activityId) => {
     setBusy(true)
@@ -82,44 +70,13 @@ export default function StudentEntry() {
     }
   }
 
-  if (showing === 'who') {
-    return (
-      <div className="en-card">
-        <p className="eyebrow">{t('entry.step', { current: 2, total: totalSteps })}</p>
-        <h1 className="en-title">{t('entry.who.title')}</h1>
-        <p className="en-lede">{t('entry.who.lede')}</p>
-
-        <div className="en-topics">
-          <button
-            type="button"
-            className="en-topic"
-            onClick={() => {
-              setActivities(null)
-              setStep('pick')
-            }}
-          >
-            <span className="en-topic-name">{t('entry.who.anon')}</span>
-            <span className="en-topic-meta">{t('entry.who.anonMeta')}</span>
-          </button>
-
-          <Link className="en-topic" to="/signin" state={{ from: '/' }}>
-            <span className="en-topic-name">{t('entry.who.signIn')}</span>
-            <span className="en-topic-meta">{t('entry.who.signInMeta')}</span>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   const shown = (activities ?? []).filter((activity) => matchesTopic(activity, topic))
 
   return (
     <div className="en-card">
-      {/* Staff skipped the notice, so they are not on step 3 of anything. */}
+      {/* Staff skipped the notice, so they are not on a numbered step at all. */}
       <p className="eyebrow">
-        {staff
-          ? t('entry.staff.eyebrow')
-          : t('entry.step', { current: totalSteps, total: totalSteps })}
+        {staff ? t('entry.staff.eyebrow') : t('entry.step', { current: step, total: totalSteps })}
       </p>
       <h1 className="en-title">{t('entry.pick.title')}</h1>
       <p className="en-lede">
@@ -175,13 +132,6 @@ export default function StudentEntry() {
       )}
 
       <div className="en-actions">
-        {/* Anonymous visitors came through the "how are you working" step and
-            can go back to it. Nobody else has one to go back to. */}
-        {signedIn || staff ? null : (
-          <button type="button" className="en-btn" onClick={() => setStep('who')}>
-            {t('common.back')}
-          </button>
-        )}
         <Link className="en-btn" to="/join">
           {t('entry.pick.enterCode')}
         </Link>

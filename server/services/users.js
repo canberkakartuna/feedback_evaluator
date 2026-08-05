@@ -6,6 +6,7 @@ import {
   parentRole,
 } from '../../shared/roles.js'
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword } from '../lib/password.js'
+import { config } from '../config.js'
 import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
 
 /**
@@ -25,11 +26,39 @@ import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
  *   student  self
  */
 
-/** The hash never leaves the server, on any path. */
+/**
+ * Consent, recorded against the account rather than only against the session.
+ *
+ * A student with an account is asked the research question **once**: they read
+ * the notice, agree, and it is remembered — where an anonymous student is asked
+ * every visit, because there is nothing to remember it against. Both still
+ * produce a consent record on every session, so the per-session audit trail is
+ * unchanged; this is what stops a returning student re-reading the same page
+ * every lesson.
+ *
+ * The version is checked rather than the flag alone. `CONSENT_VERSION` is bumped
+ * when the wording changes, and an agreement to last term's wording is not an
+ * agreement to this term's — so a bump asks everybody again, which is the whole
+ * reason the field exists.
+ */
+export const hasCurrentConsent = (user) =>
+  Boolean(user?.consent?.given && user.consent.version === config.consentVersion)
+
+export function recordedConsent() {
+  return { given: true, at: now(), version: config.consentVersion }
+}
+
+/**
+ * The hash never leaves the server, on any path.
+ *
+ * `consented` is derived rather than stored: the client needs one boolean to
+ * decide whether to show the notice, and deciding it here keeps the version
+ * comparison on the side that owns the version.
+ */
 export function publicUser(user) {
   if (!user) return null
   const { passwordHash: _passwordHash, ...rest } = user
-  return rest
+  return { ...rest, consented: hasCurrentConsent(user) }
 }
 
 /**

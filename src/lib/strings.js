@@ -38,7 +38,6 @@ const en = {
     loading: 'Loading…',
     saving: 'Saving…',
     cancel: 'Cancel',
-    back: 'Back',
     remove: 'Remove',
     delete: 'Delete',
     optional: '(optional)',
@@ -138,6 +137,14 @@ const en = {
       empty: 'Nothing is open yet. Your teacher has to publish an activity before it appears here.',
       noneInTopic: 'Nothing open on that topic. Try another one, or All.',
       enterCode: 'Enter a class code',
+    },
+
+    /** A token that could not be checked — neither signed in nor anonymous. */
+    unknown: {
+      eyebrow: 'Cannot check',
+      title: 'We cannot tell who you are',
+      lede: 'You are signed in on this device, but the server did not answer when we checked. Nothing is shown until we know who is asking — try again in a moment.',
+      retry: 'Try again',
     },
 
     /**
@@ -539,7 +546,6 @@ const tr = {
     loading: 'Yükleniyor…',
     saving: 'Kaydediliyor…',
     cancel: 'İptal',
-    back: 'Geri',
     remove: 'Kaldır',
     delete: 'Sil',
     optional: '(isteğe bağlı)',
@@ -639,6 +645,13 @@ const tr = {
       empty: 'Henüz açık bir etkinlik yok. Burada görünmesi için öğretmeninizin bir etkinlik yayımlaması gerekir.',
       noneInTopic: 'Bu konuda açık etkinlik yok. Başka bir konuyu ya da Tümü’nü deneyin.',
       enterCode: 'Sınıf kodu gir',
+    },
+
+    unknown: {
+      eyebrow: 'Doğrulanamadı',
+      title: 'Kim olduğunuzu doğrulayamıyoruz',
+      lede: 'Bu cihazda giriş yapmışsınız, ancak kontrol ederken sunucu yanıt vermedi. Kimin sorduğunu bilene kadar hiçbir şey gösterilmez — birazdan yeniden deneyin.',
+      retry: 'Yeniden dene',
     },
 
     staff: {

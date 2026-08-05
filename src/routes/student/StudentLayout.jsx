@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { isStaff } from '../../../shared/roles'
+import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
 import ConsentCard from '../../components/ConsentCard'
@@ -9,52 +10,123 @@ import '../../components/Entry.css'
 import '../console.css'
 
 /**
- * Everything before a session starts: the consent notice, and then the screen
- * that picks what to work on.
+ * Everything before a session starts, in the order the questions actually have
+ * to be asked:
  *
- * **Consent lives here and only here.** It used to be a step inside each entry
- * screen, which meant two screens each deciding who gets asked, what the wording
- * is, and what happens to someone who declines — for one question that has one
- * answer. Now a student route cannot render at all until the question has been
- * answered: the `<Outlet />` below is unreachable otherwise, so a new entry
- * screen inherits the gate instead of having to remember it.
+ *   1  who are you    anonymously, or signed in with a password
+ *   2  consent        the research notice — only for the people from (1)
+ *   3  the work       pick from the list, or the activity a class code named
  *
- *   /            pick from the list        (three steps: consent, who, what)
- *   /join        arrive with a class code  (two: consent, then the code)
+ * **The order is the point.** The notice used to be first, which meant everyone
+ * who opened the site met a research consent form before they could say who they
+ * were — including a teacher who had not signed in yet, whose route to the
+ * sign-in screen ran straight through it. Asking who first means the notice is
+ * only ever shown to somebody who has just said they are a student: they chose to
+ * work anonymously, or they are signed in with a student account.
+ *
+ * Who gets asked, and how often:
+ *
+ *   nobody yet               nothing, until they say which they are
+ *   anonymous student        every visit — nothing to remember it against
+ *   student with an account  once, ever; see `agreed` below
+ *   teacher, manager, admin  never; what they start is recorded as a preview
+ *
+ * **Asked once.** Every screen in (3) is a child of one layout element (see
+ * App.jsx), so agreeing and then walking between them does not ask again — the
+ * answer is held here, above all of them. For an account it outlives the visit:
+ * agreeing calls `POST /api/auth/consent`, and `user.consented` is what later
+ * visits read. Bumping `CONSENT_VERSION` on the server asks everybody again,
+ * which is the whole reason the version exists.
+ *
+ * Because every branch is derived from who is signed in rather than stored as a
+ * step, signing out from the bar above puts the questions back in order: whoever
+ * is left behind is an unidentified visitor again.
  *
  * `/work/:sessionId` is deliberately **not** inside this layout. Its consent was
  * recorded when the session was created and lives on the session itself, so
  * gating it again would ask a student to re-consent every time they reloaded the
  * page they were working on.
- *
- * **Staff pass straight through.** The notice asks a research participant to
- * agree to their answers and conversations being kept for the study; a teacher
- * looking at what their class will see is not one. What they start is stamped as
- * a preview rather than carrying an agreement nobody gave — see
- * routes/sessions.js — and `consent` below is what tells the child which of the
- * two it is about to create.
- *
- * Because the gate is derived from `staff` and `consented` rather than stored as
- * a step, signing out from the bar above puts it straight back: whoever is left
- * behind is an anonymous visitor who has agreed to nothing, and there is no
- * correcting effect to run late.
  */
-export default function StudentLayout({ totalSteps = 3 }) {
+export default function StudentLayout() {
   const t = useT()
-  const { user, ready } = useAuth()
+  const { pathname } = useLocation()
+  const { user, ready, problem, refresh, setUser } = useAuth()
 
+  const [working, setWorking] = useState(null) // 'anon' once they choose
   const [consented, setConsented] = useState(false)
   const [declined, setDeclined] = useState(false)
 
   const staff = ready && isStaff(user?.role)
 
-  // Nothing renders before `me` settles. Whether the notice applies depends on
-  // who is asking, and guessing for one frame means showing a teacher a form
-  // addressed to a research subject.
+  /**
+   * Only the list flow asks who.
+   *
+   * Arriving with a class code is already a declaration — nobody types the code
+   * their teacher read out unless they are in that class — and anyone who meant
+   * to be signed in instead has the bar at the top of every one of these screens.
+   */
+  const needsWho = ready && !user && pathname === '/'
+
+  /**
+   * Agreed to, either just now or on a previous visit. `user.consented` is the
+   * server's answer, version comparison included — see publicUser in
+   * services/users.js — so this screen never has to know what the current
+   * wording is called.
+   */
+  const agreed = consented || Boolean(user?.consented)
+
+  /**
+   * Which steps this person's flow has, so the numbering is theirs rather than a
+   * constant that would be wrong for three of the four cases above.
+   */
+  const steps = [...(needsWho ? ['who'] : []), ...(staff ? [] : ['consent']), 'work']
+  const stepOf = (name) => steps.indexOf(name) + 1
+
+  const agree = async () => {
+    setConsented(true)
+    if (!user) return
+
+    try {
+      // So the next visit does not ask again. A failure here is not worth
+      // stopping them for: they have agreed, this session will record it, and
+      // the worst case is being asked once more next time.
+      const { user: updated } = await api.recordConsent()
+      setUser(updated)
+    } catch {
+      /* asked again next time */
+    }
+  }
+
+  // Nothing renders before `me` settles. Every branch below reads who is asking,
+  // and guessing for one frame means showing the wrong person the wrong screen.
   if (!ready) {
     return (
       <main className="splash">
         <p className="eyebrow">{t('app.loading')}</p>
+      </main>
+    )
+  }
+
+  /**
+   * A token that could not be checked. Not the same as nobody — see the note in
+   * lib/auth.jsx — and the reason it gets a screen of its own is that the wrong
+   * guess here shows a teacher a form written for a research subject.
+   */
+  if (problem) {
+    return (
+      <main className="en-page">
+        <TopBar join={false} console={false} />
+        <div className="en-card">
+          <p className="eyebrow">{t('entry.unknown.eyebrow')}</p>
+          <h1 className="en-title">{t('entry.unknown.title')}</h1>
+          <p className="en-lede">{t('entry.unknown.lede')}</p>
+          <p className="cs-note" data-tone="bad">
+            {problem.message}
+          </p>
+          <button type="button" className="en-btn en-btn-primary" onClick={refresh}>
+            {t('entry.unknown.retry')}
+          </button>
+        </div>
       </main>
     )
   }
@@ -67,7 +139,14 @@ export default function StudentLayout({ totalSteps = 3 }) {
           <p className="eyebrow">{t('entry.declined.eyebrow')}</p>
           <h1 className="en-title">{t('entry.declined.title')}</h1>
           <p className="en-lede">{t('entry.declined.lede')}</p>
-          <button type="button" className="en-btn" onClick={() => setDeclined(false)}>
+          <button
+            type="button"
+            className="en-btn"
+            onClick={() => {
+              setDeclined(false)
+              setWorking(null)
+            }}
+          >
             {t('entry.declined.back')}
           </button>
         </div>
@@ -75,7 +154,38 @@ export default function StudentLayout({ totalSteps = 3 }) {
     )
   }
 
-  if (!staff && !consented) {
+  /* 1 — who. Skipped by anyone already signed in, and by the class-code flow. */
+  if (needsWho && working !== 'anon') {
+    return (
+      <main className="en-page">
+        <TopBar join />
+        <div className="en-card">
+          <p className="eyebrow">
+            {t('entry.step', { current: stepOf('who'), total: steps.length })}
+          </p>
+          <h1 className="en-title">{t('entry.who.title')}</h1>
+          <p className="en-lede">{t('entry.who.lede')}</p>
+
+          <div className="en-topics">
+            <button type="button" className="en-topic" onClick={() => setWorking('anon')}>
+              <span className="en-topic-name">{t('entry.who.anon')}</span>
+              <span className="en-topic-meta">{t('entry.who.anonMeta')}</span>
+            </button>
+
+            {/* The way in for staff as well, and now nothing stands in front of
+                it: this is the first screen anybody sees. */}
+            <Link className="en-topic" to="/signin" state={{ from: '/' }}>
+              <span className="en-topic-name">{t('entry.who.signIn')}</span>
+              <span className="en-topic-meta">{t('entry.who.signInMeta')}</span>
+            </Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  /* 2 — consent, for whoever has just said they are a student. */
+  if (!staff && !agreed) {
     return (
       <main className="en-page">
         {/* The class-code button is offered here too. Following it does not skip
@@ -83,26 +193,30 @@ export default function StudentLayout({ totalSteps = 3 }) {
             given a code should not have to read a list first to use it. */}
         <TopBar join />
         <ConsentCard
-          eyebrow={`${t('entry.step', { current: 1, total: totalSteps })} · ${t(
-            'entry.consent.eyebrow',
-          )}`}
-          onAgree={() => setConsented(true)}
+          eyebrow={`${t('entry.step', {
+            current: stepOf('consent'),
+            total: steps.length,
+          })} · ${t('entry.consent.eyebrow')}`}
+          onAgree={agree}
           onDecline={() => setDeclined(true)}
         />
       </main>
     )
   }
 
+  /* 3 — the work. */
   return (
     <main className="en-page">
       <TopBar join />
       {/**
        * `consent` is the value the child sends to `POST /api/sessions`: true for
-       * someone who has just ticked the box, false for staff who were never
-       * shown it. It is passed rather than recomputed so that "did this person
-       * consent?" is answered in one place — this one.
+       * somebody who has agreed, false for staff who were never shown the notice.
+       * It is passed rather than recomputed so that "did this person consent?" is
+       * answered in one place — this one.
        */}
-      <Outlet context={{ staff, consent: !staff, totalSteps }} />
+      <Outlet
+        context={{ staff, consent: !staff, step: stepOf('work'), totalSteps: steps.length }}
+      />
     </main>
   )
 }

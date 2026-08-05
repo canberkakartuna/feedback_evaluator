@@ -4,7 +4,15 @@ import { bearerToken, issueToken, requireAuth } from '../lib/auth.js'
 import { burnPassword, hashPassword, verifyPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
-import { newUser, publicUser, requireEmail, requireName, requirePassword } from '../services/users.js'
+import {
+  hasCurrentConsent,
+  newUser,
+  publicUser,
+  recordedConsent,
+  requireEmail,
+  requireName,
+  requirePassword,
+} from '../services/users.js'
 
 /**
  * Signing in, signing out, and the one route that can create a user without an
@@ -112,6 +120,51 @@ export function authRoutes(store) {
     requireAuth,
     route(async (req, res) => {
       res.json({ user: publicUser(req.user) })
+    }),
+  )
+
+  /**
+   * "I have read the research notice and I agree to it", against the account.
+   *
+   * Idempotent, and it carries no body: the only thing being recorded is that
+   * this person agreed, and to which version of the wording — both of which the
+   * server already knows. Sending a payload would invite a client to claim a
+   * date or a version it does not own.
+   *
+   * A repeat call on a still-current consent is a no-op rather than a new
+   * timestamp, so "when did they first agree?" survives a reload. Once
+   * `CONSENT_VERSION` moves, the same call records the new version, which is how
+   * re-consenting to changed wording works.
+   *
+   * There is no matching route to *withdraw* here, and that is deliberate:
+   * withdrawal deletes the work rather than editing a flag, and it lives at
+   * `DELETE /api/sessions/:id` where the student actually is.
+   */
+  router.post(
+    '/consent',
+    requireAuth,
+    route(async (req, res) => {
+      if (hasCurrentConsent(req.user)) {
+        return res.json({ user: publicUser(req.user), recorded: false })
+      }
+
+      const updated = await store.users.update(req.user.id, {
+        consent: recordedConsent(),
+        updatedAt: now(),
+      })
+
+      await store.events.insertMany([
+        {
+          id: id('evt'),
+          sessionId: null,
+          userId: req.user.id,
+          type: 'consent_recorded',
+          at: now(),
+          payload: { version: config.consentVersion },
+        },
+      ])
+
+      res.json({ user: publicUser(updated), recorded: true })
     }),
   )
 

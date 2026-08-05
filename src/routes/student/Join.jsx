@@ -13,9 +13,11 @@ import { useT } from '../../lib/i18n'
  * workspace — because a code is a shortcut and not a second way of being a
  * student.
  *
- * Consent comes first, from StudentLayout, and it comes before the lookup: this
- * screen does not mount, and so does not ask the API anything, until the notice
- * has been agreed to. Staff are not asked, and land here directly.
+ * Consent comes first, from StudentLayout, and before the lookup: this screen
+ * does not mount, and so asks the API nothing, until the notice has been agreed
+ * to. There is no "how are you working" step on this path — arriving with a code
+ * is already a declaration — so the notice is the first thing a student sees here.
+ * Staff are not asked at all, and land straight on the form.
  *
  * The code is **not a password**. It only opens an activity its teacher has
  * published; a draft says so rather than opening. That rule lives in
@@ -26,7 +28,7 @@ export default function Join() {
   const { code: fromUrl } = useParams()
   const navigate = useNavigate()
   const t = useT()
-  const { staff, consent, totalSteps } = useOutletContext()
+  const { staff, consent, step, totalSteps } = useOutletContext()
 
   const [code, setCode] = useState(fromUrl ?? '')
   const [activity, setActivity] = useState(null)
@@ -85,7 +87,7 @@ export default function Join() {
         <p className="eyebrow">
           {staff
             ? t('entry.staff.eyebrow')
-            : t('entry.step', { current: totalSteps, total: totalSteps })}{' '}
+            : t('entry.step', { current: step, total: totalSteps })}{' '}
           · <span className="mono">{activity.code}</span>
         </p>
         <h1 className="en-title">{activity.title}</h1>
@@ -135,7 +137,7 @@ export default function Join() {
       <p className="eyebrow">
         {staff
           ? t('entry.staff.eyebrow')
-          : t('entry.step', { current: totalSteps, total: totalSteps })}{' '}
+          : t('entry.step', { current: step, total: totalSteps })}{' '}
         · {t('join.eyebrow')}
       </p>
       <h1 className="en-title">{t('join.title')}</h1>

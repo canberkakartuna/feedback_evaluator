@@ -62,19 +62,22 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/**
-           * The consent notice belongs to StudentLayout, so it is declared once
-           * per entry route rather than once per screen — a route nested under
-           * it cannot render until the notice has been agreed to. `totalSteps`
-           * is how many steps that route's flow has including the notice, which
-           * is the only thing the two branches disagree about.
+           * **One** StudentLayout over every entry screen, and that is the whole
+           * point of it: the consent notice is shown on the way *into* the
+           * student side, not on the way into each screen. Because these are
+           * sibling children of a single parent route, the layout element stays
+           * mounted as they navigate between them — so a student who agrees on
+           * the list screen and then presses "Class code" is not asked a second
+           * time for the same visit.
+           *
+           * Declaring it twice, once per branch, is what caused exactly that:
+           * two elements, two pieces of state, two notices.
+           *
+           * /join has both spellings because a code is read out as often as it
+           * is clicked: /join asks for one, /join/ABC234 resolves it.
            */}
-          <Route element={<StudentLayout totalSteps={3} />}>
+          <Route element={<StudentLayout />}>
             <Route path="/" element={<StudentEntry />} />
-          </Route>
-
-          {/* Both spellings, because a code is read out as often as it is
-              clicked: /join asks for one, /join/ABC234 resolves it. */}
-          <Route element={<StudentLayout totalSteps={2} />}>
             <Route path="/join" element={<Join />} />
             <Route path="/join/:code" element={<Join />} />
           </Route>
