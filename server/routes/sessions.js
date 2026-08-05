@@ -1,5 +1,6 @@
 import express from 'express'
 import { config } from '../config.js'
+import { isStaff } from '../../shared/roles.js'
 import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import { badRequest, id, notFound, now, route, shortCode } from '../lib/http.js'
@@ -10,24 +11,36 @@ export function sessionRoutes(store) {
   /**
    * Which activity this session is for.
    *
-   * One way in: an `activityId`, clicked from the list at
-   * `GET /api/activities/available`. There is no join code — publishing is the
-   * whole access decision, so an id that names a published activity is enough
-   * and an id that names a draft is refused.
+   * Two ways in, and they are the same decision reached from two directions:
+   *
+   *   activityId  clicked from the list at `GET /api/activities/available`
+   *   code        the class code, typed at /join or followed as a link
+   *
+   * Neither is a credential. **Publishing is the whole access decision** — a
+   * draft is refused down both paths, so a code opens exactly what the list
+   * already offered and nothing more. The code exists to save a class from
+   * reading twenty titles, not to gate anything.
    *
    * A draft is reported as "not open yet" rather than "no such activity",
-   * because the only way to be holding an id at all is to have been shown it in
-   * a list. The interesting case is a teacher unpublishing between the list and
-   * the click, and that student is entitled to know it was withdrawn rather
-   * than that it never existed.
+   * because the only way to be holding an id or a code at all is to have been
+   * shown it. The interesting case is a teacher unpublishing between the list
+   * and the click, and that student is entitled to know it was withdrawn rather
+   * than that it never existed. An unknown *code* is a 404, though: mistyping
+   * six characters off a projector is the ordinary way to get one wrong.
    */
   async function resolveActivity(body) {
-    if (typeof body?.activityId !== 'string' || !body.activityId.trim()) {
-      throw badRequest('"activityId" is required — choose an activity to start')
+    const code = typeof body?.code === 'string' ? body.code.trim() : ''
+    const activityId = typeof body?.activityId === 'string' ? body.activityId.trim() : ''
+
+    if (!activityId && !code) {
+      throw badRequest('"activityId" or "code" is required — choose an activity to start')
     }
 
-    const activity = await store.activities.findById(body.activityId)
-    if (!activity) throw notFound('No such activity')
+    const activity = activityId
+      ? await store.activities.findById(activityId)
+      : await store.activities.findByCode(code)
+
+    if (!activity) throw notFound(code ? 'No activity has that class code' : 'No such activity')
     if (activity.status !== 'published') throw badRequest('That activity is not open yet')
 
     return activity
@@ -37,11 +50,25 @@ export function sessionRoutes(store) {
    * Starting a session IS the consent record. There is no route that creates a
    * session without it, so the gate cannot be bypassed by calling the API
    * directly — which is the only place a gate actually holds.
+   *
+   * **Staff are exempt, and that is the point of the exemption.** The notice
+   * asks a research participant to agree to their answers and conversations
+   * being kept for the study. A teacher opening their own activity to see what
+   * their class will see is not a participant, so asking them to agree makes the
+   * consent record meaningless: it would then contain a mix of subjects who
+   * consented and staff who clicked past a form addressed to somebody else. Such
+   * a session is stamped `staffPreview` instead, which is what lets the roster
+   * and the export tell a walkthrough apart from a student's work.
+   *
+   * A student with an account is *not* staff and is still asked, every time.
    */
   router.post(
     '/',
     route(async (req, res) => {
-      if (req.body?.consent !== true) {
+      const staff = isStaff(req.user?.role)
+      const consented = req.body?.consent === true
+
+      if (!staff && !consented) {
         throw badRequest('Consent is required to start a session', {
           field: 'consent',
           expected: true,
@@ -68,11 +95,19 @@ export function sessionRoutes(store) {
          * `GET /api/users/:userId/sessions`.
          */
         userId: req.user?.id ?? null,
+        /**
+         * `given: false` for a staff walkthrough, rather than a polite `true`
+         * nobody actually said. A consent record that claims agreement it never
+         * collected is the one field in this schema it would be worst to fudge.
+         */
         consent: {
-          given: true,
+          given: consented,
           at: now(),
           version: config.consentVersion,
+          ...(staff && !consented ? { waived: 'staff-preview' } : {}),
         },
+        /** Flat and boolean, because every reader of it is a filter. */
+        staffPreview: staff && !consented,
         // Room for the study design: which model/prompt this session ran on.
         conditionId: req.body.conditionId ?? 'default',
         promptVersion: active?.versionId ?? null,
@@ -86,7 +121,13 @@ export function sessionRoutes(store) {
           userId: session.userId,
           type: 'session_started',
           at: now(),
-          payload: { activityId: activity.id, signedIn: Boolean(session.userId) },
+          payload: {
+            activityId: activity.id,
+            signedIn: Boolean(session.userId),
+            // How they got here, which is worth knowing once there are two doors.
+            via: req.body?.code ? 'code' : 'list',
+            staffPreview: session.staffPreview,
+          },
         },
       ])
 

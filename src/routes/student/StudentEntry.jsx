@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { isStaff } from '../../../shared/roles'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { roleStringKey, useT } from '../../lib/i18n'
+import ConsentCard from '../../components/ConsentCard'
+import TopBar from '../../components/TopBar'
+import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
 import '../../components/Entry.css'
 import '../console.css'
 
@@ -21,24 +26,54 @@ import '../console.css'
  *   list is narrowed to their own teacher's work and the session carries their
  *   name so it can be followed across visits.
  *
- * There is deliberately **no join code**. It was a third identifier for
- * something that already had one, and it put a typing task between a student
- * and the work.
+ * **Staff are the third case, and they skip the consent step entirely.** The
+ * notice asks a research participant to agree to being recorded; a teacher
+ * opening their own activity to see what their class will see is not one, and
+ * asking them to tick it would put staff clicks and student consent in the same
+ * field. They land straight on the list, with a line saying what they are
+ * looking at. routes/sessions.js enforces the same distinction, and stamps
+ * whatever they start as a preview.
  *
- * The consent wording is a PLACEHOLDER. Replace it with the text your ethics
- * committee approves before this goes near a real student.
+ * A **class code** is the other door — see routes/student/Join.jsx. It is a
+ * shortcut to one activity rather than a second identity: same consent, same
+ * session, one less list to read.
  */
 export default function StudentEntry() {
   const navigate = useNavigate()
+  const t = useT()
   const { user, ready } = useAuth()
 
-  const [step, setStep] = useState('consent')
+  const staff = ready && isStaff(user?.role)
+
+  /**
+   * `null` until someone presses something, and the first step is *derived*
+   * rather than stored.
+   *
+   * Deriving it is what keeps a teacher from ever seeing the consent form. An
+   * effect that corrected the step after mounting would run after the paint, so
+   * there would be one frame of a form addressed to a research subject — brief,
+   * and exactly the thing this screen is not supposed to show them.
+   */
+  const [chosen, setChosen] = useState(null)
+  const [consented, setConsented] = useState(false)
   const [activities, setActivities] = useState(null)
+  const [topic, setTopic] = useState('all')
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [agreed, setAgreed] = useState(false)
 
   const signedIn = ready && Boolean(user)
+  const step = chosen ?? (staff ? 'pick' : 'consent')
+
+  /**
+   * Identity can change under them: the bar at the top of this screen signs
+   * people out, and whoever is left behind is an anonymous visitor who has
+   * agreed to nothing. A teacher who signs out mid-list is therefore sent back
+   * to the notice rather than left holding a list they reached without it.
+   */
+  useEffect(() => {
+    if (!ready || staff || consented) return
+    if (step !== 'consent' && step !== 'declined') setChosen('consent')
+  }, [consented, ready, staff, step])
 
   useEffect(() => {
     if (step !== 'pick') return
@@ -65,6 +100,8 @@ export default function StudentEntry() {
       const { session } = await api.startSession({
         activityId,
         device: navigator.userAgent.slice(0, 120),
+        // Staff were never shown the notice, so there is nothing to claim.
+        consent: !staff,
       })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
@@ -73,18 +110,26 @@ export default function StudentEntry() {
     }
   }
 
+  // Identity first. Every branch below reads it, and guessing wrong for one
+  // frame means showing a teacher a form addressed to a research subject.
+  if (!ready) {
+    return (
+      <main className="splash">
+        <p className="eyebrow">{t('app.loading')}</p>
+      </main>
+    )
+  }
+
   if (step === 'declined') {
     return (
       <main className="en-page">
+        <TopBar join />
         <div className="en-card">
-          <p className="eyebrow">Not started</p>
-          <h1 className="en-title">Nothing has been recorded</h1>
-          <p className="en-lede">
-            The workspace only runs with consent, so there is nothing further to do here. You can
-            close this tab.
-          </p>
-          <button type="button" className="en-btn" onClick={() => setStep('consent')}>
-            Back to the consent form
+          <p className="eyebrow">{t('entry.declined.eyebrow')}</p>
+          <h1 className="en-title">{t('entry.declined.title')}</h1>
+          <p className="en-lede">{t('entry.declined.lede')}</p>
+          <button type="button" className="en-btn" onClick={() => setChosen('consent')}>
+            {t('entry.declined.back')}
           </button>
         </div>
       </main>
@@ -92,15 +137,19 @@ export default function StudentEntry() {
   }
 
   if (step === 'pick') {
+    const shown = (activities ?? []).filter((activity) => matchesTopic(activity, topic))
+
     return (
       <main className="en-page">
+        <TopBar join />
         <div className="en-card">
-          <p className="eyebrow">Step 3 of 3</p>
-          <h1 className="en-title">What are you working on?</h1>
+          {/* Staff skipped a step, so they are not on step 3 of anything. */}
+          <p className="eyebrow">
+            {staff ? t('entry.staff.eyebrow') : t('entry.step', { current: 3, total: 3 })}
+          </p>
+          <h1 className="en-title">{t('entry.pick.title')}</h1>
           <p className="en-lede">
-            {signedIn
-              ? `Set by your teacher, and saved to your account.`
-              : 'Pick the one your teacher told you to open. You are working anonymously.'}
+            {signedIn ? t('entry.pick.ledeSignedIn') : t('entry.pick.ledeAnon')}
           </p>
 
           {error ? (
@@ -109,47 +158,62 @@ export default function StudentEntry() {
             </p>
           ) : null}
 
-          {signedIn ? (
+          {staff ? (
+            <p className="cs-note" data-tone="warn">
+              {t('entry.staff.notice', { role: t(roleStringKey(user.role)) })}
+            </p>
+          ) : signedIn ? (
             <p className="cs-hint" style={{ marginBottom: 'var(--s-4)' }}>
-              Signed in as <strong>{user.name}</strong>. To work anonymously instead,{' '}
-              <Link to="/signin">sign out first</Link> — while you are signed in, everything you do
-              is saved to your account.
+              {t('entry.pick.signedInAs', { name: user.name })}
             </p>
           ) : null}
 
           {activities === null ? (
-            <p className="cs-note">Loading…</p>
+            <p className="cs-note">{t('common.loading')}</p>
           ) : activities.length === 0 ? (
-            <p className="cs-empty">
-              Nothing is open yet. Your teacher has to publish an activity before it appears here.
-            </p>
+            <p className="cs-empty">{t('entry.pick.empty')}</p>
           ) : (
-            <div className="en-topics">
-              {activities.map((activity) => (
-                <button
-                  key={activity.id}
-                  type="button"
-                  className="en-topic"
-                  disabled={busy}
-                  onClick={() => begin(activity.id)}
-                >
-                  <span className="en-topic-name">{activity.title}</span>
-                  <span className="en-topic-meta mono">
-                    {activity.questionCount} {activity.questionCount === 1 ? 'question' : 'questions'}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <>
+              <TopicFilter activities={activities} value={topic} onChange={setTopic} />
+
+              {shown.length === 0 ? (
+                <p className="cs-empty">{t('entry.pick.noneInTopic')}</p>
+              ) : (
+                <div className="en-topics">
+                  {shown.map((activity) => (
+                    <button
+                      key={activity.id}
+                      type="button"
+                      className="en-topic"
+                      disabled={busy}
+                      onClick={() => begin(activity.id)}
+                    >
+                      <span className="en-topic-name">{activity.title}</span>
+                      <span className="en-topic-meta mono">
+                        {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
+                        {t('common.questions', { count: activity.questionCount })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           <div className="en-actions">
-            <button
-              type="button"
-              className="en-btn"
-              onClick={() => setStep(signedIn ? 'consent' : 'who')}
-            >
-              Back
-            </button>
+            {/* Staff have no step to go back to; the bar above is their way out. */}
+            {staff ? null : (
+              <button
+                type="button"
+                className="en-btn"
+                onClick={() => setChosen(signedIn ? 'consent' : 'who')}
+              >
+                {t('common.back')}
+              </button>
+            )}
+            <Link className="en-btn" to="/join">
+              {t('entry.pick.enterCode')}
+            </Link>
           </div>
         </div>
       </main>
@@ -159,13 +223,11 @@ export default function StudentEntry() {
   if (step === 'who') {
     return (
       <main className="en-page">
+        <TopBar join />
         <div className="en-card">
-          <p className="eyebrow">Step 2 of 3</p>
-          <h1 className="en-title">How are you working today?</h1>
-          <p className="en-lede">
-            Either is fine. Anonymous is the normal way in — you only need an account if your
-            teacher set one up for you.
-          </p>
+          <p className="eyebrow">{t('entry.step', { current: 2, total: 3 })}</p>
+          <h1 className="en-title">{t('entry.who.title')}</h1>
+          <p className="en-lede">{t('entry.who.lede')}</p>
 
           <div className="en-topics">
             <button
@@ -173,24 +235,22 @@ export default function StudentEntry() {
               className="en-topic"
               onClick={() => {
                 setActivities(null)
-                setStep('pick')
+                setChosen('pick')
               }}
             >
-              <span className="en-topic-name">Continue anonymously</span>
-              <span className="en-topic-meta">No account. Nothing is asked for.</span>
+              <span className="en-topic-name">{t('entry.who.anon')}</span>
+              <span className="en-topic-meta">{t('entry.who.anonMeta')}</span>
             </button>
 
             <Link className="en-topic" to="/signin" state={{ from: '/' }}>
-              <span className="en-topic-name">Sign in</span>
-              <span className="en-topic-meta">
-                If your teacher gave you an email and password.
-              </span>
+              <span className="en-topic-name">{t('entry.who.signIn')}</span>
+              <span className="en-topic-meta">{t('entry.who.signInMeta')}</span>
             </Link>
           </div>
 
           <div className="en-actions">
-            <button type="button" className="en-btn" onClick={() => setStep('consent')}>
-              Back
+            <button type="button" className="en-btn" onClick={() => setChosen('consent')}>
+              {t('common.back')}
             </button>
           </div>
         </div>
@@ -200,62 +260,15 @@ export default function StudentEntry() {
 
   return (
     <main className="en-page">
-      <div className="en-card">
-        <p className="eyebrow">Step 1 of 3 · Consent</p>
-        <h1 className="en-title">Before you start</h1>
-        <p className="en-lede">
-          This workspace is part of a research study on how AI feedback helps students work through
-          problems. Please read this before you start.
-        </p>
-
-        <div className="en-terms">
-          <h2 className="en-terms-head">What gets recorded</h2>
-          <ul className="en-list">
-            <li>Everything you type to the tutor, and everything it replies.</li>
-            <li>Your answers — typed, drawn or uploaded — and the marks on them.</li>
-            <li>Which questions you open, how you mark them, and when.</li>
-          </ul>
-
-          <h2 className="en-terms-head">How it is used</h2>
-          <ul className="en-list">
-            <li>To build an anonymous dataset for research on AI feedback in teaching.</li>
-            <li>Your teacher may read your conversations and label them for the study.</li>
-            <li>You are not asked for your name, your email or your school.</li>
-          </ul>
-
-          <p className="en-warn">
-            Do not type your name, anyone else&rsquo;s name, or any other personal detail into the
-            workspace. You can stop at any time, and delete everything you did, from inside the
-            workspace.
-          </p>
-        </div>
-
-        <label className="en-agree">
-          <input
-            type="checkbox"
-            checked={agreed}
-            onChange={(event) => setAgreed(event.target.checked)}
-          />
-          <span>
-            I have read this, and I agree to my answers and conversations being recorded for this
-            research.
-          </span>
-        </label>
-
-        <div className="en-actions">
-          <button
-            type="button"
-            className="en-btn en-btn-primary"
-            disabled={!agreed}
-            onClick={() => setStep(signedIn ? 'pick' : 'who')}
-          >
-            Agree and continue
-          </button>
-          <button type="button" className="en-btn" onClick={() => setStep('declined')}>
-            I do not agree
-          </button>
-        </div>
-      </div>
+      <TopBar join />
+      <ConsentCard
+        eyebrow={`${t('entry.step', { current: 1, total: 3 })} · ${t('entry.consent.eyebrow')}`}
+        onAgree={() => {
+          setConsented(true)
+          setChosen(signedIn ? 'pick' : 'who')
+        }}
+        onDecline={() => setChosen('declined')}
+      />
     </main>
   )
 }

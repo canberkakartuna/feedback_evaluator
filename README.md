@@ -13,17 +13,31 @@ npm install
 cp .env.example .env          # then put MONGODB_URI in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 257 end-to-end assertions over real HTTP
+npm run test:api              # 280 end-to-end assertions over real HTTP
+npm run check:strings         # every interface string, in both languages
 ```
+
+The interface is in **English or Turkish**, switched by the EN/TR control that
+sits on every screen. What a teacher writes — titles, questions, the AI prompt —
+is content and is never translated; the chrome around it is, and
+`src/lib/strings.js` holds both languages side by side so a gap in one is
+visible. `npm run check:strings` fails on a key that is used and missing, or
+present in one language only.
 
 ## Three audiences, one deployment
 
 | Route | Who | What they do |
 | --- | --- | --- |
 | `/` | students | Consent, then anonymously or signed in, pick an activity |
+| `/join`, `/join/:code` | students | The same, reached by a class code or its link |
 | `/work/:sessionId` | students | The workspace: question, answer, tutor chat |
 | `/teacher` | teachers, managers | Write activities, read student work, label snippets |
 | `/admin` | administrators | Accounts, and the system-wide AI prompt |
+
+Every screen carries the same bar of direct buttons — **home, sign in or sign
+out, the console for whoever is signed in, and the language switch** — so the way
+out of a screen is never a link buried in a paragraph. See
+`src/components/TopBar.jsx`.
 
 ### Two ways in for a student
 
@@ -34,9 +48,34 @@ npm run test:api              # 257 end-to-end assertions over real HTTP
   is narrowed to their own teacher's work, and the session carries their name so
   it can be followed across visits.
 
-There is no join code. **Publishing is the whole access decision**: a draft is
-invisible and cannot be started, a published activity is startable by whoever is
-looking. Closing an activity again is how a teacher shuts it down.
+Either way, they get there through a list or through a **class code**: six
+characters shown to the teacher, typed at `/join`, or followed as a link
+(`/join/ABC234`) put in a lesson plan or a class chat. The editor shows both, with
+a button to copy either.
+
+A code is **not a credential**. **Publishing is the whole access decision**: a
+draft is invisible and cannot be started — not by id, not by code — and a
+published activity is startable by whoever is looking. Closing an activity again
+is how a teacher shuts it down. What the code buys is the first two minutes of a
+lesson: six characters instead of twenty titles to read.
+
+Activities also carry a **topic** — ratio, whole numbers, or none — and both the
+students' list and the teacher's are filtered by it. The list is `TOPICS` in
+`shared/activity.js`, and adding one is a line there plus a translation in
+`src/lib/strings.js`.
+
+### Staff are not participants
+
+A teacher, manager or admin opening the student side **never sees the consent
+notice**, and is not asked to agree to it. The notice asks a research subject to
+agree to their answers and conversations being kept for the study; a teacher
+checking what their class will see is not one, and ticking it on their behalf
+would put staff clicks and student consent in the same field.
+
+Such a session is stamped `staffPreview` instead, with `consent.given: false` and
+`waived: 'staff-preview'` — recorded honestly rather than fudged — and the roster
+labels it so it cannot be read as a student's work. `routes/sessions.js` is where
+that holds. A **student** with an account is not staff and is asked every time.
 
 **Anonymous is not invisible.** A session with no account still reaches the
 teacher, through the activity rather than through a user: they own the activity,
@@ -56,15 +95,16 @@ The first administrator comes from `POST /api/auth/bootstrap`, guarded by
 deployment step, not a screen — `GET /api/health` reports `ready: false` and says
 so while no user exists.
 
-**Most students never get an account.** They open the site, agree to the consent
-notice, and type the code their teacher put on the board. The session is
-anonymous, and the teacher still sees it, because it is attached to an activity
-they own.
+**Most students never get an account.** They open the site or type the class code
+their teacher put on the board, agree to the consent notice, and start. The
+session is anonymous, and the teacher still sees it, because it is attached to an
+activity they own.
 
 ## How the pieces fit
 
 ```
 activity ──< question          a teacher's set of questions; published or not
+   │                           carries a class code and a topic
    │
    └──< session ──< answer     one student's run at it — anonymous or named
              │
@@ -116,6 +156,7 @@ The client is not trusted with anything the study will later be read from:
 
 ```
 shared/          definitions both sides need: roles, activity shapes, marking
+                 ids and shapes only — never a display word, in any language
 server/          the API — see server/README.md
   routes/          HTTP surface
   services/        the rules, in one place each
@@ -123,8 +164,9 @@ server/          the API — see server/README.md
   lib/storage.js   uploads: local disk or DigitalOcean Spaces
 src/
   routes/          one folder per audience: student, teacher, admin
-  components/      the workspace panels
-  lib/             api client, auth context, helpers
+  components/      the workspace panels, plus the shared chrome
+  lib/             api client, auth context, i18n, helpers
+  lib/strings.js   every interface string, English and Turkish side by side
 ```
 
 ## Deploying

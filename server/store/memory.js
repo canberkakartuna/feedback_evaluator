@@ -157,6 +157,19 @@ export function createMemoryStore() {
       async findById(id) {
         return clone(activities.get(id) ?? null)
       },
+      /**
+       * The class code, upper-cased on the way in so a student typing it in
+       * lower case still lands. A blank code matches nothing rather than the
+       * first activity authored before codes existed.
+       */
+      async findByCode(code) {
+        if (!code) return null
+        const wanted = String(code).trim().toUpperCase()
+        for (const activity of activities.values()) {
+          if (activity.code === wanted) return clone(activity)
+        }
+        return null
+      },
       async update(id, patch) {
         const current = activities.get(id)
         if (!current) return null

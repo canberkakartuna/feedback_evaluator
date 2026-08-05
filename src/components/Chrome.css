@@ -1,0 +1,177 @@
+/* ─────────────────────────────────────────────────────────────
+   Chrome: the bar of direct buttons, and the language switch.
+
+   Present on every screen, so it is deliberately quiet — hairline
+   buttons on the same 24px square as everything else. It reads as
+   furniture until you need it, which is the point: a student who
+   has finished should not have to hunt for the way out.
+   ───────────────────────────────────────────────────────────── */
+
+.ch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  width: 100%;
+  /* The same measure as .en-card, so the bar and the sheet share an edge. */
+  max-width: 620px;
+  margin: 0 auto var(--s-4);
+}
+
+/* Inside a console sidebar the bar stacks instead, and owns no width. */
+.ch-bar[data-layout='stack'] {
+  flex-direction: column;
+  align-items: stretch;
+  max-width: none;
+  margin: 0;
+}
+
+/* Stacked, the switch is as wide as the buttons above it, so its two halves
+   share that width rather than huddling on the left. */
+.ch-bar[data-layout='stack'] .ch-lang-btn {
+  flex: 1;
+}
+
+.ch-who {
+  margin: 0 auto 0 0;
+  font-size: var(--t-12);
+  color: var(--graphite);
+}
+
+.ch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 5px var(--s-3);
+  font: inherit;
+  font-family: var(--f-display);
+  font-size: var(--t-13);
+  color: var(--ink);
+  background: var(--paper-raise);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ch-btn:hover:not(:disabled) {
+  border-color: var(--graphite-faint);
+  background: var(--paper-sunk);
+}
+
+.ch-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ── language switch ─────────────────────────────────────────── */
+
+.ch-lang {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  background: var(--paper-raise);
+}
+
+.ch-lang-btn {
+  padding: 5px var(--s-2);
+  min-width: 34px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--graphite);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.ch-lang-btn + .ch-lang-btn {
+  border-left: 1px solid var(--edge);
+}
+
+.ch-lang-btn:hover {
+  color: var(--ink);
+  background: var(--paper-sunk);
+}
+
+.ch-lang-btn[aria-pressed='true'] {
+  color: var(--pen-deep);
+  background: var(--pen-soft);
+  font-weight: 600;
+}
+
+/* ── topic filter ────────────────────────────────────────────── */
+
+.ch-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+
+.ch-filter-label {
+  margin: 0;
+  color: var(--graphite);
+}
+
+.ch-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px var(--s-3);
+  font-family: var(--f-display);
+  font-size: var(--t-13);
+  color: var(--graphite);
+  background: var(--paper-raise);
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ch-chip:hover {
+  color: var(--ink);
+  border-color: var(--graphite-faint);
+}
+
+.ch-chip[aria-pressed='true'] {
+  color: var(--pen-deep);
+  background: var(--pen-soft);
+  border-color: var(--pen);
+  font-weight: 600;
+}
+
+.ch-chip-count {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  color: var(--graphite-faint);
+}
+
+.ch-chip[aria-pressed='true'] .ch-chip-count {
+  color: var(--pen-deep);
+}
+
+/* ── the workspace copy ──────────────────────────────────────── */
+
+/* The three-pane workspace has no page margins to hang a bar in, so its
+   copy sits in the question-list header and shrinks to fit. */
+.ch-bar[data-layout='inline'] {
+  margin: var(--s-3) 0 0;
+  max-width: none;
+  justify-content: flex-start;
+  gap: var(--s-1);
+}
+
+.ch-bar[data-layout='inline'] .ch-btn {
+  padding: 3px var(--s-2);
+  font-size: var(--t-12);
+}
+
+.ch-bar[data-layout='inline'] .ch-lang-btn {
+  padding: 3px 6px;
+  min-width: 28px;
+}

@@ -119,6 +119,13 @@ export async function studentActivities(store, user) {
       id: activity.id,
       title: activity.title,
       blurb: activity.blurb,
+      /**
+       * What the list is filtered by. Null for anything a teacher has not
+       * classified, which the client shows as its own group rather than hiding —
+       * an activity that vanished because nobody set a topic would look like a
+       * publishing failure.
+       */
+      topic: activity.topic ?? null,
       questionCount: await store.questions.count({ activityId: activity.id }),
     })),
   )

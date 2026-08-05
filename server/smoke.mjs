@@ -404,16 +404,43 @@ try {
   const untitled = await call('POST', '/api/activities', { token: teacherToken, body: {} })
   check('an activity needs a title', untitled.status === 400)
 
+  const badTopic = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Fine title', topic: 'astrology' },
+  })
+  check('an unknown topic is rejected', badTopic.status === 400)
+
   const created = await call('POST', '/api/activities', {
     token: teacherToken,
-    body: { title: 'Membranes & transport', blurb: 'How things cross the membrane.' },
+    body: {
+      title: 'Membranes & transport',
+      blurb: 'How things cross the membrane.',
+      topic: 'ratio',
+    },
   })
   check('teacher creates an activity', created.status === 201)
   const activity = created.body.activity
   check('it starts as a draft', activity.status === 'draft')
-  check('it carries no join code', activity.code === undefined)
   check('it is owned by its author', activity.ownerId === teacher.id)
   check('it starts empty', activity.questionCount === 0)
+  check('the topic is stored', activity.topic === 'ratio')
+
+  /**
+   * The class code. Six characters from the unambiguous alphabet, allocated at
+   * creation — not a credential, which is what the draft assertions below are
+   * really checking.
+   */
+  check('it carries a class code', /^[A-Z2-9]{6}$/.test(activity.code))
+
+  const untopiced = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { topic: null },
+  })
+  check('the topic can be cleared', untopiced.body.activity.topic === null)
+  await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { topic: 'whole-numbers' },
+  })
 
   console.log('\nadding questions')
   const emptyPublish = await call('PATCH', `/api/activities/${activity.id}`, {
@@ -641,6 +668,19 @@ try {
   })
   check('and cannot be started', draftSession.status === 400)
 
+  /**
+   * The class code is a shortcut, not a key. Everything here runs with no token
+   * at all, and a draft is refused down this path exactly as it is down the list
+   * path — which is the assertion that keeps the code from becoming a way in.
+   */
+  const draftByCode = await call('GET', `/api/activities/code/${activity.code}`)
+  check('a draft cannot be reached by its class code', draftByCode.status === 400)
+
+  const draftCodeSession = await call('POST', '/api/sessions', {
+    body: { consent: true, code: activity.code },
+  })
+  check('nor started by it', draftCodeSession.status === 400)
+
   const published = await call('PATCH', `/api/activities/${activity.id}`, {
     token: teacherToken,
     body: { status: 'published' },
@@ -656,10 +696,43 @@ try {
   check('now an anonymous visitor can see it', openList.body.activities.length === 1)
   check('it is named', openList.body.activities[0].title === 'Membranes & transport')
   check('and counted', openList.body.activities[0].questionCount === 3)
+  check('and carries its topic, for the filter', openList.body.activities[0].topic === 'whole-numbers')
   check('but carries no questions', !('questions' in openList.body.activities[0]))
   check(
     'and no mark scheme',
     !JSON.stringify(openList.body).includes('water potential'),
+  )
+
+  console.log('\nthe class code, once it is published')
+  const byCode = await call('GET', `/api/activities/code/${activity.code.toLowerCase()}`)
+  check('a published activity resolves from its code', byCode.status === 200)
+  check('case does not matter', byCode.body.activity.id === activity.id)
+  check('it is named', byCode.body.activity.title === 'Membranes & transport')
+  check('and counted', byCode.body.activity.questionCount === 3)
+  check('but carries no questions', !('questions' in byCode.body.activity))
+
+  const nonsenseCode = await call('GET', '/api/activities/code/ZZZZZZ')
+  check('an unknown code is a 404', nonsenseCode.status === 404)
+
+  const codeSession = await call('POST', '/api/sessions', {
+    body: { consent: true, code: activity.code.toLowerCase() },
+  })
+  check('a student can start from a code alone', codeSession.status === 201)
+  check('and lands in the right activity', codeSession.body.session.activityId === activity.id)
+  check('with consent still recorded', codeSession.body.session.consent.given === true)
+  // Removed again: the assertions further down count sessions.
+  await call('DELETE', `/api/sessions/${codeSession.body.session.id}`)
+
+  const codeNoConsent = await call('POST', '/api/sessions', { body: { code: activity.code } })
+  check('the code does not bypass consent', codeNoConsent.status === 400)
+
+  const secondActivity = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'A second activity' },
+  })
+  check(
+    'every activity gets its own code',
+    secondActivity.body.activity.code !== activity.code,
   )
 
   /* ================================================================== student */
@@ -676,6 +749,41 @@ try {
 
   const noActivity = await call('POST', '/api/sessions', { body: { consent: true } })
   check('a session must name an activity', noActivity.status === 400)
+
+  const studentNoConsent = await call('POST', '/api/sessions', {
+    token: studentToken,
+    body: { activityId: activity.id },
+  })
+  check('a signed-in student is still asked', studentNoConsent.status === 400)
+
+  /**
+   * Staff are exempt: the notice is addressed to a research participant, and a
+   * teacher checking their own activity is not one. The session records that
+   * honestly rather than claiming an agreement nobody gave.
+   */
+  const staffPreview = await call('POST', '/api/sessions', {
+    token: teacherToken,
+    body: { activityId: activity.id },
+  })
+  check('a teacher starts one without consenting', staffPreview.status === 201)
+  check('and it is stamped as a preview', staffPreview.body.session.staffPreview === true)
+  check('with consent recorded as not given', staffPreview.body.session.consent.given === false)
+  check('and why', staffPreview.body.session.consent.waived === 'staff-preview')
+
+  const consentedTeacher = await call('POST', '/api/sessions', {
+    token: teacherToken,
+    body: { consent: true, activityId: activity.id },
+  })
+  check(
+    'a teacher who does consent is not a preview',
+    consentedTeacher.body.session.staffPreview === false,
+  )
+
+  // Taken back out again: everything below counts rows, and two walkthroughs
+  // left lying in the store would make the roster assertions about a student's
+  // work be about a teacher's clicking instead.
+  await call('DELETE', `/api/sessions/${staffPreview.body.session.id}`)
+  await call('DELETE', `/api/sessions/${consentedTeacher.body.session.id}`)
 
   /**
    * The anonymous door: no token, no code, no password. Everything that follows

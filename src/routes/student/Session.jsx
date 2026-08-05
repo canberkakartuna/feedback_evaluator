@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { readAsDataUrl } from '../../lib/attachments'
+import { useT } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 import { ownTutor } from '../../../shared/tutor-scripts'
 import QuestionList from '../../components/QuestionList'
@@ -61,6 +62,7 @@ function toState(question, answer, messages) {
 export default function Session() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
+  const t = useT()
 
   const [loaded, setLoaded] = useState(null)
   const [loadError, setLoadError] = useState(null)
@@ -201,10 +203,14 @@ export default function Session() {
     const own = questions.filter((question) => question.isOwnQuestion)
 
     return [
-      { id: 'activity', title: loaded.activity?.title ?? 'Questions', questions: authored },
-      ...(own.length ? [{ id: 'own', title: 'Your own questions', questions: own }] : []),
+      {
+        id: 'activity',
+        title: loaded.activity?.title ?? t('ws.questionsFallback'),
+        questions: authored,
+      },
+      ...(own.length ? [{ id: 'own', title: t('ws.ownQuestions'), questions: own }] : []),
     ]
-  }, [loaded, questions])
+  }, [loaded, questions, t])
 
   const index = questions.findIndex((question) => question.id === activeId)
   const active = questions[index] ?? questions[0] ?? null
@@ -333,20 +339,36 @@ export default function Session() {
       const { answer, feedback } = await api.checkAnswer(sessionId, activeId)
       applyAnswer(activeId, answer)
 
+      /**
+       * The one tutor line the client writes rather than receives.
+       *
+       * It reports the mark, so it is interface text and follows the language
+       * switch. `nextStep` inside it is not: it is the coaching a teacher typed
+       * against that criterion, and it is shown as written.
+       */
+      const line = feedback.markable
+        ? [
+            t('ws.markedLine', {
+              code: active.code,
+              earned: feedback.earned,
+              total: feedback.total,
+            }),
+            feedback.verdict === 'mastered' ? t('ws.fullMarks') : feedback.nextStep,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        : t('ws.handMarked', { code: active.code })
+
       append(activeId, {
         id: `mark-${Date.now()}`,
         from: 'tutor',
         kind: 'note',
-        text: feedback.markable
-          ? `Marked ${active.code} — ${feedback.earned} of ${feedback.total}. ${
-              feedback.verdict === 'mastered' ? 'Full marks.' : feedback.nextStep
-            }`
-          : `${active.code} is with your teacher to mark by hand. I cannot score a drawing or a photo.`,
+        text: line,
       })
     } catch (error) {
       fail(error)
     }
-  }, [active, activeId, append, applyAnswer, fail, flushDraft, sessionId])
+  }, [active, activeId, append, applyAnswer, fail, flushDraft, sessionId, t])
 
   /** The tutor answers server-side; this only shows that it is thinking. */
   const converse = useCallback(
@@ -412,14 +434,14 @@ export default function Session() {
 
   /** The withdrawal half of consent, offered where the student actually is. */
   const withdraw = useCallback(async () => {
-    if (!window.confirm('Delete everything from this session? This cannot be undone.')) return
+    if (!window.confirm(t('ws.confirmWithdraw'))) return
     try {
       await api.deleteSession(sessionId)
       navigate('/', { replace: true })
     } catch (error) {
       fail(error)
     }
-  }, [fail, navigate, sessionId])
+  }, [fail, navigate, sessionId, t])
 
   const revealTutor = useCallback(() => {
     setTutorCollapsed(false)
@@ -451,10 +473,10 @@ export default function Session() {
     return (
       <main className="en-page">
         <div className="en-card">
-          <p className="eyebrow">Cannot open this session</p>
+          <p className="eyebrow">{t('ws.cannotOpen')}</p>
           <h1 className="en-title">{loadError.message}</h1>
           <button type="button" className="en-btn en-btn-primary" onClick={() => navigate('/')}>
-            Start again
+            {t('ws.startAgain')}
           </button>
         </div>
       </main>
@@ -464,7 +486,7 @@ export default function Session() {
   if (!loaded || !active || !activeState) {
     return (
       <main className="splash">
-        <p className="eyebrow">Loading your work</p>
+        <p className="eyebrow">{t('ws.loading')}</p>
       </main>
     )
   }
@@ -472,9 +494,9 @@ export default function Session() {
   const unreadCount = questions.filter((question) => progress[question.id]?.unread).length
 
   const tabs = [
-    { id: 'list', label: 'Questions', meta: `${tally.done}/${tally.total}` },
-    { id: 'problem', label: 'Problem', meta: active.code },
-    { id: 'tutor', label: 'Tutor', dot: unreadCount > 0 },
+    { id: 'list', label: t('ws.tabQuestions'), meta: `${tally.done}/${tally.total}` },
+    { id: 'problem', label: t('ws.tabProblem'), meta: active.code },
+    { id: 'tutor', label: t('ws.tabTutor'), dot: unreadCount > 0 },
   ]
 
   return (
@@ -488,13 +510,13 @@ export default function Session() {
       {problem ? (
         <div className="ws-problem-banner" role="alert">
           <span>{problem}</span>
-          <button type="button" onClick={() => setProblem(null)} aria-label="Dismiss">
+          <button type="button" onClick={() => setProblem(null)} aria-label={t('common.dismiss')}>
             ×
           </button>
         </div>
       ) : null}
 
-      <aside className="ws-pane ws-list" aria-label="Question set">
+      <aside className="ws-pane ws-list" aria-label={t('ws.questionSet')}>
         <button
           type="button"
           className="ws-rail"
@@ -511,17 +533,17 @@ export default function Session() {
               strokeLinejoin="round"
             />
           </svg>
-          <span className="ws-rail-label">Questions</span>
+          <span className="ws-rail-label">{t('ws.tabQuestions')}</span>
           <span className="ws-rail-count mono">
             {tally.done}/{tally.total}
           </span>
-          <span className="sr-only">Show questions</span>
+          <span className="sr-only">{t('ws.showQuestions')}</span>
         </button>
 
         <div className="ws-list-inner">
           <QuestionList
             course={{
-              title: loaded.activity?.title ?? 'Your questions',
+              title: loaded.activity?.title ?? t('ws.questionsFallback'),
               subtitle: loaded.session.code,
             }}
             groups={groups}
@@ -560,11 +582,11 @@ export default function Session() {
         type="button"
         className="ws-scrim"
         tabIndex={tutorOpen ? 0 : -1}
-        aria-label="Close tutor"
+        aria-label={t('ws.closeTutor')}
         onClick={() => setTutorOpen(false)}
       />
 
-      <aside className="ws-pane ws-tutor" aria-label="AI tutor">
+      <aside className="ws-pane ws-tutor" aria-label={t('ws.tutorPane')}>
         <button
           type="button"
           className="ws-rail"
@@ -581,10 +603,10 @@ export default function Session() {
             />
             <path d="M11 3v8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
           </svg>
-          <span className="ws-rail-label">Tutor</span>
+          <span className="ws-rail-label">{t('ws.tabTutor')}</span>
           {unreadCount > 0 ? <span className="ws-rail-dot" aria-hidden="true" /> : null}
           <span className="sr-only">
-            Show tutor{unreadCount > 0 ? ', new reply waiting' : ''}
+            {unreadCount > 0 ? t('ws.showTutorUnread') : t('ws.showTutor')}
           </span>
         </button>
 
@@ -603,7 +625,7 @@ export default function Session() {
         </div>
       </aside>
 
-      <nav className="ws-tabs" aria-label="Switch panel">
+      <nav className="ws-tabs" aria-label={t('ws.switchPanel')}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -614,7 +636,7 @@ export default function Session() {
           >
             <span className="ws-tab-label">{tab.label}</span>
             {tab.meta ? <span className="ws-tab-meta mono">{tab.meta}</span> : null}
-            {tab.dot ? <span className="ws-tab-dot" aria-label="New reply" /> : null}
+            {tab.dot ? <span className="ws-tab-dot" aria-label={t('ws.newReply')} /> : null}
           </button>
         ))}
       </nav>

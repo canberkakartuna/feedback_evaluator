@@ -1,19 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import StatusMark from './StatusMark'
-import { MARKS, SELF_MARKS } from '../lib/status'
+import { MARKS, SELF_MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
-import {
-  MODES,
-  boardFile,
-  contentSummary,
-  describeContent,
-  hasContent,
-  modeLabel,
-  uploadedFiles,
-} from '../lib/answer'
+import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
+import { useT } from '../lib/i18n'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
+
+/** `write` → `qp.discardWrite`, the phrase naming what a switch would lose. */
+const discardKey = (mode) => `qp.discard${mode.charAt(0).toUpperCase()}${mode.slice(1)}`
+
+/** How much is in the answer, in the unit that mode is measured in. */
+const countKey = { write: 'common.words', draw: 'common.strokes', upload: 'common.files' }
 
 export default function QuestionPanel({
   question,
@@ -32,6 +31,7 @@ export default function QuestionPanel({
   onStep,
   onOpenTutor,
 }) {
+  const t = useT()
   const sheet = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
@@ -96,7 +96,7 @@ export default function QuestionPanel({
               {question.points ? (
                 <>
                   <span className="qp-sep" aria-hidden="true" />
-                  <span className="mono">{question.points} marks</span>
+                  <span className="mono">{t('qp.marks', { count: question.points })}</span>
                 </>
               ) : null}
             </p>
@@ -105,16 +105,19 @@ export default function QuestionPanel({
           <div className="qp-bar-right">
             <span className="qp-state" style={{ color: MARKS[state.selfMark ?? state.status].tone }}>
               <StatusMark status={state.selfMark ?? state.status} size={12} />
-              {MARKS[state.selfMark ?? state.status].short}
+              {t(markShortKey(state.selfMark ?? state.status))}
             </span>
             <span
               className="qp-place mono"
-              aria-label={`Question ${position.current} of ${position.total}`}
+              aria-label={t('qp.questionOf', {
+                current: position.current,
+                total: position.total,
+              })}
             >
               {position.current}/{position.total}
             </span>
             <button type="button" className="qp-tutor-toggle" onClick={onOpenTutor}>
-              Tutor
+              {t('qp.tutor')}
             </button>
           </div>
         </div>
@@ -130,7 +133,7 @@ export default function QuestionPanel({
               <img
                 className="qp-shot-img"
                 src={question.image.url}
-                alt={question.prompt ? 'The question, as set' : 'The question'}
+                alt={question.prompt ? t('qp.questionAsSet') : t('qp.question')}
               />
             </figure>
           ) : null}
@@ -167,12 +170,14 @@ export default function QuestionPanel({
 
           <section className="qp-answer-block">
             <div className="qp-answer-head">
-              <span className="eyebrow">Your answer</span>
-              <span className="qp-words mono">{contentSummary(state)}</span>
+              <span className="eyebrow">{t('qp.yourAnswer')}</span>
+              <span className="qp-words mono">
+                {t(countKey[state.mode], { count: contentCount(state) })}
+              </span>
             </div>
 
             {/* One answer per question: choosing a method replaces the others. */}
-            <div className="qp-modes" role="group" aria-label="How to answer">
+            <div className="qp-modes" role="group" aria-label={t('qp.howToAnswer')}>
               {MODES.map((option) => (
                 <button
                   key={option.id}
@@ -181,8 +186,8 @@ export default function QuestionPanel({
                   aria-pressed={state.mode === option.id}
                   onClick={() => requestMode(option.id)}
                 >
-                  <span className="qp-mode-label">{option.label}</span>
-                  <span className="qp-mode-hint mono">{option.hint}</span>
+                  <span className="qp-mode-label">{t(`modes.${option.id}Label`)}</span>
+                  <span className="qp-mode-hint mono">{t(`modes.${option.id}Hint`)}</span>
                 </button>
               ))}
             </div>
@@ -190,7 +195,10 @@ export default function QuestionPanel({
             {pendingMode ? (
               <div className="qp-mode-warn" role="alert">
                 <p className="qp-mode-warn-text">
-                  Switching to {modeLabel(pendingMode)} discards {describeContent(state)}.
+                  {t('qp.modeWarn', {
+                    mode: t(`modes.${pendingMode}Label`),
+                    what: t(discardKey(state.mode), { count: contentCount(state) }),
+                  })}
                 </p>
                 <div className="qp-mode-warn-actions">
                   <button
@@ -201,10 +209,10 @@ export default function QuestionPanel({
                       setPendingMode(null)
                     }}
                   >
-                    Discard and switch
+                    {t('qp.discardSwitch')}
                   </button>
                   <button type="button" className="qp-btn" onClick={() => setPendingMode(null)}>
-                    Keep my answer
+                    {t('qp.keepAnswer')}
                   </button>
                 </div>
               </div>
@@ -213,7 +221,7 @@ export default function QuestionPanel({
             {state.mode === 'write' ? (
               <>
                 <label className="sr-only" htmlFor="answer">
-                  Your written answer
+                  {t('qp.writtenAnswer')}
                 </label>
                 <textarea
                   id="answer"
@@ -222,15 +230,13 @@ export default function QuestionPanel({
                   spellCheck="true"
                   placeholder={
                     question.markable
-                      ? 'Write your answer here. The tutor marks it against the rubric, not against a model answer.'
-                      : 'Write what you have tried so far, and the tutor will work through it with you.'
+                      ? t('qp.placeholderMarkable')
+                      : t('qp.placeholderUnmarked')
                   }
                   onChange={(event) => onDraftChange(event.target.value)}
                 />
                 {question.workingExpected ? (
-                  <p className="qp-mode-nudge">
-                    This one is normally worked out by hand — Draw or Upload usually suits it better.
-                  </p>
+                  <p className="qp-mode-nudge">{t('qp.workingNudge')}</p>
                 ) : null}
               </>
             ) : null}
@@ -239,16 +245,19 @@ export default function QuestionPanel({
               <div className="qp-board">
                 <button type="button" className="qp-way" onClick={() => setBoardOpen(true)}>
                   {board ? (
-                    <img className="qp-board-thumb" src={board.url} alt="Your whiteboard so far" />
+                    <img className="qp-board-thumb" src={board.url} alt={t('qp.boardAlt')} />
                   ) : null}
                   <span className="qp-way-text">
                     <span className="qp-way-main">
-                      {state.strokes.length ? 'Edit your whiteboard' : 'Draw on the whiteboard'}
+                      {state.strokes.length ? t('qp.editBoard') : t('qp.drawBoard')}
                     </span>
                     <span className="qp-way-sub mono">
                       {state.strokes.length
-                        ? `${state.strokes.length} ${state.strokes.length === 1 ? 'stroke' : 'strokes'} · saved as ${board ? formatBytes(board.size) : 'a PNG'}`
-                        : 'Squared paper · pen, eraser, undo'}
+                        ? t('qp.boardMeta', {
+                            strokes: t('common.strokes', { count: state.strokes.length }),
+                            size: board ? formatBytes(board.size) : t('qp.aPng'),
+                          })
+                        : t('qp.boardHint')}
                     </span>
                   </span>
                 </button>
@@ -282,17 +291,16 @@ export default function QuestionPanel({
                     }}
                   />
                   <span className="qp-way-text">
-                    <span className="qp-way-main">Add a photo or a file</span>
-                    <span className="qp-way-sub mono">
-                      Drop one here or paste it · JPG, PNG or PDF · 10 MB
-                    </span>
+                    <span className="qp-way-main">{t('qp.addFile')}</span>
+                    <span className="qp-way-sub mono">{t('qp.addFileMeta')}</span>
                   </span>
                 </label>
 
                 {rejected.length ? (
                   <p className="qp-drop-error" role="alert">
-                    Not added: {rejected.map((file) => `${file.name} ${file.reason}`).join('; ')}.
-                    Fix the file and attach it again.
+                    {t('qp.rejected', {
+                      list: rejected.map((file) => `${file.name} ${file.reason}`).join('; '),
+                    })}
                   </p>
                 ) : null}
 
@@ -305,7 +313,7 @@ export default function QuestionPanel({
                           href={file.url}
                           target="_blank"
                           rel="noreferrer"
-                          aria-label={`Open ${file.name} in a new tab`}
+                          aria-label={t('qp.openInTab', { name: file.name })}
                         >
                           {isImage(file.type) ? (
                             <img src={file.url} alt="" />
@@ -324,7 +332,8 @@ export default function QuestionPanel({
                           className="qp-file-remove"
                           onClick={() => onDetach(file.id)}
                         >
-                          Remove<span className="sr-only"> {file.name}</span>
+                          {t('common.remove')}
+                          <span className="sr-only"> {file.name}</span>
                         </button>
                       </li>
                     ))}
@@ -336,19 +345,19 @@ export default function QuestionPanel({
             <div className="qp-actions">
               {question.markable ? (
                 <button type="button" className="qp-btn qp-btn-primary" onClick={onCheck}>
-                  Check my answer
+                  {t('qp.check')}
                 </button>
               ) : null}
               <button type="button" className="qp-btn" onClick={onAskHint}>
-                Get a hint
+                {t('qp.hint')}
               </button>
-              {stale ? <p className="qp-stale">Edited since it was marked — check again.</p> : null}
+              {stale ? <p className="qp-stale">{t('qp.stale')}</p> : null}
             </div>
           </section>
 
           {/* Doc item 2: the student's own read of how it went. */}
           <section className="qp-selfmark">
-            <span className="eyebrow">How did this one go?</span>
+            <span className="eyebrow">{t('qp.howDidItGo')}</span>
             <div className="qp-selfmark-row">
               {SELF_MARKS.map((key) => (
                 <button
@@ -360,7 +369,7 @@ export default function QuestionPanel({
                   onClick={() => onSelfMark(state.selfMark === key ? null : key)}
                 >
                   <StatusMark status={key} size={12} />
-                  {MARKS[key].label}
+                  {t(markLabelKey(key))}
                 </button>
               ))}
             </div>
@@ -380,10 +389,10 @@ export default function QuestionPanel({
                 </span>
                 <span className="qp-stamp-label">
                   {feedback.markable
-                    ? MARKS[feedback.verdict].label
+                    ? t(markLabelKey(feedback.verdict))
                     : feedback.pending
-                      ? 'With your teacher'
-                      : 'Nothing to mark'}
+                      ? t('qp.withTeacher')
+                      : t('qp.nothingToMark')}
                 </span>
               </div>
 
@@ -407,7 +416,7 @@ export default function QuestionPanel({
 
                 {feedback.nextStep ? (
                   <p className="qp-next">
-                    <span className="eyebrow">Do this next</span>
+                    <span className="eyebrow">{t('qp.doThisNext')}</span>
                     {feedback.nextStep}
                   </p>
                 ) : null}
@@ -434,7 +443,7 @@ export default function QuestionPanel({
           <button type="button" className="qp-step" disabled={!previous} onClick={() => onStep(-1)}>
             <span aria-hidden="true">←</span>
             <span className="qp-step-text">
-              <span className="qp-step-label">Previous</span>
+              <span className="qp-step-label">{t('qp.previous')}</span>
               <span className="mono">{previous ? previous.code : '—'}</span>
             </span>
           </button>
@@ -446,7 +455,7 @@ export default function QuestionPanel({
             onClick={() => onStep(1)}
           >
             <span className="qp-step-text">
-              <span className="qp-step-label">Next</span>
+              <span className="qp-step-label">{t('qp.next')}</span>
               <span className="mono">{next ? next.code : '—'}</span>
             </span>
             <span aria-hidden="true">→</span>

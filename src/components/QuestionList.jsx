@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import StatusMark from './StatusMark'
-import { AUTO_MARKS, MARKS } from '../lib/status'
+import TopBar from './TopBar'
+import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
+import { useT } from '../lib/i18n'
 import './QuestionList.css'
 
 export default function QuestionList({
@@ -14,6 +16,7 @@ export default function QuestionList({
   onCollapse,
   onWithdraw,
 }) {
+  const t = useT()
   const [ownDraft, setOwnDraft] = useState('')
 
   const askOwn = (event) => {
@@ -30,12 +33,16 @@ export default function QuestionList({
   }
 
   const rowNote = (state) => {
-    if (state.selfMark) return MARKS[state.selfMark].label
-    if (state.feedback?.pending) return 'With your teacher'
+    if (state.selfMark) return t(markLabelKey(state.selfMark))
+    if (state.feedback?.pending) return t('ql.withTeacher')
     if (state.feedback?.markable && state.status !== 'new') {
-      return `${MARKS[state.status].short} · ${state.feedback.earned}/${state.feedback.total}`
+      return t('ql.markedScore', {
+        mark: t(markShortKey(state.status)),
+        earned: state.feedback.earned,
+        total: state.feedback.total,
+      })
     }
-    return MARKS[state.status].label
+    return t(markLabelKey(state.status))
   }
 
   return (
@@ -50,8 +57,8 @@ export default function QuestionList({
           <button
             type="button"
             className="ql-collapse"
-            aria-label="Hide questions"
-            title="Hide questions"
+            aria-label={t('ql.hide')}
+            title={t('ql.hide')}
             onClick={onCollapse}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -67,11 +74,13 @@ export default function QuestionList({
           </button>
         </div>
 
+        {/* The workspace fills the viewport and has no page margins, so the
+            global buttons live here — it is the one pane with a heading. */}
+        <TopBar layout="inline" who={false} join={false} />
+
         <p className="ql-count">
-          <span className="mono">
-            {tally.done} of {tally.total}
-          </span>{' '}
-          marked done
+          <span className="mono">{t('ql.tally', { done: tally.done, total: tally.total })}</span>{' '}
+          {t('ql.tallyLabel')}
         </p>
 
         <ol className="ql-spine" aria-hidden="true">
@@ -116,11 +125,14 @@ export default function QuestionList({
                         <span className="ql-row-top">
                           <span className="ql-code mono">{question.code}</span>
                           {question.points ? (
-                            <span className="ql-points mono">{question.points} pts</span>
+                            <span className="ql-points mono">
+                              {t('ql.points', { count: question.points })}
+                            </span>
                           ) : null}
                         </span>
                         <span className="ql-row-prompt">
-                          {question.prompt || (question.image ? 'Question as a picture' : '')}
+                          {question.prompt ||
+                            (question.image ? t('ql.pictureQuestion') : '')}
                         </span>
                         <span className="ql-row-state" style={{ color: mark.tone }}>
                           {rowNote(state)}
@@ -137,23 +149,23 @@ export default function QuestionList({
         {/* Doc item 8: what they ask unprompted shows where they actually stall. */}
         <section className="ql-group ql-own">
           <h2 className="ql-group-head">
-            <span className="eyebrow">Ask your own</span>
+            <span className="eyebrow">{t('ql.askOwn')}</span>
           </h2>
 
           <form className="ql-own-form" onSubmit={askOwn}>
             <label className="sr-only" htmlFor="own-question">
-              Your own question
+              {t('ql.ownLabel')}
             </label>
             <textarea
               id="own-question"
               className="ql-own-input"
               rows={3}
               value={ownDraft}
-              placeholder="Stuck on something else? Type that question here and work on it with the tutor."
+              placeholder={t('ql.ownPlaceholder')}
               onChange={(event) => setOwnDraft(event.target.value)}
             />
             <button type="submit" className="ql-own-btn" disabled={!ownDraft.trim()}>
-              Add to my list
+              {t('ql.ownAdd')}
             </button>
           </form>
         </section>
@@ -164,7 +176,7 @@ export default function QuestionList({
           {AUTO_MARKS.map((key) => (
             <li key={key} className="ql-key-item">
               <StatusMark status={key} size={12} />
-              <span>{MARKS[key].short}</span>
+              <span>{t(markShortKey(key))}</span>
             </li>
           ))}
         </ul>
@@ -173,7 +185,7 @@ export default function QuestionList({
             rather than in a policy page they will never open. */}
         {onWithdraw ? (
           <button type="button" className="ql-withdraw" onClick={onWithdraw}>
-            Delete everything I did
+            {t('ql.withdraw')}
           </button>
         ) : null}
       </footer>

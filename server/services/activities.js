@@ -1,11 +1,13 @@
 import {
   LIMITS,
   QUESTION_KINDS,
+  TOPIC_IDS,
   blankTutor,
   isActivityStatus,
   isQuestionKind,
+  isTopic,
 } from '../../shared/activity.js'
-import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
+import { badRequest, forbidden, id, notFound, now, shortCode } from '../lib/http.js'
 import { scopeOf } from './users.js'
 
 /**
@@ -275,26 +277,80 @@ export function parseActivityInput(body, { forCreate } = {}) {
     patch.status = body.status
   }
 
+  /**
+   * `null` clears the topic and is not an error — an activity with no topic is a
+   * supported state, so "none" has to be sendable as well as reachable by never
+   * having set one. Anything outside the list is refused rather than stored,
+   * since a topic nothing can filter on is worse than no topic at all.
+   */
+  if (body?.topic !== undefined) {
+    if (body.topic === null || body.topic === '') {
+      patch.topic = null
+    } else if (!isTopic(body.topic)) {
+      throw badRequest(`"topic" must be null or one of: ${TOPIC_IDS.join(', ')}`)
+    } else {
+      patch.topic = body.topic
+    }
+  }
+
   return patch
+}
+
+/* ------------------------------------------------------------- class codes */
+
+/**
+ * The class code, and what it is not.
+ *
+ * It is **not a credential.** `GET /api/activities/code/:code` and the session
+ * route both refuse a code that names a draft, so a code opens exactly what
+ * publishing already opened — nothing more. What it buys is the walk from "open
+ * the site, pick from a list of twenty" to "type six characters, or follow the
+ * link I put on the board", which is the whole of a lesson's first two minutes.
+ *
+ * Six characters from the unambiguous alphabet in lib/http.js, so it can be read
+ * off a projector and typed by a ten-year-old. Uniqueness is checked rather than
+ * assumed: the space is about a billion, collisions are vanishingly unlikely,
+ * and "vanishingly unlikely" is not the same as "cannot happen" when the failure
+ * is two classes landing in one activity. Mongo also carries a unique index on
+ * the field — see store/mongo.js — which is what actually holds under a race.
+ */
+const CODE_ATTEMPTS = 5
+
+export async function freshClassCode(store) {
+  for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt += 1) {
+    const candidate = shortCode()
+    if (!(await store.activities.findByCode(candidate))) return candidate
+  }
+
+  // Five collisions in a row is not bad luck, it is a broken generator. Better
+  // to say so than to hand two activities the same code.
+  throw new Error('Could not allocate an unused class code')
+}
+
+/**
+ * Backfills a code onto an activity authored before codes existed.
+ *
+ * A write on a read, which is normally worth avoiding — but the alternative is a
+ * "Generate code" button on every older activity, which is a migration wearing a
+ * user interface. It runs once per activity and then never again.
+ */
+export async function ensureClassCode(store, activity) {
+  if (activity.code) return activity
+
+  const code = await freshClassCode(store)
+  return (await store.activities.update(activity.id, { code })) ?? { ...activity, code }
 }
 
 /* ----------------------------------------------------------------- documents */
 
-/**
- * No join code.
- *
- * There used to be one, and students typed it to get in. Entry is now either
- * anonymous or a signed-in account, and in both cases the student picks from a
- * list — so a code would be a second identifier for a thing that already has
- * one, kept in step for nobody's benefit. Publishing is the whole access
- * decision; see studentActivities in services/delivery.js.
- */
-export function newActivity({ title, blurb = '', ownerId, status = 'draft' }) {
+export function newActivity({ title, blurb = '', topic = null, code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
+    code,
     title,
     blurb,
+    topic,
     ownerId,
     status,
     createdAt: at,
@@ -303,7 +359,9 @@ export function newActivity({ title, blurb = '', ownerId, status = 'draft' }) {
 }
 
 export async function createActivity(store, fields) {
-  return store.activities.create(newActivity(fields))
+  return store.activities.create(
+    newActivity({ ...fields, code: fields.code ?? (await freshClassCode(store)) }),
+  )
 }
 
 /** Appended to the end. See store/mongo.js on why `position` is a float. */

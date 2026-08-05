@@ -9,11 +9,16 @@ import {
   fitCanvas,
   pointFrom,
 } from '../lib/board'
+import { useT } from '../lib/i18n'
 import './Whiteboard.css'
 
 const UNDO_LIMIT = 40
 
+/** `graphite` → `wb.inkGraphite`; the swatch names live in strings.js. */
+const inkKey = (id) => `wb.ink${id.charAt(0).toUpperCase()}${id.slice(1)}`
+
 export default function Whiteboard({ question, initialStrokes, onSave, onClose }) {
+  const t = useT()
   const dialog = useRef(null)
   const gridCanvas = useRef(null)
   const inkCanvas = useRef(null)
@@ -129,25 +134,30 @@ export default function Whiteboard({ question, initialStrokes, onSave, onClose }
   }
 
   return (
-    <dialog className="wb" ref={dialog} aria-label={`Whiteboard for ${question.code}`} onCancel={onClose}>
+    <dialog
+      className="wb"
+      ref={dialog}
+      aria-label={t('wb.forQuestion', { code: question.code })}
+      onCancel={onClose}
+    >
       <header className="wb-head">
         <div>
-          <p className="eyebrow">Whiteboard</p>
+          <p className="eyebrow">{t('wb.title')}</p>
           <p className="wb-scope">
-            Working on <span className="mono">{question.code}</span>
+            {t('wb.workingOn')} <span className="mono">{question.code}</span>
           </p>
         </div>
 
         <div className="wb-tools">
-          <div className="wb-group" role="group" aria-label="Pen colour">
+          <div className="wb-group" role="group" aria-label={t('wb.penColour')}>
             {INKS.map((ink) => (
               <button
                 key={ink.id}
                 type="button"
                 className="wb-ink-swatch"
                 style={{ '--swatch': ink.value }}
-                aria-label={ink.label}
-                title={ink.label}
+                aria-label={t(inkKey(ink.id))}
+                title={t(inkKey(ink.id))}
                 aria-pressed={tool === 'pen' && color === ink.value}
                 onClick={() => {
                   setTool('pen')
@@ -164,19 +174,19 @@ export default function Whiteboard({ question, initialStrokes, onSave, onClose }
               aria-pressed={tool === 'eraser'}
               onClick={() => setTool('eraser')}
             >
-              Erase
+              {t('wb.erase')}
             </button>
             <button type="button" className="wb-tool" disabled={!past.length} onClick={undo}>
-              Undo
+              {t('wb.undo')}
             </button>
             <button type="button" className="wb-tool" disabled={!strokes.length} onClick={clear}>
-              Clear
+              {t('wb.clear')}
             </button>
           </div>
         </div>
       </header>
 
-      <p className="wb-rotate mono">Turn your phone sideways for more room to write.</p>
+      <p className="wb-rotate mono">{t('wb.rotate')}</p>
 
       <div className="wb-stage">
         <div className="wb-surface">
@@ -185,7 +195,7 @@ export default function Whiteboard({ question, initialStrokes, onSave, onClose }
             className="wb-ink"
             ref={inkCanvas}
             role="img"
-            aria-label="Drawing area. Keyboard drawing is not supported — attach a photo of your working instead."
+            aria-label={t('wb.canvasLabel')}
             onPointerDown={startStroke}
             onPointerMove={extendStroke}
             onPointerUp={endStroke}
@@ -197,16 +207,18 @@ export default function Whiteboard({ question, initialStrokes, onSave, onClose }
       <footer className="wb-foot">
         <p className="wb-hint mono">
           {strokes.length
-            ? `${strokes.length} ${strokes.length === 1 ? 'stroke' : 'strokes'} · saves as a PNG with your answer`
-            : 'Draw with a mouse, a finger or a stylus'}
+            ? t('wb.strokesSaved', {
+                strokes: t('common.strokes', { count: strokes.length }),
+              })
+            : t('wb.drawHint')}
         </p>
 
         <div className="wb-actions">
           <button type="button" className="wb-btn" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button type="button" className="wb-btn wb-btn-primary" onClick={save}>
-            Save to answer
+            {t('wb.save')}
           </button>
         </div>
       </footer>

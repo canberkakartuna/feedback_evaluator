@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { useT } from '../lib/i18n'
 import './TutorPanel.css'
 
-const ACTIONS = [
-  { id: 'hint', label: 'Give me a hint' },
-  { id: 'concept', label: 'Explain the concept' },
-  { id: 'example', label: 'Worked example' },
-  { id: 'review', label: 'Check my reasoning' },
-]
+/** Ids the server understands; the words come from `tp.*Action` in strings.js. */
+const ACTIONS = ['hint', 'concept', 'example', 'review']
 
 export default function TutorPanel({
   question,
@@ -19,6 +16,7 @@ export default function TutorPanel({
   onClose,
   onCollapse,
 }) {
+  const t = useT()
   const [draft, setDraft] = useState('')
   const thread = useRef(null)
   const closeButton = useRef(null)
@@ -44,17 +42,17 @@ export default function TutorPanel({
     <>
       <header className="tp-head">
         <div>
-          <p className="eyebrow">Tutor</p>
+          <p className="eyebrow">{t('tp.tutor')}</p>
           <p className="tp-scope">
-            Working on <span className="mono">{question.code}</span>
+            {t('tp.workingOn')} <span className="mono">{question.code}</span>
           </p>
         </div>
         <div className="tp-head-actions">
           <button
             type="button"
             className="tp-collapse"
-            aria-label="Hide tutor"
-            title="Hide tutor"
+            aria-label={t('tp.hide')}
+            title={t('tp.hide')}
             onClick={onCollapse}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -70,7 +68,7 @@ export default function TutorPanel({
           </button>
 
           <button type="button" className="tp-close" ref={closeButton} onClick={onClose}>
-            Close
+            {t('tp.close')}
           </button>
         </div>
       </header>
@@ -86,24 +84,24 @@ export default function TutorPanel({
               <p className="tp-rate">
                 {state.ratings[message.id] ? (
                   <span className="tp-rate-done mono">
-                    {state.ratings[message.id] === 'up' ? 'Marked helpful' : 'Marked not helpful'}
+                    {state.ratings[message.id] === 'up' ? t('tp.helpful') : t('tp.notHelpful')}
                   </span>
                 ) : (
                   <>
-                    <span className="tp-rate-ask mono">Did this help?</span>
+                    <span className="tp-rate-ask mono">{t('tp.didThisHelp')}</span>
                     <button
                       type="button"
                       className="tp-rate-btn"
                       onClick={() => onRate(message.id, 'up')}
                     >
-                      Yes
+                      {t('tp.yes')}
                     </button>
                     <button
                       type="button"
                       className="tp-rate-btn"
                       onClick={() => onRate(message.id, 'down')}
                     >
-                      No
+                      {t('tp.no')}
                     </button>
                   </>
                 )}
@@ -114,7 +112,7 @@ export default function TutorPanel({
 
         {pending ? (
           <article className="tp-msg" data-from="tutor">
-            <p className="tp-typing" aria-label="The tutor is writing">
+            <p className="tp-typing" aria-label={t('tp.writing')}>
               <i />
               <i />
               <i />
@@ -126,14 +124,14 @@ export default function TutorPanel({
       <div className="tp-actions">
         {ACTIONS.map((action) => (
           <button
-            key={action.id}
+            key={action}
             type="button"
             className="tp-chip"
             disabled={pending}
-            onClick={() => onQuickAction(action.id)}
+            onClick={() => onQuickAction(action)}
           >
-            {action.label}
-            {action.id === 'hint' ? (
+            {t(`tp.${action}Action`)}
+            {action === 'hint' ? (
               <span className="tp-chip-count mono">{hintsLeft > 0 ? hintsLeft : 0}</span>
             ) : null}
           </button>
@@ -142,21 +140,21 @@ export default function TutorPanel({
 
       <form className="tp-composer" onSubmit={submit}>
         <label className="sr-only" htmlFor="tutor-message">
-          Message the tutor
+          {t('tp.messageLabel')}
         </label>
         <textarea
           id="tutor-message"
           className="tp-input"
           rows={1}
           value={draft}
-          placeholder="Ask about this question…"
+          placeholder={t('tp.placeholder')}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) submit(event)
           }}
         />
         <button type="submit" className="tp-send" disabled={!draft.trim()}>
-          Send
+          {t('tp.send')}
         </button>
       </form>
     </>

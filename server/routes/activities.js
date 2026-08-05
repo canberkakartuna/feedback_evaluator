@@ -8,6 +8,7 @@ import {
   assertCanAuthor,
   createActivity,
   displayCode,
+  ensureClassCode,
   loadActivityInScope,
   nextPosition,
   newQuestion,
@@ -28,8 +29,8 @@ import { ApiError, badRequest, id, notFound, now, route } from '../lib/http.js'
  * shared/activity.js `publicQuestion` leaves behind. Both live in this file so
  * the difference is visible in one screen rather than inferred from two.
  *
- * Route order is load-bearing: `/available` is declared before `/:activityId`,
- * or Express would read "available" as an activity id.
+ * Route order is load-bearing: `/available` and `/code/:code` are declared
+ * before `/:activityId`, or Express would read "available" as an activity id.
  */
 export function activityRoutes(store) {
   const router = express.Router()
@@ -144,6 +145,39 @@ export function activityRoutes(store) {
     }),
   )
 
+  /**
+   * One activity by its class code — the other student door, and the one a
+   * teacher can put on a projector or hand out as a link.
+   *
+   * **Open on purpose**, exactly like `/available`: a code names an activity
+   * that publishing has already opened, so asking for a credential here would
+   * close a door that is deliberately open. What comes back is the same
+   * title/blurb/count summary the list gives, never the questions.
+   *
+   * A draft answers "not open yet" rather than "no such code", because a code
+   * only exists to be handed out: a class typing the one on the board deserves
+   * to hear that their teacher has not published it, not that they mistyped.
+   */
+  router.get(
+    '/code/:code',
+    route(async (req, res) => {
+      const activity = await store.activities.findByCode(req.params.code)
+      if (!activity) throw notFound('No activity has that class code')
+      if (activity.status !== 'published') throw badRequest('That activity is not open yet')
+
+      res.json({
+        activity: {
+          id: activity.id,
+          code: activity.code,
+          title: activity.title,
+          blurb: activity.blurb,
+          topic: activity.topic ?? null,
+          questionCount: await store.questions.count({ activityId: activity.id }),
+        },
+      })
+    }),
+  )
+
   /* ----------------------------------------------------------------- authoring */
 
   router.get(
@@ -156,9 +190,18 @@ export function activityRoutes(store) {
         scope.all ? {} : { ownerId: scope.ownerIds },
       )
 
+      /**
+       * Codes are backfilled here as well as in the single read, because the
+       * list is where a teacher looks one up to read it out. See ensureClassCode
+       * in services/activities.js on why this writes during a read.
+       */
+      const withCodes = await Promise.all(
+        activities.map((activity) => ensureClassCode(store, activity)),
+      )
+
       res.json({
         scope: scope.all ? 'all' : 'own',
-        activities: await Promise.all(activities.map(summarise)),
+        activities: await Promise.all(withCodes.map(summarise)),
       })
     }),
   )
@@ -181,7 +224,8 @@ export function activityRoutes(store) {
     '/:activityId',
     requireAuth,
     route(async (req, res) => {
-      const { activity } = await loadActivityInScope(store, req.user, req.params.activityId)
+      const loaded = await loadActivityInScope(store, req.user, req.params.activityId)
+      const activity = await ensureClassCode(store, loaded.activity)
       const questions = await store.questions.list({ activityId: activity.id })
 
       res.json({
@@ -210,8 +254,10 @@ export function activityRoutes(store) {
       res.json({
         activity: {
           id: activity.id,
+          code: activity.code ?? null,
           title: activity.title,
           blurb: activity.blurb,
+          topic: activity.topic ?? null,
           status: activity.status,
           questionCount: questions.length,
           questions: questions.map((question, index) =>

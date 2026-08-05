@@ -6,9 +6,16 @@
  * live in shared/course.js — nothing here is content, only the shape content
  * has to take.
  *
- *   activity  { id, title, blurb, ownerId, status, createdAt, updatedAt }
+ *   activity  { id, code, title, blurb, topic, ownerId, status,
+ *               createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, image, stimulus,
  *               workingExpected, rubric[], tutor{}, position, ... }
+ *
+ * **An activity carries a class code.** Six characters, generated once, shown to
+ * the teacher so a class can be pointed straight at one activity — typed into
+ * /join, or followed as a link. It is a shortcut, not a credential: a code only
+ * opens an activity that is already published, so publishing is still the whole
+ * access decision. See services/activities.js.
  *
  * **A question is a typed prompt, an uploaded image, or both.** Retyping a
  * question out of a textbook is the slowest part of setting work, so a teacher
@@ -55,11 +62,36 @@ export const QUESTION_KINDS = [
 
 export const isQuestionKind = (value) => QUESTION_KINDS.includes(value)
 
+/**
+ * What an activity is *about*, so a class of thirty is not handed a list of
+ * twenty activities to read through.
+ *
+ * A fixed list for the same reason QUESTION_KINDS is one: it is a filter, and a
+ * filter over free text fragments into "Ratio", "ratio" and "Ratios" across
+ * three teachers. Adding a topic is one line here — the client's labels are
+ * keyed by `id` in src/lib/strings.js, so a new id needs a translation there
+ * too or it will show its own id.
+ *
+ * `null` is a first-class value and means "no topic set". Every activity
+ * authored before this existed is in that state, and so is any a teacher simply
+ * has not classified, so both lists treat it as a bucket rather than a gap.
+ *
+ * Ids only — the words are in src/lib/strings.js under `topics.*`, for the same
+ * reason shared/marks.js holds no words: this file is imported by the API, which
+ * has no language to say them in.
+ */
+export const TOPICS = [{ id: 'ratio' }, { id: 'whole-numbers' }]
+
+export const TOPIC_IDS = TOPICS.map((topic) => topic.id)
+
+export const isTopic = (value) => TOPIC_IDS.includes(value)
+
 export const LIMITS = {
   title: 200,
   blurb: 500,
   prompt: 5000,
-  code: 24, // a question's own label, e.g. "BIO-101" — activities have none
+  code: 24, // a question's own label, e.g. "BIO-101". An activity's class code
+  //           is generated rather than typed — see services/activities.js
   criterionLabel: 300,
   criterionCoach: 1000,
   keyword: 100,

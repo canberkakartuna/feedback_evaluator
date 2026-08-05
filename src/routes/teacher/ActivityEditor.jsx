@@ -1,22 +1,26 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { TOPICS } from '../../../shared/activity'
 import { api } from '../../lib/api'
+import { useT } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import QuestionForm from './QuestionForm'
+import ShareActivity from './ShareActivity'
 
 /**
- * One activity: its settings and its questions.
+ * One activity: its settings, how students reach it, and its questions.
  *
- * Publishing is the hinge, and with no join code it is the *whole* access
- * decision — a draft is invisible to students and cannot be started, so a
- * teacher can build at their own pace. The server refuses to publish an
- * activity with no questions. Unpublishing closes it again without touching
- * anything already recorded, which is why it is offered as the answer whenever
- * a delete is refused.
+ * Publishing is the hinge and the whole access decision — a draft is invisible
+ * to students and cannot be started, by id or by class code, so a teacher can
+ * build at their own pace. The server refuses to publish an activity with no
+ * questions. Unpublishing closes it again without touching anything already
+ * recorded, which is why it is offered as the answer whenever a delete is
+ * refused.
  */
 export default function ActivityEditor() {
   const { activityId } = useParams()
   const navigate = useNavigate()
+  const t = useT()
 
   const { data, error, loading, reload } = useAsync(
     () => api.activity(activityId),
@@ -28,11 +32,11 @@ export default function ActivityEditor() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null)
 
-  if (loading) return <p className="cs-note">Loading…</p>
+  if (loading) return <p className="cs-note">{t('common.loading')}</p>
   if (error) {
     return (
       <p className="cs-note" data-tone="bad">
-        {error.message} — <Link to="/teacher">back to activities</Link>
+        {error.message} — <Link to="/teacher">{t('editor.breadcrumb')}</Link>
       </p>
     )
   }
@@ -79,7 +83,8 @@ export default function ActivityEditor() {
       <header className="cs-head">
         <div>
           <p className="eyebrow">
-            <Link to="/teacher">Activities</Link> · {published ? 'Open' : 'Draft'}
+            <Link to="/teacher">{t('editor.breadcrumb')}</Link> ·{' '}
+            {published ? t('activities.open') : t('activities.draft')}
           </p>
           <h1 className="cs-title">{activity.title}</h1>
           {activity.blurb ? <p className="cs-lede">{activity.blurb}</p> : null}
@@ -87,7 +92,7 @@ export default function ActivityEditor() {
 
         <div className="cs-actions">
           <Link className="cs-btn" to={`/teacher/students?activity=${activity.id}`}>
-            See their work
+            {t('editor.seeWork')}
           </Link>
           <button
             type="button"
@@ -101,7 +106,7 @@ export default function ActivityEditor() {
               ).catch(() => {})
             }
           >
-            {published ? 'Close to students' : 'Publish'}
+            {published ? t('editor.closeToStudents') : t('editor.publish')}
           </button>
         </div>
       </header>
@@ -115,29 +120,54 @@ export default function ActivityEditor() {
       <section className="cs-card">
         {published ? (
           <>
-            <p className="eyebrow">Open to students</p>
+            <p className="eyebrow">{t('editor.openHead')}</p>
             <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
-              It appears in the list students see when they open the site and agree to the consent
-              notice. No code and no account needed — <strong>publishing is what opens it</strong>,
-              so close it again when the lesson is over.
+              {t('editor.openHint')}
             </p>
           </>
         ) : (
           <>
-            <p className="eyebrow">Not open yet</p>
+            <p className="eyebrow">{t('editor.draftHead')}</p>
             <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
-              {questions.length === 0
-                ? 'Students cannot see this. Add at least one question, then publish it.'
-                : 'Students cannot see this yet. Publish it and it appears in their list.'}
+              {questions.length === 0 ? t('editor.draftHintEmpty') : t('editor.draftHint')}
             </p>
           </>
         )}
+
+        {/* The topic, saved on change rather than behind a Save button: it is one
+            field, and the list a class reads is filtered by it. */}
+        <div className="cs-field" style={{ marginTop: 'var(--s-4)', maxWidth: '320px' }}>
+          <label className="cs-label" htmlFor="activity-topic">
+            {t('editor.topicLabel')}
+          </label>
+          <select
+            id="activity-topic"
+            className="cs-select"
+            disabled={busy}
+            value={activity.topic ?? ''}
+            onChange={(event) =>
+              act(() =>
+                api.updateActivity(activity.id, { topic: event.target.value || null }),
+              ).catch(() => {})
+            }
+          >
+            <option value="">{t('topics.unset')}</option>
+            {TOPICS.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {t(`topics.${entry.id}`)}
+              </option>
+            ))}
+          </select>
+          <p className="cs-hint">{busy ? t('editor.topicSaving') : t('editor.topicHint')}</p>
+        </div>
       </section>
+
+      <ShareActivity activity={activity} published={published} />
 
       <section className="cs-section">
         <div className="cs-head">
           <h2 className="cs-section-head" style={{ margin: 0 }}>
-            Questions <span className="mono cs-hint">({questions.length})</span>
+            {t('editor.questions')} <span className="mono cs-hint">({questions.length})</span>
           </h2>
           {!adding ? (
             <button
@@ -148,14 +178,14 @@ export default function ActivityEditor() {
                 setEditingId(null)
               }}
             >
-              + Add question
+              {t('editor.addQuestion')}
             </button>
           ) : null}
         </div>
 
         {adding ? (
           <div className="cs-card" style={{ marginBottom: 'var(--s-4)' }}>
-            <h3 className="cs-section-head">New question</h3>
+            <h3 className="cs-section-head">{t('editor.newQuestion')}</h3>
             <QuestionForm
               busy={busy}
               onCancel={() => setAdding(false)}
@@ -168,9 +198,7 @@ export default function ActivityEditor() {
         ) : null}
 
         {questions.length === 0 && !adding ? (
-          <p className="cs-empty">
-            No questions yet. Write one, or upload a photo of one — either is enough.
-          </p>
+          <p className="cs-empty">{t('editor.noQuestions')}</p>
         ) : (
           <ul className="cs-qlist">
             {questions.map((question, index) => (
@@ -178,12 +206,12 @@ export default function ActivityEditor() {
                 <div className="cs-q-head">
                   <span className="cs-q-code">{question.code}</span>
                   <p className="cs-q-prompt">
-                    {question.prompt || <em>Uploaded question — no text</em>}
+                    {question.prompt || <em>{t('editor.uploadedNoText')}</em>}
                   </p>
 
                   {question.image ? (
                     <span className="cs-pill" data-tone="draft">
-                      picture
+                      {t('editor.picture')}
                     </span>
                   ) : null}
 
@@ -191,7 +219,7 @@ export default function ActivityEditor() {
                       scheme, so "unmarked" on every row would be noise. */}
                   {question.rubric?.length ? (
                     <span className="cs-pill" data-tone="live">
-                      {question.rubric.length} criteria
+                      {t('common.criteria', { count: question.rubric.length })}
                     </span>
                   ) : null}
 
@@ -199,7 +227,7 @@ export default function ActivityEditor() {
                     type="button"
                     className="cs-btn cs-btn-sm"
                     disabled={busy || index === 0}
-                    aria-label={`Move ${question.code} up`}
+                    aria-label={t('editor.moveUp', { code: question.code })}
                     onClick={() => move(index, -1)?.catch(() => {})}
                   >
                     ↑
@@ -208,7 +236,7 @@ export default function ActivityEditor() {
                     type="button"
                     className="cs-btn cs-btn-sm"
                     disabled={busy || index === questions.length - 1}
-                    aria-label={`Move ${question.code} down`}
+                    aria-label={t('editor.moveDown', { code: question.code })}
                     onClick={() => move(index, 1)?.catch(() => {})}
                   >
                     ↓
@@ -221,7 +249,7 @@ export default function ActivityEditor() {
                       setAdding(false)
                     }}
                   >
-                    {editingId === question.id ? 'Close' : 'Edit'}
+                    {editingId === question.id ? t('editor.closeEdit') : t('editor.edit')}
                   </button>
                   <button
                     type="button"
@@ -231,7 +259,7 @@ export default function ActivityEditor() {
                       act(() => api.deleteQuestion(activity.id, question.id)).catch(() => {})
                     }
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                 </div>
 
@@ -255,14 +283,13 @@ export default function ActivityEditor() {
       </section>
 
       <section className="cs-section">
-        <h2 className="cs-section-head">Danger zone</h2>
+        <h2 className="cs-section-head">{t('editor.danger')}</h2>
         <div className="cs-card">
           <p className="cs-hint" style={{ marginBottom: 'var(--s-3)' }}>
-            Deleting is refused once any student has worked on this. Close it to students instead —
-            that stops new sessions and keeps every transcript readable.
+            {t('editor.dangerHint')}
           </p>
           <button type="button" className="cs-btn cs-btn-danger" onClick={remove}>
-            Delete this activity
+            {t('editor.deleteActivity')}
           </button>
         </div>
       </section>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LIMITS } from '../../../shared/activity'
 import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/attachments'
+import { useT } from '../../lib/i18n'
 
 /**
  * Writing or editing one question.
@@ -22,6 +23,7 @@ import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/at
  * already supports and the smoke test already covers.
  */
 export default function QuestionForm({ question, onSave, onCancel, busy }) {
+  const t = useT()
   const [prompt, setPrompt] = useState(question?.prompt ?? '')
 
   // `undefined` means "leave whatever is stored alone", which is what the API
@@ -82,25 +84,23 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
     <form className="cs-form" onSubmit={submit}>
       <div className="cs-field">
         <label className="cs-label" htmlFor="q-prompt">
-          Question
+          {t('qform.question')}
         </label>
         <textarea
           id="q-prompt"
           className="cs-textarea"
           rows={4}
           maxLength={LIMITS.prompt}
-          placeholder="A red blood cell is placed in distilled water. Explain why it bursts."
+          placeholder={t('qform.placeholder')}
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
         />
-        <p className="cs-hint">
-          Leave this empty if you are uploading the question as a picture instead.
-        </p>
+        <p className="cs-hint">{t('qform.promptHint')}</p>
       </div>
 
       <div className="cs-field">
         <label className="cs-label" htmlFor="q-image">
-          Or upload the question
+          {t('qform.orUpload')}
         </label>
 
         {shownImage ? (
@@ -125,7 +125,7 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
                 setImageError(null)
               }}
             >
-              Remove
+              {t('common.remove')}
             </button>
           </div>
         ) : (
@@ -138,7 +138,7 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           />
         )}
 
-        <p className="cs-hint">A photo or scan of the question. JPG, PNG or PDF, up to 10 MB.</p>
+        <p className="cs-hint">{t('qform.imageHint')}</p>
         {imageError ? (
           <p className="cs-note" data-tone="bad" role="alert">
             {imageError}
@@ -151,16 +151,14 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           {error}
         </p>
       ) : null}
-      {!asksSomething ? (
-        <p className="cs-hint">Write the question above, or upload a picture of it.</p>
-      ) : null}
+      {!asksSomething ? <p className="cs-hint">{t('qform.needSomething')}</p> : null}
 
       <div className="cs-actions">
         <button type="submit" className="cs-btn cs-btn-primary" disabled={busy || !asksSomething}>
-          {busy ? 'Saving…' : question ? 'Save changes' : 'Add question'}
+          {busy ? t('common.saving') : question ? t('qform.saveChanges') : t('qform.add')}
         </button>
         <button type="button" className="cs-btn" onClick={onCancel}>
-          Cancel
+          {t('common.cancel')}
         </button>
       </div>
     </form>

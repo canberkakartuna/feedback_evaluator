@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { roleStringKey, useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import { MANAGEABLE, PARENT } from '../../../shared/roles'
 import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
@@ -20,15 +21,12 @@ import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
  * get an account at all and start an activity anonymously instead.
  */
 
-const ROLE_BLURB = {
-  admin: 'Everything, everywhere, including the dataset export.',
-  manager: 'Their teachers, and those teachers’ students and activities.',
-  teacher: 'Their own students, their own activities, their own transcripts.',
-  student: 'Only themselves. Most students need no account — they work anonymously.',
-}
+/** `'admin'` → `people.blurbAdmin`, the line under the role picker. */
+const blurbKey = (role) => `people.blurb${role.charAt(0).toUpperCase()}${role.slice(1)}`
 
 export default function People() {
   const { user: actor } = useAuth()
+  const { lang, t } = useI18n()
   const { data, error, loading, reload } = useAsync(() => api.users(), [])
 
   const [form, setForm] = useState({
@@ -75,7 +73,7 @@ export default function People() {
 
       const { user: made } = await api.createUser(body)
       setForm({ role: form.role, name: '', email: '', password: '', parentId: '' })
-      setNotice({ tone: 'good', text: `Created ${made.name}. Give them the password you just set.` })
+      setNotice({ tone: 'good', text: t('people.created', { name: made.name }) })
       await reload()
     } catch (failure) {
       setNotice({ tone: 'bad', text: failure.message })
@@ -101,11 +99,11 @@ export default function People() {
   }
 
   const resetFor = async (target) => {
-    const next = window.prompt(`New password for ${target.name}`)
+    const next = window.prompt(t('people.resetPrompt', { name: target.name }))
     if (!next) return
     await act(
       () => api.resetPassword(target.id, next),
-      `Password reset for ${target.name}. They have been signed out everywhere.`,
+      t('people.resetDone', { name: target.name }),
     )
   }
 
@@ -113,12 +111,9 @@ export default function People() {
     <>
       <header className="cs-head">
         <div>
-          <p className="eyebrow">Accounts</p>
-          <h1 className="cs-title">People</h1>
-          <p className="cs-lede">
-            There is no public sign-up. Accounts are created here, downwards through the hierarchy —
-            an administrator adds managers and teachers, and a teacher adds their own students.
-          </p>
+          <p className="eyebrow">{t('people.eyebrow')}</p>
+          <h1 className="cs-title">{t('people.title')}</h1>
+          <p className="cs-lede">{t('people.lede')}</p>
         </div>
       </header>
 
@@ -129,13 +124,13 @@ export default function People() {
       ) : null}
 
       <section className="cs-card" style={{ marginTop: 'var(--s-4)' }}>
-        <h2 className="cs-section-head">Add someone</h2>
+        <h2 className="cs-section-head">{t('people.add')}</h2>
 
         <form className="cs-form" onSubmit={create}>
           <div className="cs-row">
             <div className="cs-field">
               <label className="cs-label" htmlFor="role">
-                Role
+                {t('people.role')}
               </label>
               <select
                 id="role"
@@ -145,17 +140,17 @@ export default function People() {
               >
                 {creatable.map((role) => (
                   <option key={role} value={role}>
-                    {role}
+                    {t(roleStringKey(role))}
                   </option>
                 ))}
               </select>
-              <p className="cs-hint">{ROLE_BLURB[form.role]}</p>
+              <p className="cs-hint">{t(blurbKey(form.role))}</p>
             </div>
 
             {parentSpec ? (
               <div className="cs-field">
                 <label className="cs-label" htmlFor="parent">
-                  {parentSpec.role}
+                  {t(roleStringKey(parentSpec.role))}
                 </label>
                 <select
                   id="parent"
@@ -164,7 +159,9 @@ export default function People() {
                   onChange={(event) => set({ parentId: event.target.value })}
                 >
                   <option value="">
-                    {actor.role === 'admin' ? 'Unassigned' : `— pick a ${parentSpec.role} —`}
+                    {actor.role === 'admin'
+                      ? t('people.unassigned')
+                      : t('people.pickParent', { role: t(roleStringKey(parentSpec.role)) })}
                   </option>
                   {parentOptions.map((option) => (
                     <option key={option.id} value={option.id}>
@@ -174,8 +171,11 @@ export default function People() {
                 </select>
                 <p className="cs-hint">
                   {actor.role === 'admin'
-                    ? 'May be left unassigned and set later.'
-                    : `Which ${parentSpec.role} this ${form.role} belongs to.`}
+                    ? t('people.parentHintAdmin')
+                    : t('people.parentHint', {
+                        parent: t(roleStringKey(parentSpec.role)),
+                        role: t(roleStringKey(form.role)),
+                      })}
                 </p>
               </div>
             ) : null}
@@ -184,7 +184,7 @@ export default function People() {
           <div className="cs-row">
             <div className="cs-field">
               <label className="cs-label" htmlFor="name">
-                Name
+                {t('people.name')}
               </label>
               <input
                 id="name"
@@ -197,7 +197,7 @@ export default function People() {
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="new-email">
-                Email
+                {t('people.email')}
               </label>
               <input
                 id="new-email"
@@ -211,7 +211,7 @@ export default function People() {
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="new-password">
-                Password
+                {t('people.password')}
               </label>
               <input
                 id="new-password"
@@ -223,14 +223,16 @@ export default function People() {
                 onChange={(event) => set({ password: event.target.value })}
               />
               <p className="cs-hint">
-                At least {MIN_PASSWORD_LENGTH} characters. Shown so you can pass it on.
+                {t('people.passwordHint', { min: MIN_PASSWORD_LENGTH })}
               </p>
             </div>
           </div>
 
           <div>
             <button type="submit" className="cs-btn cs-btn-primary" disabled={busy}>
-              {busy ? 'Creating…' : `Create ${form.role}`}
+              {busy
+                ? t('people.creating')
+                : t('people.create', { role: t(roleStringKey(form.role)) })}
             </button>
           </div>
         </form>
@@ -238,7 +240,7 @@ export default function People() {
 
       <section className="cs-section">
         <h2 className="cs-section-head">
-          Everyone <span className="mono cs-hint">({users.length})</span>
+          {t('people.everyone')} <span className="mono cs-hint">({users.length})</span>
         </h2>
 
         {error ? (
@@ -246,17 +248,17 @@ export default function People() {
             {error.message}
           </p>
         ) : loading ? (
-          <p className="cs-note">Loading…</p>
+          <p className="cs-note">{t('common.loading')}</p>
         ) : (
           <div className="cs-scroll-x">
             <table className="cs-table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Role</th>
-                  <th>Email</th>
-                  <th>Reports to</th>
-                  <th>Last seen</th>
+                  <th>{t('people.thName')}</th>
+                  <th>{t('people.thRole')}</th>
+                  <th>{t('people.thEmail')}</th>
+                  <th>{t('people.thReportsTo')}</th>
+                  <th>{t('people.thLastSeen')}</th>
                   <th />
                 </tr>
               </thead>
@@ -265,27 +267,29 @@ export default function People() {
                   <tr key={entry.id}>
                     <td>
                       {entry.name}
-                      {entry.id === actor.id ? <span className="cs-hint"> · you</span> : null}
+                      {entry.id === actor.id ? (
+                        <span className="cs-hint"> · {t('people.you')}</span>
+                      ) : null}
                       {!entry.active ? (
                         <>
                           {' '}
                           <span className="cs-pill" data-tone="quiet">
-                            inactive
+                            {t('people.inactive')}
                           </span>
                         </>
                       ) : null}
                     </td>
                     <td>
                       <span className="cs-pill" data-tone={entry.role === 'admin' ? 'live' : 'quiet'}>
-                        {entry.role}
+                        {t(roleStringKey(entry.role))}
                       </span>
                     </td>
                     <td className="mono">{entry.email}</td>
                     <td>{nameOf(entry.managerId ?? entry.teacherId)}</td>
                     <td className="mono">
                       {entry.lastLoginAt
-                        ? new Date(entry.lastLoginAt).toLocaleDateString()
-                        : 'never'}
+                        ? new Date(entry.lastLoginAt).toLocaleDateString(lang)
+                        : t('people.never')}
                     </td>
                     <td>
                       <div className="cs-actions">
@@ -294,7 +298,7 @@ export default function People() {
                           className="cs-btn cs-btn-sm"
                           onClick={() => resetFor(entry)}
                         >
-                          Reset password
+                          {t('people.reset')}
                         </button>
                         <button
                           type="button"
@@ -303,21 +307,23 @@ export default function People() {
                           onClick={() =>
                             act(
                               () => api.updateUser(entry.id, { active: !entry.active }),
-                              `${entry.name} is now ${entry.active ? 'inactive' : 'active'}.`,
+                              entry.active
+                                ? t('people.nowInactive', { name: entry.name })
+                                : t('people.nowActive', { name: entry.name }),
                             )
                           }
                         >
-                          {entry.active ? 'Deactivate' : 'Reactivate'}
+                          {entry.active ? t('people.deactivate') : t('people.reactivate')}
                         </button>
                         <button
                           type="button"
                           className="cs-btn cs-btn-sm cs-btn-danger"
                           disabled={entry.id === actor.id}
                           onClick={() =>
-                            act(() => api.deleteUser(entry.id), `${entry.name} deleted.`)
+                            act(() => api.deleteUser(entry.id), t('people.deleted', { name: entry.name }))
                           }
                         >
-                          Delete
+                          {t('people.delete')}
                         </button>
                       </div>
                     </td>

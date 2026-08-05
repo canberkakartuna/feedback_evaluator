@@ -1,7 +1,11 @@
 /* The cover of the exercise book: one sheet, the margin rule down its side. */
 
+/* A column, because every entry screen now carries the bar of direct buttons
+   above its sheet — see components/TopBar.jsx. With one child it centres
+   exactly as it did when the card was the only thing here. */
 .en-page {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100%;

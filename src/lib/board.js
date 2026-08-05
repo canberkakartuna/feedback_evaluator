@@ -21,10 +21,11 @@ const PAPER = '#fffdf7'
 const GRID = '#dde4db'
 const MARGIN_RULE = 'rgb(185 69 47 / 0.42)'
 
+/** Names live in strings.js as `wb.ink<Id>`; see shared/marks.js on why. */
 export const INKS = [
-  { id: 'graphite', label: 'Graphite', value: '#1b2430' },
-  { id: 'teal', label: 'Teal pen', value: '#0e7566' },
-  { id: 'red', label: 'Red pen', value: '#b9452f' },
+  { id: 'graphite', value: '#1b2430' },
+  { id: 'teal', value: '#0e7566' },
+  { id: 'red', value: '#b9452f' },
 ]
 
 /** Squared paper with the same margin rule as the question page. */

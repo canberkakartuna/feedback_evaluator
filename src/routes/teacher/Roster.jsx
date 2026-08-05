@@ -1,10 +1,19 @@
 import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 
-const when = (iso) =>
-  new Date(iso).toLocaleString(undefined, {
+/**
+ * Dates follow the interface language rather than the machine's.
+ *
+ * `undefined` as a locale means "whatever this browser is set to", which on a
+ * shared school machine set to English would print English months next to
+ * Turkish column headings. Somebody who has chosen TR has said which language
+ * they are reading in; a date is part of that.
+ */
+const when = (iso, lang) =>
+  new Date(iso).toLocaleString(lang, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
@@ -22,12 +31,17 @@ const when = (iso) =>
  * own short code stands in when there is not, which is the only handle an
  * anonymous session has.
  *
+ * A teacher's **own walkthrough** shows here too and is labelled as one. It is
+ * not a student's work and must not be read as one — see routes/sessions.js on
+ * why staff sessions carry no consent record.
+ *
  * `questionsWithChat` is the column the doc actually asks for: not which
  * questions were opened, but which ones produced a conversation. That is what
  * separates a session worth reading from one where somebody clicked through.
  */
 export default function Roster() {
   const [params, setParams] = useSearchParams()
+  const { lang, t } = useI18n()
   const activityFilter = params.get('activity') ?? ''
 
   const sessions = useAsync(() => api.researchSessions(), [])
@@ -36,8 +50,8 @@ export default function Roster() {
 
   const nameOf = useMemo(() => {
     const map = new Map((students.data?.users ?? []).map((user) => [user.id, user.name]))
-    return (userId) => (userId ? (map.get(userId) ?? 'Signed-in student') : null)
-  }, [students.data])
+    return (userId) => (userId ? (map.get(userId) ?? t('roster.signedInStudent')) : null)
+  }, [students.data, t])
 
   const titleOf = useMemo(() => {
     const map = new Map((activities.data?.activities ?? []).map((entry) => [entry.id, entry.title]))
@@ -52,17 +66,14 @@ export default function Roster() {
     <>
       <header className="cs-head">
         <div>
-          <p className="eyebrow">Reading</p>
-          <h1 className="cs-title">Student work</h1>
-          <p className="cs-lede">
-            One row per session. Open one to read it question by question, then send the useful
-            exchanges through to labelling.
-          </p>
+          <p className="eyebrow">{t('roster.eyebrow')}</p>
+          <h1 className="cs-title">{t('roster.title')}</h1>
+          <p className="cs-lede">{t('roster.lede')}</p>
         </div>
 
         <div className="cs-field">
           <label className="cs-label" htmlFor="filter">
-            Activity
+            {t('roster.activity')}
           </label>
           <select
             id="filter"
@@ -73,7 +84,7 @@ export default function Roster() {
               setParams(next ? { activity: next } : {}, { replace: true })
             }}
           >
-            <option value="">All</option>
+            <option value="">{t('common.all')}</option>
             {(activities.data?.activities ?? []).map((activity) => (
               <option key={activity.id} value={activity.id}>
                 {activity.title}
@@ -88,22 +99,20 @@ export default function Roster() {
           {sessions.error.message}
         </p>
       ) : sessions.loading ? (
-        <p className="cs-note">Loading…</p>
+        <p className="cs-note">{t('common.loading')}</p>
       ) : rows.length === 0 ? (
-        <p className="cs-empty">
-          Nothing yet. Publish an activity and sessions appear here as students work through it.
-        </p>
+        <p className="cs-empty">{t('roster.empty')}</p>
       ) : (
         <div className="cs-scroll-x">
           <table className="cs-table">
             <thead>
               <tr>
-                <th>Student</th>
-                <th>Activity</th>
-                <th>Started</th>
-                <th>Questions with chat</th>
-                <th>Messages</th>
-                <th>Snippets</th>
+                <th>{t('roster.thStudent')}</th>
+                <th>{t('roster.thActivity')}</th>
+                <th>{t('roster.thStarted')}</th>
+                <th>{t('roster.thQuestionsWithChat')}</th>
+                <th>{t('roster.thMessages')}</th>
+                <th>{t('roster.thSnippets')}</th>
                 <th />
               </tr>
             </thead>
@@ -111,23 +120,32 @@ export default function Roster() {
               {rows.map((session) => (
                 <tr key={session.id}>
                   <td>
-                    {nameOf(session.userId) ?? (
+                    {session.staffPreview ? (
                       <>
-                        <span className="cs-pill" data-tone="quiet">
-                          anonymous
+                        <span className="cs-pill" data-tone="draft">
+                          {t('roster.preview')}
                         </span>{' '}
                         <span className="mono">{session.code}</span>
                       </>
+                    ) : (
+                      (nameOf(session.userId) ?? (
+                        <>
+                          <span className="cs-pill" data-tone="quiet">
+                            {t('roster.anonymous')}
+                          </span>{' '}
+                          <span className="mono">{session.code}</span>
+                        </>
+                      ))
                     )}
                   </td>
                   <td>{titleOf(session.activityId)}</td>
-                  <td className="mono">{when(session.createdAt)}</td>
+                  <td className="mono">{when(session.createdAt, lang)}</td>
                   <td className="mono">{session.counts.questionsWithChat}</td>
                   <td className="mono">{session.counts.messages}</td>
                   <td className="mono">{session.counts.snippets}</td>
                   <td>
                     <Link className="cs-btn cs-btn-sm" to={`/teacher/students/${session.id}`}>
-                      Read
+                      {t('roster.read')}
                     </Link>
                   </td>
                 </tr>

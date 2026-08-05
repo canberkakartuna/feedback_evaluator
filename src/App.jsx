@@ -1,7 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider, homeFor, useAuth } from './lib/auth'
+import { useT } from './lib/i18n'
 import SignIn from './routes/SignIn'
 import StudentEntry from './routes/student/StudentEntry'
+import Join from './routes/student/Join'
 import Session from './routes/student/Session'
 import TeacherLayout from './routes/teacher/TeacherLayout'
 import Activities from './routes/teacher/Activities'
@@ -16,7 +18,8 @@ import People from './routes/admin/People'
 /**
  * Three audiences on one deployment, told apart by role.
  *
- *   /            students — consent, then join a code or pick from a list
+ *   /            students — consent, then pick from a list
+ *   /join        the same, reached by a class code (/join/:code resolves one)
  *   /work/:id    the workspace itself
  *   /teacher     authoring, rosters, transcripts, labelling
  *   /admin       accounts
@@ -43,9 +46,11 @@ function Guard({ roles, children }) {
 }
 
 function Splash() {
+  const t = useT()
+
   return (
     <main className="splash">
-      <p className="eyebrow">Loading</p>
+      <p className="eyebrow">{t('app.loading')}</p>
     </main>
   )
 }
@@ -56,6 +61,10 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<StudentEntry />} />
+          {/* Both spellings, because a code is read out as often as it is
+              clicked: /join asks for one, /join/ABC234 resolves it. */}
+          <Route path="/join" element={<Join />} />
+          <Route path="/join/:code" element={<Join />} />
           <Route path="/work/:sessionId" element={<Session />} />
           <Route path="/signin" element={<SignIn />} />
 

@@ -71,7 +71,17 @@ const INDEXES = {
   // which routes/users.js reports as a 409.
   users: [[{ email: 1 }, { unique: true }], { role: 1, name: 1 }, { teacherId: 1 }, { managerId: 1 }],
   authTokens: [{ userId: 1 }],
-  activities: [{ ownerId: 1, createdAt: -1 }, { status: 1 }],
+  // `activities.code` is the class code students type at /join. Unique because
+  // two activities sharing one would send half a class to the wrong work, and
+  // sparse because every activity authored before codes existed has no field to
+  // index — without `sparse` they would all collide on `null` and the index
+  // would refuse to build. services/activities.js checks for a collision before
+  // inserting; this is what holds when two teachers create at the same instant.
+  activities: [
+    { ownerId: 1, createdAt: -1 },
+    { status: 1 },
+    [{ code: 1 }, { unique: true, sparse: true }],
+  ],
   questions: [{ activityId: 1, position: 1 }],
   sessions: [{ createdAt: -1 }, { userId: 1, createdAt: -1 }, { activityId: 1, createdAt: -1 }],
   answers: [{ sessionId: 1 }],
@@ -263,6 +273,14 @@ export function createMongoStore({ uri, dbName } = {}) {
       },
       async findById(id) {
         return (await col('activities')).findOne({ _id: id }, BARE)
+      },
+      /** See memory.js: upper-cased, and a blank code matches nothing. */
+      async findByCode(code) {
+        if (!code) return null
+        return (await col('activities')).findOne(
+          { code: String(code).trim().toUpperCase() },
+          BARE,
+        )
       },
       async update(id, patch) {
         return (await col('activities')).findOneAndUpdate(

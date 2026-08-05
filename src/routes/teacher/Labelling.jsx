@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { useT } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 
-const VALUES = [
-  { id: 'yes', label: 'Yes' },
-  { id: 'partly', label: 'Partly' },
-  { id: 'no', label: 'No' },
-]
+/** Three answers, translated by id — see `labelling.*` in src/lib/strings.js. */
+const VALUES = ['yes', 'partly', 'no']
 
 /**
  * The labelling loop the study is actually for.
@@ -26,6 +24,7 @@ const VALUES = [
  * tab was closed is the failure mode that matters.
  */
 export default function Labelling() {
+  const t = useT()
   const [params, setParams] = useSearchParams()
   const sessionId = params.get('session') ?? ''
   const filter = params.get('show') ?? 'undecided'
@@ -78,17 +77,14 @@ export default function Labelling() {
     <>
       <header className="cs-head">
         <div>
-          <p className="eyebrow">Building the dataset</p>
-          <h1 className="cs-title">Labelling</h1>
-          <p className="cs-lede">
-            Each card is one thing a student said and the reply that answered it. Keep the ones
-            worth studying, then say which criteria the feedback meets and why.
-          </p>
+          <p className="eyebrow">{t('labelling.eyebrow')}</p>
+          <h1 className="cs-title">{t('labelling.title')}</h1>
+          <p className="cs-lede">{t('labelling.lede')}</p>
         </div>
 
         <div className="cs-field">
           <label className="cs-label" htmlFor="show">
-            Show
+            {t('labelling.show')}
           </label>
           <select
             id="show"
@@ -100,17 +96,17 @@ export default function Labelling() {
               setParams(next, { replace: true })
             }}
           >
-            <option value="undecided">Not yet decided</option>
-            <option value="true">Kept</option>
-            <option value="false">Dropped</option>
-            <option value="all">Everything</option>
+            <option value="undecided">{t('labelling.filterUndecided')}</option>
+            <option value="true">{t('labelling.filterKept')}</option>
+            <option value="false">{t('labelling.filterDropped')}</option>
+            <option value="all">{t('labelling.filterAll')}</option>
           </select>
         </div>
       </header>
 
       {sessionId ? (
         <p className="cs-note">
-          Filtered to one session.{' '}
+          {t('labelling.oneSession')}{' '}
           <button
             type="button"
             className="cs-btn cs-btn-sm"
@@ -120,7 +116,7 @@ export default function Labelling() {
               setParams(next, { replace: true })
             }}
           >
-            Show every session
+            {t('labelling.showAll')}
           </button>
         </p>
       ) : null}
@@ -136,12 +132,12 @@ export default function Labelling() {
           {error.message}
         </p>
       ) : loading ? (
-        <p className="cs-note">Loading…</p>
+        <p className="cs-note">{t('common.loading')}</p>
       ) : snippets.length === 0 ? (
         <p className="cs-empty">
           {filter === 'undecided'
-            ? 'Nothing left to decide. Switch the filter to review what you kept.'
-            : 'No snippets match that filter.'}
+            ? t('labelling.emptyUndecided')
+            : t('labelling.emptyOther')}
         </p>
       ) : (
         <div style={{ display: 'grid', gap: 'var(--s-4)', marginTop: 'var(--s-4)' }}>
@@ -149,14 +145,16 @@ export default function Labelling() {
             <article key={snippet.id} className="cs-snip">
               <div>
                 <div className="cs-turn" data-from="student">
-                  <p className="cs-turn-who eyebrow">Student asked</p>
+                  <p className="cs-turn-who eyebrow">{t('labelling.studentAsked')}</p>
                   <p className="cs-turn-text">{snippet.student.text}</p>
                 </div>
 
                 <div className="cs-turn" data-from="tutor">
                   <p className="cs-turn-who eyebrow">
-                    {snippet.tutor.label ?? 'Feedback'}
-                    {snippet.rating ? ` · student rated it ${snippet.rating}` : ''}
+                    {snippet.tutor.label ?? t('labelling.feedback')}
+                    {snippet.rating
+                      ? ` · ${t('labelling.studentRated', { rating: snippet.rating })}`
+                      : ''}
                   </p>
                   <p className="cs-turn-text">{snippet.tutor.text}</p>
                 </div>
@@ -168,7 +166,7 @@ export default function Labelling() {
                     disabled={saving === snippet.id}
                     onClick={() => save(snippet, { included: true })}
                   >
-                    Keep for the dataset
+                    {t('labelling.keep')}
                   </button>
                   <button
                     type="button"
@@ -176,14 +174,14 @@ export default function Labelling() {
                     disabled={saving === snippet.id}
                     onClick={() => save(snippet, { included: false })}
                   >
-                    Drop
+                    {t('labelling.drop')}
                   </button>
                 </div>
               </div>
 
               <div>
                 <p className="eyebrow" style={{ marginBottom: 'var(--s-2)' }}>
-                  Does this feedback…
+                  {t('labelling.criteriaHead')}
                 </p>
 
                 <div className="cs-criteria">
@@ -193,18 +191,18 @@ export default function Labelling() {
                       <div className="cs-choices">
                         {VALUES.map((value) => (
                           <button
-                            key={value.id}
+                            key={value}
                             type="button"
                             className="cs-choice"
-                            aria-pressed={snippet.labels?.[criterion.id] === value.id}
+                            aria-pressed={snippet.labels?.[criterion.id] === value}
                             disabled={saving === snippet.id}
                             onClick={() =>
                               save(snippet, {
-                                labels: { ...snippet.labels, [criterion.id]: value.id },
+                                labels: { ...snippet.labels, [criterion.id]: value },
                               })
                             }
                           >
-                            {value.label}
+                            {t(`labelling.${value}`)}
                           </button>
                         ))}
                       </div>
@@ -213,14 +211,14 @@ export default function Labelling() {
 
                   <div className="cs-field">
                     <label className="cs-label" htmlFor={`note-${snippet.id}`}>
-                      Why
+                      {t('labelling.why')}
                     </label>
                     <textarea
                       id={`note-${snippet.id}`}
                       className="cs-textarea"
                       rows={3}
                       defaultValue={snippet.note ?? ''}
-                      placeholder="Good nudge, stops short of the answer."
+                      placeholder={t('labelling.whyPlaceholder')}
                       // Saved on blur rather than per keystroke: one row is a
                       // paragraph at most, and a request per character would
                       // make the whole list feel broken.

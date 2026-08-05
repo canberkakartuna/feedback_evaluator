@@ -1,5 +1,7 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { roleStringKey, useT } from '../../lib/i18n'
+import TopBar from '../../components/TopBar'
 import '../console.css'
 
 /**
@@ -13,43 +15,40 @@ import '../console.css'
  * well; one setting reachable from two places is one setting too many.
  */
 export default function AdminLayout() {
-  const { user, signOut } = useAuth()
-  const navigate = useNavigate()
+  const { user } = useAuth()
+  const t = useT()
 
   return (
     <div className="cs">
-      <nav className="cs-nav" aria-label="Admin sections">
+      <nav className="cs-nav" aria-label={t('admin.sections')}>
         <Link className="cs-brand" to="/admin">
-          <p className="eyebrow">Administrator</p>
+          <p className="eyebrow">{t('admin.eyebrow')}</p>
           <h1 className="cs-brand-name">Dropshot</h1>
         </Link>
 
         <ul className="cs-links">
           <li>
             <NavLink className="cs-link" to="/admin" end>
-              People
+              {t('admin.people')}
             </NavLink>
           </li>
           <li>
             <NavLink className="cs-link" to="/teacher">
-              Teacher console →
+              {t('admin.teacherConsole')}
             </NavLink>
           </li>
         </ul>
 
         <div className="cs-who">
           <p className="cs-who-name">{user.name}</p>
-          <p className="cs-who-role eyebrow">{user.role}</p>
-          <button
-            type="button"
-            className="cs-btn cs-btn-sm"
-            onClick={async () => {
-              await signOut()
-              navigate('/signin', { replace: true })
-            }}
-          >
-            Sign out
-          </button>
+          <p className="cs-who-role eyebrow">{t(roleStringKey(user.role))}</p>
+          <TopBar
+            layout="stack"
+            homeKey="nav.studentView"
+            who={false}
+            console={false}
+            signOutTo="/signin"
+          />
         </div>
       </nav>
 

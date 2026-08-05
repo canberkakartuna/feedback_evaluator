@@ -68,8 +68,8 @@ the client and the API never disagree about which value won.
 
 ## What the server owns, and why
 
-- **Consent.** There is no route that creates a session without `consent: true`. The UI gate is a courtesy; this is the gate.
-- **The questions themselves.** Teachers author them; nothing is hard-coded. A student reaches an activity by picking it from `GET /api/activities/available` — there is no join code, so **publishing is the whole access decision**. See [Activity endpoints](#activity-endpoints).
+- **Consent.** There is no route that creates a session without `consent: true` — with one deliberate exception: **staff** (teacher, manager, admin) are not asked, because the notice is addressed to a research participant and they are not one. Their session is stamped `staffPreview: true` with `consent.given: false` and `waived: 'staff-preview'`, rather than claiming an agreement nobody gave. The UI gate is a courtesy; this is the gate.
+- **The questions themselves.** Teachers author them; nothing is hard-coded. A student reaches an activity by picking it from `GET /api/activities/available`, or by its **class code** through `GET /api/activities/code/:code` — and both refuse a draft, so **publishing is the whole access decision** and the code is a shortcut, not a credential. See [Activity endpoints](#activity-endpoints).
 - **The mark scheme.** No student-facing route returns rubric keywords or tutor scripts; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
@@ -197,7 +197,17 @@ from another's list.
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
 | `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
 | `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
-| `GET` | `/api/activities/available` | **Open — no token needed.** Published activities: every one of them for an anonymous visitor, narrowed to their own teacher's for a signed-in student. Titles and counts only, never the questions |
+| `GET` | `/api/activities/available` | **Open — no token needed.** Published activities: every one of them for an anonymous visitor, narrowed to their own teacher's for a signed-in student. Titles, topics and counts only, never the questions |
+| `GET` | `/api/activities/code/:code` | **Open — no token needed.** One activity by its class code, case-insensitive. Same summary shape as `/available`. **404** on an unknown code, **400** on a draft ("not open yet") |
+
+**Every activity carries a class code and a topic.** The code is six characters
+from the unambiguous alphabet in `lib/http.js`, allocated at creation, unique
+(checked on insert, and a unique sparse index in `store/mongo.js`), and
+backfilled onto older activities the first time they are read. It exists so a
+class can be pointed at one activity — read out, or followed as
+`/join/ABC234` — and it opens nothing that publishing has not already opened.
+The topic is one of `TOPICS` in `shared/activity.js`, or `null`; both lists in
+the client filter on it.
 
 **The rubric and the tutor script are optional, and that is the design.** A
 question with only a prompt still works: the chat answers from the system
@@ -211,7 +221,7 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/health` | |
-| `POST` | `/api/sessions` | `{ consent: true, activityId }` → `{ session, activity }`. **400 without consent.** Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
+| `POST` | `/api/sessions` | `{ consent: true, activityId }` or `{ consent: true, code }` → `{ session, activity }`. **400 without consent**, unless the token belongs to staff — then the session is a `staffPreview` and records no agreement. Send a login token and the session attaches to that user; without one `userId` is `null` and the session is anonymous |
 | `GET` | `/api/sessions/:id` | Resume: session, activity, answers, messages, own questions |
 | `POST` | `/api/sessions/:id/end` | |
 | `DELETE` | `/api/sessions/:id` | "Delete my session" — also deletes the files |

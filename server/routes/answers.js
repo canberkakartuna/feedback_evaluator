@@ -1,11 +1,9 @@
 import express from 'express'
-import { MODES } from '../../shared/answer.js'
+import { MODE_IDS } from '../../shared/answer.js'
 import { answerKey, evaluateAnswer } from '../../shared/marking.js'
 import { answerShape } from '../services/tutor.js'
 import { SELF_MARKS } from '../../shared/marks.js'
 import { badRequest, id, notFound, now, route } from '../lib/http.js'
-
-const MODE_IDS = MODES.map((mode) => mode.id)
 
 export function answerRoutes(store, { resolveQuestion }) {
   const router = express.Router()

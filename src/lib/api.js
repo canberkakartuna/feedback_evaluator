@@ -169,11 +169,29 @@ export const api = {
    */
   availableActivities: () => call('GET', '/api/activities/available'),
 
+  /**
+   * The other student door: one activity, by the class code a teacher read out.
+   * Open, like the list — a code names something publishing already opened.
+   */
+  activityByCode: (code) =>
+    call('GET', `/api/activities/code/${encodeURIComponent(String(code).trim())}`),
+
   /* ---------------------------------------------------------------- sessions */
 
-  /** Consent is the session. There is no way to start one without it. */
-  startSession: ({ activityId, device } = {}) =>
-    call('POST', '/api/sessions', { consent: true, activityId, device }),
+  /**
+   * Consent is the session, and it is passed explicitly rather than hard-coded.
+   *
+   * A student reaches this having ticked the box, so it is `true`. Staff reach it
+   * having never been shown the box — the notice is addressed to a research
+   * participant, which they are not — so it is `false`, and the server records
+   * that session as a preview instead of inventing an agreement. Sending `true`
+   * for everybody would be one line shorter and would quietly corrupt the one
+   * field in the study nobody may fudge.
+   *
+   * `activityId` or `code`: whichever door they came through.
+   */
+  startSession: ({ activityId, code, device, consent = true } = {}) =>
+    call('POST', '/api/sessions', { consent, activityId, code, device }),
   resumeSession: (sessionId) => call('GET', `/api/sessions/${sessionId}`),
   endSession: (sessionId) => call('POST', `/api/sessions/${sessionId}/end`),
   deleteSession: (sessionId) => call('DELETE', `/api/sessions/${sessionId}`),

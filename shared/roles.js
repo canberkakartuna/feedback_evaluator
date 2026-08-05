@@ -69,3 +69,16 @@ export const canManageRole = (actorRole, targetRole) =>
 
 /** Roles that can see more than themselves — i.e. have a roster worth listing. */
 export const canListOthers = (role) => (MANAGEABLE[role] ?? []).length > 0
+
+/**
+ * Staff: everyone who works *on* the study rather than being a subject of it.
+ *
+ * The distinction is not another permission level — it is who the research
+ * consent notice is addressed to. A teacher opening their own activity to check
+ * it is not a participant and is not asked to agree to have their conversations
+ * recorded for research; a student is, every time. routes/sessions.js is where
+ * that holds, and src/routes/student/StudentEntry.jsx is where it shows.
+ */
+export const STAFF_ROLES = ['teacher', 'manager', 'admin']
+
+export const isStaff = (role) => STAFF_ROLES.includes(role)

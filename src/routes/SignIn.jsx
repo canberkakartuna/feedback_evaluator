@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
+import { useT } from '../lib/i18n'
+import TopBar from '../components/TopBar'
 import './console.css'
 import '../components/Entry.css'
 
@@ -21,6 +23,7 @@ export default function SignIn() {
   const { user, ready, signIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const t = useT()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -46,14 +49,17 @@ export default function SignIn() {
 
   return (
     <main className="en-page">
+      {/* No "My console" here — nobody is signed in yet, and no sign-out for the
+          same reason. Home and the language switch are the useful pair. */}
+      <TopBar who={false} join />
       <div className="en-card">
-        <p className="eyebrow">Staff and students with an account</p>
-        <h1 className="en-title">Sign in</h1>
+        <p className="eyebrow">{t('signin.eyebrow')}</p>
+        <h1 className="en-title">{t('signin.title')}</h1>
 
         <form className="cs-form" onSubmit={submit}>
           <div className="cs-field">
             <label className="cs-label" htmlFor="email">
-              Email
+              {t('signin.email')}
             </label>
             <input
               id="email"
@@ -68,7 +74,7 @@ export default function SignIn() {
 
           <div className="cs-field">
             <label className="cs-label" htmlFor="password">
-              Password
+              {t('signin.password')}
             </label>
             <input
               id="password"
@@ -88,14 +94,22 @@ export default function SignIn() {
           ) : null}
 
           <button type="submit" className="cs-btn cs-btn-primary" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? t('signin.busy') : t('signin.submit')}
           </button>
         </form>
 
         <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
-          No account? Students join with a code from their teacher —{' '}
-          <Link to="/">start here</Link>. Teacher accounts are created by an administrator.
+          {t('signin.noAccount')} {t('signin.staffAccounts')}
         </p>
+
+        <div className="en-actions">
+          <Link className="en-btn" to="/">
+            {t('signin.startHere')}
+          </Link>
+          <Link className="en-btn" to="/join">
+            {t('entry.pick.enterCode')}
+          </Link>
+        </div>
       </div>
     </main>
   )
