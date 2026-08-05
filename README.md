@@ -49,7 +49,11 @@ takes the way out with it.
   something to call the work on their roster, where the only handle used to be a
   six-character session code. Requiring one would push a child into typing their
   real name, which is the single thing the notice asks them not to do. This is the
-  normal way in and what the study is designed around.
+  normal way in and what the study is designed around. The workspace header shows
+  it back to them — **read-only**, because a student has to be able to answer
+  "which one is mine?" and renaming it halfway through would rename work already
+  filed under the old name. `nickname` is accepted once, when the session is
+  created; no route changes it afterwards.
 - **Signed in**, with an email and password their teacher set for them. The list
   is narrowed to their own teacher's work, and the session carries their name so
   it can be followed across visits.

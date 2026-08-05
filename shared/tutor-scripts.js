@@ -17,9 +17,21 @@
  * the answer to "the call failed and the student is still waiting".
  */
 
+/**
+ * No `opening` here, on purpose.
+ *
+ * The chat's first line is the one tutor field the browser renders itself, so an
+ * unauthored one is interface text and belongs with the rest of it — see
+ * `tp.opening` in src/lib/strings.js, which exists in both languages. Putting a
+ * generic English sentence in this file meant `publicQuestion` shipped it as if
+ * a teacher had written it, and nothing downstream could tell the difference or
+ * translate it.
+ *
+ * The rest of these lines are delivered as tutor *replies*, a step at a time,
+ * and follow the same rule as the marking summaries: produced server-side, shown
+ * as written. They are English until the model call replaces them.
+ */
 export const ownTutor = {
-  opening:
-    'Ask me anything you are stuck on. Paste the question in, or just describe where you got lost, and we will work through it together.',
   hints: [
     'Tell me what you have tried so far. The first line that stopped making sense is usually where to start.',
     'Write down what you know and what you are looking for, then find the rule that connects the two.',
@@ -40,7 +52,6 @@ export const ownTutor = {
 export function withFallbacks(tutor) {
   const script = tutor ?? {}
   return {
-    opening: script.opening?.trim() || ownTutor.opening,
     hints: script.hints?.length ? script.hints : ownTutor.hints,
     concept: script.concept?.trim() || ownTutor.concept,
     example: script.example?.trim() || ownTutor.example,

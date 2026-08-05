@@ -77,7 +77,13 @@ export default function TutorPanel({
         {state.messages.map((message) => (
           <article key={message.id} className="tp-msg" data-from={message.from} data-kind={message.kind}>
             {message.label ? <p className="tp-msg-label">{message.label}</p> : null}
-            <p className="tp-msg-text">{message.text}</p>
+            {/* An opening line nobody authored is chrome, so it is said here and
+                follows the language switch. Everything else in this thread is
+                either the student's own words or a reply written against what a
+                teacher authored, and is shown exactly as it came. */}
+            <p className="tp-msg-text">
+              {message.text || (message.kind === 'opening' ? t('tp.opening') : null)}
+            </p>
 
             {/* Doc item 5: was this feedback any use? */}
             {message.kind === 'reply' ? (

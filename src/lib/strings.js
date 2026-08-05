@@ -204,6 +204,15 @@ const en = {
     questionSet: 'Question set',
     tutorPane: 'AI tutor',
     closeTutor: 'Close tutor',
+    /**
+     * Their own nickname, so they can read it back. Labelled rather than left
+     * bare, because "Test" on its own could be a code, a class or a title —
+     * and the tooltip answers the question a fixed name invites.
+     */
+    whoNickname: 'Nickname: {name}',
+    whoNicknameFixed:
+      'The name your work is filed under. Your teacher sees it on their roster, and it stays the same for this session.',
+    whoCode: 'Session {code}',
   },
 
   ql: {
@@ -268,6 +277,15 @@ const en = {
     workingOn: 'Working on',
     hide: 'Hide tutor',
     close: 'Close',
+    /**
+     * The line the chat opens on when the teacher left that field blank.
+     *
+     * Interface, not content: nobody authored it, so unlike the tutor's replies
+     * it follows the language switch. A teacher who *did* write an opening has
+     * theirs shown instead, in whatever language they wrote it.
+     */
+    opening:
+      'Ask me anything you are stuck on. Paste the question in, or just describe where you got lost, and we will work through it together.',
     hintAction: 'Give me a hint',
     conceptAction: 'Explain the concept',
     exampleAction: 'Worked example',
@@ -718,6 +736,10 @@ const tr = {
     questionSet: 'Soru listesi',
     tutorPane: 'Yapay zekâ öğretmeni',
     closeTutor: 'Öğretmeni kapat',
+    whoNickname: 'Takma ad: {name}',
+    whoNicknameFixed:
+      'Çalışmanız bu adla kaydediliyor. Öğretmeniniz bu adı listesinde görür ve bu oturum boyunca değişmez.',
+    whoCode: 'Oturum {code}',
   },
 
   ql: {
@@ -782,6 +804,8 @@ const tr = {
     workingOn: 'Üzerinde çalışılan',
     hide: 'Öğretmeni gizle',
     close: 'Kapat',
+    opening:
+      'Takıldığın her şeyi bana sorabilirsin. Soruyu buraya yapıştır ya da nerede kaybolduğunu anlat, birlikte üzerinden geçelim.',
     hintAction: 'Bana ipucu ver',
     conceptAction: 'Konuyu açıkla',
     exampleAction: 'Çözümlü örnek',

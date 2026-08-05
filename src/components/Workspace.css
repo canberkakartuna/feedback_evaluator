@@ -57,9 +57,30 @@
   text-overflow: ellipsis;
 }
 
+/* A nickname is something a student typed, so it keeps its own capitals: the
+   eyebrow face this used to wear uppercased it and made it look like a code. */
 .ws-head-who {
-  flex: none;
+  /* Shrinks and clips rather than overflowing: a nickname is free text capped at
+     40 characters server-side, and the long end of that has to go somewhere
+     other than underneath the buttons. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   margin: 0;
+  font-size: var(--t-12);
+  color: var(--graphite);
+  /* It cannot be edited, but it can be read out to a teacher, so it can be
+     selected — the cursor is the only hint of that. */
+  cursor: text;
+}
+
+/* A code is machine output and reads better as one. */
+.ws-head-who[data-kind='code'] {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.04em;
 }
 
 .ws-head-sep {
@@ -234,21 +255,20 @@
     border: 0;
   }
 
-  /* On a phone the buttons are what the header is for, so the title gives up
-     its second line of identity rather than pushing them onto a second row. */
   .ws-head {
     flex-wrap: wrap;
+    justify-content: flex-end;
     gap: var(--s-2);
     padding: var(--s-2) var(--s-3);
   }
 
-  .ws-head-title {
-    font-size: var(--t-16);
+  .ws-head-id {
+    flex-wrap: wrap;
+    gap: 0 var(--s-2);
   }
 
-  .ws-head-sep,
-  .ws-head-who {
-    display: none;
+  .ws-head-title {
+    font-size: var(--t-16);
   }
 
   .ws[data-view='list'] .ws-list,
@@ -324,6 +344,26 @@
     width: 6px;
     height: 6px;
     background: var(--margin);
+  }
+}
+
+/**
+ * A narrow phone: the identity takes its own line, buttons drop below it.
+ *
+ * Sharing one row is what this width cannot do. Once the buttons have taken
+ * theirs, about a hundred pixels are left, and a nickname clipped to fit that
+ * defeats the point of showing it to the student it belongs to. A second row of
+ * header is cheaper than a truncated name.
+ */
+@media (max-width: 520px) {
+  .ws-head-id {
+    flex: 1 0 100%;
+  }
+
+  /* A long name wraps to the line below, and the dot that joined it to the
+     title would be left dangling at the end of the first one. */
+  .ws-head-sep {
+    display: none;
   }
 }
 

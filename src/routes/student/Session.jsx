@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { readAsDataUrl } from '../../lib/attachments'
 import { useT } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
-import { ownTutor } from '../../../shared/tutor-scripts'
 import QuestionList from '../../components/QuestionList'
 import QuestionPanel from '../../components/QuestionPanel'
 import TopBar from '../../components/TopBar'
@@ -38,7 +38,16 @@ function toState(question, answer, messages) {
     id: `${question.id}-opening`,
     from: 'tutor',
     kind: 'opening',
-    text: question.opening || ownTutor.opening,
+    /**
+     * The teacher's line, or nothing.
+     *
+     * Nothing is not a gap: an opening nobody authored is interface text, and
+     * TutorPanel says the translated one. Left null rather than resolved here
+     * because this runs once, when the session loads — a sentence baked in at
+     * that moment would stay in whichever language was selected then, and a
+     * student who switched to Turkish would keep reading English until reload.
+     */
+    text: question.opening?.trim() || null,
   }
 
   return {
@@ -64,6 +73,8 @@ export default function Session() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
   const t = useT()
+  // Only to name whoever is signed in; the session is what authorises the work.
+  const { user } = useAuth()
 
   const [loaded, setLoaded] = useState(null)
   const [loadError, setLoadError] = useState(null)
@@ -494,6 +505,36 @@ export default function Session() {
 
   const unreadCount = questions.filter((question) => progress[question.id]?.unread).length
 
+  /**
+   * Who this session belongs to, said in the header.
+   *
+   * Three cases, and the first is the one that matters: **an anonymous student
+   * has to be able to read their own nickname.** They made it up on the way in
+   * and it is the only handle their teacher has for their work, so a student who
+   * has forgotten it cannot answer "which one is mine?" — and the header used to
+   * print it in the same uppercase mono as a session code, which both hid what
+   * it was and mangled the capitals they typed.
+   *
+   * It is text, never a field. Nothing here can edit it, and neither can the
+   * API: `nickname` is accepted once, when the session is created.
+   *
+   * Null while `me` is still in flight for a session that has an account behind
+   * it, rather than showing the code for a moment and then swapping it for a
+   * name — the one thing worse than an unfamiliar handle is a changing one.
+   */
+  const identity = loaded.session.nickname
+    ? {
+        kind: 'nickname',
+        key: 'ws.whoNickname',
+        vars: { name: loaded.session.nickname },
+        title: t('ws.whoNicknameFixed'),
+      }
+    : !loaded.session.userId
+      ? { kind: 'code', key: 'ws.whoCode', vars: { code: loaded.session.code } }
+      : user
+        ? { kind: 'account', key: 'nav.signedInAs', vars: { name: user.name } }
+        : null
+
   const tabs = [
     { id: 'list', label: t('ws.tabQuestions'), meta: `${tally.done}/${tally.total}` },
     { id: 'problem', label: t('ws.tabProblem'), meta: active.code },
@@ -525,14 +566,23 @@ export default function Session() {
           <h1 className="ws-head-title">
             {loaded.activity?.title ?? t('ws.questionsFallback')}
           </h1>
-          <span className="ws-head-sep" aria-hidden="true">
-            ·
-          </span>
-          {/* Their own nickname reads better than the session code, and it is
-              the same label their teacher sees on the roster. */}
-          <p className="eyebrow ws-head-who">
-            {loaded.session.nickname || loaded.session.code}
-          </p>
+          {identity ? (
+            <>
+              <span className="ws-head-sep" aria-hidden="true">
+                ·
+              </span>
+              {/**
+               * Who the work is filed under — read-only, and there is no route
+               * that would change it. A nickname is fixed when the session
+               * starts: it is the handle their teacher sees on the roster, so
+               * renaming it halfway through would rename work already sitting
+               * under the old one. Shown, not offered.
+               */}
+              <p className="ws-head-who" data-kind={identity.kind} title={identity.title}>
+                {t(identity.key, identity.vars)}
+              </p>
+            </>
+          ) : null}
         </div>
 
         <TopBar layout="bar" who={false} join={false} />

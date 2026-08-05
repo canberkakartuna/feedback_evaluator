@@ -38,8 +38,6 @@
  * copy that holds.
  */
 
-import { withFallbacks } from './tutor-scripts.js'
-
 export const ACTIVITY_STATUSES = ['draft', 'published']
 
 export const isActivityStatus = (value) => ACTIVITY_STATUSES.includes(value)
@@ -170,15 +168,23 @@ export function publicQuestion(question, activity) {
     criteriaCount: question.rubric?.length ?? 0,
     hintCount: hintCount(question),
     /**
-     * The one tutor field that does travel.
+     * The one tutor field that does travel, and **only if a teacher wrote it**.
      *
      * It is the line the chat opens on, so it is shown before the student has
      * done anything — there is nothing to earn by withholding it, and holding
      * it back would mean an empty chat pane on every question. The hints,
      * concept, worked example and misconception all stay on the server, where
      * they are released a step at a time through the tutor route.
+     *
+     * `null` when the field was left blank, rather than the generic English line
+     * this used to substitute here. That substitution put interface text into a
+     * content field: a Turkish class working on an activity with no authored
+     * opening was greeted in English, and no language switch could reach it,
+     * because by the time the browser saw the sentence it was indistinguishable
+     * from something a teacher had typed. The generic greeting is chrome, so the
+     * client says it — see TutorPanel and `tp.opening`.
      */
-    opening: withFallbacks(question.tutor).opening,
+    opening: question.tutor?.opening?.trim() || null,
     position: question.position,
     activityId: question.activityId,
     activityTitle: activity?.title ?? null,
