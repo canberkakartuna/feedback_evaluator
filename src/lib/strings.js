@@ -90,7 +90,6 @@ const en = {
     submit: 'Sign in',
     busy: 'Signing in…',
     noAccount: 'No account? Students join with a code from their teacher, or pick from the list.',
-    startHere: 'Start as a student',
     staffAccounts: 'Teacher accounts are created by an administrator.',
   },
 
@@ -592,7 +591,6 @@ const tr = {
     busy: 'Giriş yapılıyor…',
     noAccount:
       'Hesabınız yok mu? Öğrenciler öğretmenlerinden aldıkları sınıf koduyla ya da listeden seçerek katılır.',
-    startHere: 'Öğrenci olarak başla',
     staffAccounts: 'Öğretmen hesaplarını yönetici oluşturur.',
   },
 

@@ -102,10 +102,9 @@ export default function SignIn() {
           {t('signin.noAccount')} {t('signin.staffAccounts')}
         </p>
 
+        {/* No "start as a student" here — Home in the bar above already goes
+            there, and two buttons to one place read as two destinations. */}
         <div className="en-actions">
-          <Link className="en-btn" to="/">
-            {t('signin.startHere')}
-          </Link>
           <Link className="en-btn" to="/join">
             {t('entry.pick.enterCode')}
           </Link>
