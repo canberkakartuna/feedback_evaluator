@@ -10,9 +10,11 @@ import '../console.css'
  * Kept separate from the teacher console because the work is different in kind
  * — this is where the hierarchy itself is built, and it is the only place a
  * manager or teacher can be created. An admin still has the teacher console
- * available from the sidebar, since they can author and read everything too,
- * and that is where the AI prompt is edited. It used to be mirrored here as
- * well; one setting reachable from two places is one setting too many.
+ * available from the sidebar, since they can author and read everything too.
+ *
+ * The AI prompt is not edited from either console. It is versioned server-side
+ * and set outside the app, so no teacher can quietly change the feedback every
+ * other teacher's students receive.
  */
 export default function AdminLayout() {
   const { user } = useAuth()

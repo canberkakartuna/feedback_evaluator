@@ -32,7 +32,7 @@ present in one language only.
 | `/join`, `/join/:code` | students | The same, reached by a class code or its link |
 | `/work/:sessionId` | students | The workspace: question, answer, tutor chat |
 | `/teacher` | teachers, managers | Write activities, read student work, label snippets |
-| `/admin` | administrators | Accounts, and the system-wide AI prompt |
+| `/admin` | administrators | Accounts |
 
 Every screen carries the same bar of direct buttons — **home, sign in or sign
 out, the console for whoever is signed in, and the language switch** — so the way
@@ -114,6 +114,13 @@ Such a session is stamped `staffPreview` instead, with `consent.given: false` an
 labels it so it cannot be read as a student's work. `routes/sessions.js` is where
 that holds. A **student** with an account is not staff and is asked every time.
 
+A teacher does not have to go looking for the student side to do this. **Open as
+a student** sits on the activity itself, in the console, and goes straight to the
+workspace — the entry screens exist to ask who somebody is and whether they agree,
+and a signed-in teacher has already answered both. It is offered once the activity
+is published, because a preview is a real session and the server will not start
+one on a draft.
+
 **Anonymous is not invisible.** A session with no account still reaches the
 teacher, through the activity rather than through a user: they own the activity,
 so they see every session started from it, with its transcript and its snippets.
@@ -187,7 +194,8 @@ The client is not trusted with anything the study will later be read from:
   offering something that would be refused.
 - **Prompt versioning.** One system prompt, append-only, and every session
   records the version it ran on — so "which prompt produced this feedback?" stays
-  answerable after the prompt has moved on.
+  answerable after the prompt has moved on. No console edits it: the prompt is
+  set through the API, not from a screen a teacher can reach.
 
 ## Layout
 

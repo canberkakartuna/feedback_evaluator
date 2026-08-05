@@ -19,7 +19,12 @@ import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
  *   to their own teacher's work, and the session carries their name so it can be
  *   followed across visits.
  * - **Staff** get the same list with a line saying that anything they start is
- *   recorded as a preview rather than as a student's work.
+ *   recorded as a preview rather than as a student's work. This is no longer the
+ *   way they are meant to arrive, though: "Open as a student" on the activity
+ *   itself starts the same preview from the console, without walking a teacher
+ *   through screens that exist to ask a question they have already answered.
+ *   The list still shows them, because a signed-in teacher landing on / has to
+ *   see something, and what they see should be what their class sees.
  *
  * A **class code** is the other door — see ./Join.jsx. It is a shortcut to one
  * activity rather than a second identity: same consent, same session, one less

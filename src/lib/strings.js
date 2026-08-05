@@ -351,7 +351,6 @@ const en = {
     activities: 'Activities',
     studentWork: 'Student work',
     labelling: 'Labelling',
-    prompt: 'AI prompt',
     accounts: 'Accounts →',
   },
 
@@ -377,6 +376,9 @@ const en = {
 
   editor: {
     breadcrumb: 'Activities',
+    preview: 'Open as a student',
+    previewOpening: 'Opening…',
+    previewDraft: 'Publish it first. A preview is a real session, and nothing starts one on an activity that is not open.',
     seeWork: 'See their work',
     publish: 'Publish',
     closeToStudents: 'Close to students',
@@ -871,7 +873,6 @@ const tr = {
     activities: 'Etkinlikler',
     studentWork: 'Öğrenci çalışmaları',
     labelling: 'Etiketleme',
-    prompt: 'YZ yönergesi',
     accounts: 'Hesaplar →',
   },
 
@@ -897,6 +898,9 @@ const tr = {
 
   editor: {
     breadcrumb: 'Etkinlikler',
+    preview: 'Öğrenci olarak aç',
+    previewOpening: 'Açılıyor…',
+    previewDraft: 'Önce yayımlayın. Önizleme gerçek bir oturumdur; açık olmayan bir etkinlikte oturum başlatılamaz.',
     seeWork: 'Çalışmalarını gör',
     publish: 'Yayımla',
     closeToStudents: 'Öğrencilere kapat',

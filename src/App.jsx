@@ -12,7 +12,6 @@ import ActivityEditor from './routes/teacher/ActivityEditor'
 import Roster from './routes/teacher/Roster'
 import StudentWork from './routes/teacher/StudentWork'
 import Labelling from './routes/teacher/Labelling'
-import SystemPrompt from './routes/teacher/SystemPrompt'
 import AdminLayout from './routes/admin/AdminLayout'
 import People from './routes/admin/People'
 
@@ -101,7 +100,6 @@ export default function App() {
             <Route path="students" element={<Roster />} />
             <Route path="students/:sessionId" element={<StudentWork />} />
             <Route path="labelling" element={<Labelling />} />
-            <Route path="prompt" element={<SystemPrompt />} />
           </Route>
 
           <Route

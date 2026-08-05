@@ -8,7 +8,6 @@ const LINKS = [
   { to: '/teacher', end: true, key: 'teacher.activities' },
   { to: '/teacher/students', key: 'teacher.studentWork' },
   { to: '/teacher/labelling', key: 'teacher.labelling' },
-  { to: '/teacher/prompt', key: 'teacher.prompt' },
 ]
 
 /**
