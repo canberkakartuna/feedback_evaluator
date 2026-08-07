@@ -114,6 +114,69 @@ export const config = {
   },
 
   /**
+   * The tutor's model: Google Gemini, through the Generative Language API.
+   *
+   * `configured` is the switch services/tutor.js reads. Unset the key and the
+   * tutor falls back to the scripted lines in shared/tutor-scripts.js — the app
+   * still works end to end, the chat is just canned, which is what a bare
+   * checkout and the smoke test both want. `GET /api/health` says which of the
+   * two is answering.
+   *
+   * The key lives in `.env.local`, so it has never been committed. Note what
+   * that costs: `.env.local` is not deployed, so a deployment answers scripted
+   * until `GEMINI_API_KEY` is set in the host's own environment settings — see
+   * the note in `.env`, which is committed and does carry the other
+   * credentials. Everything else here is a knob and belongs in `.env`.
+   */
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY?.trim() || null,
+    /**
+     * The `-latest` alias, so a model retirement does not take the tutor down
+     * with it — it resolves to `gemini-3.6-flash` today. Pin that exact name
+     * while a study is running and the replies have to stay comparable; the
+     * trade is that a retired version stops answering (`gemini-2.5-flash` is
+     * already a 404 for a new key) where the alias moves on instead.
+     */
+    model: process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
+    /** A student is watching a typing indicator, so this is deliberately short. */
+    timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS ?? 20000),
+    /**
+     * Not the length of the reply — the prompt's word cap does that. This has
+     * to cover the model's *thinking as well*, which is billed to the same
+     * allowance and spent first: measured at `thinkingLevel: low`, a 400-token
+     * allowance left 14 tokens for the answer and truncated it. 2000 leaves
+     * room for a few hundred tokens of reasoning and a few sentences of tutor.
+     * Lowering it does not save money, it produces cut-off replies.
+     */
+    maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS ?? 2000),
+    temperature: Number(process.env.GEMINI_TEMPERATURE ?? 0.6),
+    /**
+     * How hard the model thinks first, passed to the API verbatim — because the
+     * field it goes in changed between model generations and sending the wrong
+     * one is a 400 rather than a warning:
+     *
+     * - 3.x: `{ thinkingLevel: 'low' | 'high' }`. It cannot be switched off.
+     * - 2.5: `{ thinkingBudget: <tokens> }`, and `0` switched it off.
+     *
+     * `low` because a tutor turn is a judgement about one short answer, not a
+     * proof, and every thinking token is a token of reply given up. Set
+     * `GEMINI_THINKING_LEVEL=` (empty) to send nothing at all and let the model
+     * pick its own default; set `GEMINI_THINKING_BUDGET` instead and that wins,
+     * for a model old enough to want it.
+     */
+    thinking: (() => {
+      const level = process.env.GEMINI_THINKING_LEVEL?.trim()
+      const budget = process.env.GEMINI_THINKING_BUDGET?.trim()
+      if (budget) return { thinkingBudget: Number(budget) }
+      if (level === '') return null
+      return { thinkingLevel: level || 'low' }
+    })(),
+    get configured() {
+      return Boolean(this.apiKey)
+    },
+  },
+
+  /**
    * Researcher endpoints read every student's transcript, so they stay shut
    * until a token is set. There is deliberately no default.
    */

@@ -12,9 +12,11 @@
  * against a question this file has never seen. Anything specific to a topic
  * belongs on the question, authored by the teacher who set it.
  *
- * `fallbackReplies` stands in for the model call in services/tutor.js. When
- * that becomes a real request against the active system prompt, these stay as
- * the answer to "the call failed and the student is still waiting".
+ * `fallbackReplies` is what the tutor says when the model cannot: no
+ * `GEMINI_API_KEY`, a timeout, a rate limit, a blocked prompt. They are not
+ * decoration — a student pressing send is owed a sentence, and an empty bubble
+ * or a stack trace is worse than a generic nudge. Keep them answerable against
+ * any question, because that is the situation they are read in.
  */
 
 /**
@@ -29,7 +31,10 @@
  *
  * The rest of these lines are delivered as tutor *replies*, a step at a time,
  * and follow the same rule as the marking summaries: produced server-side, shown
- * as written. They are English until the model call replaces them.
+ * as written. **They are the unconfigured and the failed path only.** With
+ * `GEMINI_API_KEY` set, a question nobody wrote a script for is answered by the
+ * model instead — which is also the only way it gets answered in Turkish, since
+ * these are English wherever the interface is.
  */
 export const ownTutor = {
   hints: [
@@ -48,6 +53,12 @@ export const ownTutor = {
 /**
  * Filled in per field, so a teacher who wrote hints but no worked example gets
  * their hints and a sensible stand-in for the example — not all-or-nothing.
+ *
+ * `authored` records which fields were real, because once a model is answering
+ * that difference decides who speaks: services/tutor.js delivers a teacher's
+ * own hint, concept or worked example verbatim, and asks the model only where
+ * nobody wrote one. Server-side only, like the rest of this object —
+ * `publicQuestion` is an allow-list and does not carry it.
  */
 export function withFallbacks(tutor) {
   const script = tutor ?? {}
@@ -56,6 +67,12 @@ export function withFallbacks(tutor) {
     concept: script.concept?.trim() || ownTutor.concept,
     example: script.example?.trim() || ownTutor.example,
     misconception: script.misconception?.trim() || ownTutor.misconception,
+    authored: {
+      hints: Boolean(script.hints?.length),
+      concept: Boolean(script.concept?.trim()),
+      example: Boolean(script.example?.trim()),
+      misconception: Boolean(script.misconception?.trim()),
+    },
   }
 }
 

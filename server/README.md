@@ -57,6 +57,12 @@ the client and the API never disagree about which value won.
 | `AUTH_TOKEN_TTL_DAYS` | `30` | How long a login lasts. |
 | `BOOTSTRAP_TOKEN` | falls back to `RESEARCH_TOKEN` | Guards `POST /api/auth/bootstrap`. **Set one of the two before deploying** — with neither, whoever calls that route first on an empty database becomes the admin. |
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
+| `GEMINI_API_KEY` | *unset* | **A credential. Kept in `.env.local`, which means the deployment needs it set in the host's settings** — `.env.local` is not deployed, so without that the deployed tutor answers scripted and nothing on screen says so. Unset anywhere means the scripted lines in `shared/tutor-scripts.js` and no model; `/api/health` warns while that is so. [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `GEMINI_MODEL` | `gemini-flash-latest` | Just a name. The alias survives a model retirement; pin an exact version while a study is running so replies stay comparable. |
+| `GEMINI_MAX_OUTPUT_TOKENS` | `2000` | **Not the reply length** — the prompt caps that at 120 words. Thinking is billed to this allowance and spent first, so a tight number truncates the answer rather than saving money. |
+| `GEMINI_THINKING_LEVEL` | `low` | `low` or `high` on Gemini 3, which cannot be told not to think. Empty sends nothing. `GEMINI_THINKING_BUDGET` is the 2.5-era token count and wins if set — sending it to a 3.x model is a 400. |
+| `GEMINI_TIMEOUT_MS` | `20000` | A student is watching a typing indicator. |
+| `GEMINI_TEMPERATURE` | `0.6` | |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
 | `MONGODB_DB` | `dropshot` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
@@ -71,7 +77,8 @@ the client and the API never disagree about which value won.
 - **Consent.** There is no route that creates a session without `consent: true` — with one deliberate exception: **staff** (teacher, manager, admin) are not asked, because the notice is addressed to a research participant and they are not one. Their session is stamped `staffPreview: true` with `consent.given: false` and `waived: 'staff-preview'`, rather than claiming an agreement nobody gave. The UI gate is a courtesy; this is the gate.
 - **The questions themselves.** Teachers author them; nothing is hard-coded. A student reaches an activity by picking it from `GET /api/activities/available`, or by its **class code** through `GET /api/activities/code/:code` — and both refuse a draft, so **publishing is the whole access decision** and the code is a shortcut, not a credential. See [Activity endpoints](#activity-endpoints).
 - **The mark scheme.** No student-facing route returns rubric keywords or tutor scripts; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
-- **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for.
+- **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for. True whether the hint was authored or generated: the model is asked for hint *n* and told nothing about hint *n + 1*.
+- **The model call.** The API key, the system prompt and the request are all server-side — see [The tutor](#the-tutor). The browser sends what the student typed and receives one reply.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
 - **Who can see whom.** Roles and the hierarchy are enforced in `services/users.js`, not in the client. See [Users, roles and the hierarchy](#users-roles-and-the-hierarchy).
 
@@ -230,7 +237,7 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | `GET` | `/api/sessions/:id/answers/:questionId` | |
 | `POST` | `/api/sessions/:id/answers/:questionId/check` | Marks against the hidden rubric. **400 when the question has no rubric** |
 | `GET` | `/api/sessions/:id/questions/:qid/messages` | Thread for one question |
-| `POST` | `/api/sessions/:id/questions/:qid/messages` | `{ text }` **or** `{ action: hint\|concept\|example\|review }` → `{ student, tutor }` |
+| `POST` | `/api/sessions/:id/questions/:qid/messages` | `{ text, lang? }` **or** `{ action: hint\|concept\|example\|review, lang? }` → `{ student, tutor }`. `lang` is `en` or `tr` and is which language the reply is written in — see [The tutor](#the-tutor) |
 | `POST` | `/api/sessions/:id/messages/:msgId/rating` | `{ value: up\|down, note? }` (doc item 5) |
 | `POST` | `/api/sessions/:id/questions/:qid/uploads` | `{ name, dataUrl, source: file\|whiteboard }` |
 | `DELETE` | `/api/sessions/:id/questions/:qid/uploads/:uploadId` | |
@@ -240,6 +247,59 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 | `POST` | `/api/sessions/:id/events` | `{ events: [{ type, questionId?, payload?, at? }] }`, max 200 |
 | `GET` | `/api/prompts` | The active system prompt and its version history |
 | `POST` | `/api/prompts` | `{ text, note? }` → a new version, made active. Teacher, manager or admin; stamped with who wrote it |
+
+## The tutor
+
+`services/tutor.js` decides who answers a turn, and `lib/gemini.js` makes the
+call — plain `fetch` against Google's Generative Language API, no SDK, because
+the whole surface used is one POST with a key header.
+
+**Three sources, and which one speaks is decided per turn.**
+
+1. **The teacher.** An authored hint, concept or worked example is delivered
+   exactly as written. The study is about the feedback students receive and a
+   model paraphrasing a carefully staged hint would replace it silently. The
+   escalation is still the server's: it holds the text and hands out one step.
+2. **The model.** Free text, "check my reasoning", and every turn on a question
+   nobody wrote that field for — all of a student's own questions, and any tutor
+   field a teacher left blank. It receives the system prompt, the question, the
+   rubric's **criteria and coaching notes but never its keywords**, the answer as
+   it stands, the last ten turns of the thread, and the language to reply in.
+3. **The scripted lines** in `shared/tutor-scripts.js`, when there is no key or
+   the call failed. Not a placeholder any more — a student who pressed send is
+   owed a sentence, and this is the one they get. `GET /api/health` reports
+   `tutor: "gemini" | "scripted"` and warns while no model is running.
+
+Every reply records `source` and `model`, on the message and on the snippet:
+`gemini`, `scripted` (a teacher's own words, or the generic script where no model
+runs at all) or **`fallback`** — the model was asked and failed. That third value
+is the one to watch. Nothing in the interface shows a failed call, so without it a
+rate-limited lesson and a well-authored one look identical in the data. The
+`ai_feedback_shown` event carries the reason alongside it.
+
+**A reply runs on the prompt version its session was stamped with**, not on
+whatever is active now — `store.prompts.byVersion`. Publishing v3 mid-lesson must
+not quietly change what v2's sessions are answering with while the transcript
+still says v2.
+
+**Two things about the API that cost a debugging session to find**, both
+documented at the top of `lib/gemini.js`: thinking tokens are billed to
+`maxOutputTokens` and spent *first*, so a tight allowance truncates the reply
+rather than saving money; and thinking is configured differently per model
+generation — `thinkingLevel` on 3.x, `thinkingBudget` on 2.5 — with the wrong
+field a flat 400.
+
+**Rate limits are the thing to check before a class uses this.** The free tier
+allows a handful of requests a minute across the whole key, which one classroom
+exceeds immediately; a 429 is not retried (the quota does not clear in
+milliseconds) and every student over the limit silently gets a scripted line
+instead. Enable billing on the Google Cloud project before a real session, and
+read the `source` field afterwards to see what actually happened.
+
+Not sent to the model yet: whiteboard strokes and photographs of working. Gemini
+reads images and the bytes are in Spaces, so this is a fetch-and-attach away —
+until then the honest scripted line ("I cannot read a drawing or a photo yet")
+stands in, and `services/tutor.js` says so where it decides.
 
 ## Reading and labelling
 
@@ -302,10 +362,15 @@ vercel            # preview
 vercel --prod
 ```
 
-Set `RESEARCH_TOKEN` and `MONGODB_URI` in project settings — not in `.env`; see
+Set `RESEARCH_TOKEN`, `MONGODB_URI`, `SPACES_KEY`/`SPACES_SECRET` and
+`GEMINI_API_KEY` in project settings — not in `.env`, which is committed; see
 [Environment](#environment). Then create the first admin with
 `POST /api/auth/bootstrap`; `GET /api/health` reports `ready: false` while no user
 exists.
+
+The function is capped at 60s and a tutor turn takes a few seconds, so nothing
+here needs a longer budget — but `GEMINI_TIMEOUT_MS` has to stay well under that
+cap, or a slow model becomes a platform timeout with no reply and no fallback.
 
 ### One thing still assumes a single long-lived process
 

@@ -10,11 +10,12 @@ documentation in [server/README.md](server/README.md); this file is the map.
 
 ```bash
 npm install
-cp .env.example .env          # then put MONGODB_URI in .env.local
+cp .env.example .env          # then MONGODB_URI and GEMINI_API_KEY in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 280 end-to-end assertions over real HTTP
+npm run test:api              # 297 end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
+npm run check:gemini          # one real call to the tutor's model
 ```
 
 The interface is in **English or Turkish**, switched by the EN/TR control that
@@ -183,6 +184,32 @@ system-wide prompt and the answer goes to the teacher unmarked. That is a
 supported state, not a half-finished one, and `shared/activity.js` holds the
 helpers that make it mean the same thing everywhere.
 
+## The tutor
+
+The chat is **Google Gemini**, called server-side per turn against the system
+prompt the session was stamped with. `server/lib/gemini.js` is the client — plain
+`fetch`, no SDK — and `server/services/tutor.js` decides who answers, which is
+not the same decision every turn:
+
+- **A teacher's own words win.** A hint, a concept explanation or a worked
+  example somebody authored is delivered exactly as written. The model does not
+  paraphrase teaching, and the escalation stays the server's: hint 2 is not
+  readable before hint 1 is asked for, generated or not.
+- **The model answers everything else** — free text, "check my reasoning", and
+  every turn on a question nobody wrote a script for, which includes all of a
+  student's own questions. It reads the question, the rubric's criteria (never
+  its keywords), the answer as it stands and the thread so far, and replies in
+  the student's chosen language.
+- **Scripted lines are the floor.** No `GEMINI_API_KEY`, a timeout, a blocked
+  prompt or a rate limit and the student gets a generic line from
+  `shared/tutor-scripts.js` rather than an error. The app runs end to end with no
+  key at all; `GET /api/health` warns while that is the case, and every reply
+  records which of the three wrote it — `gemini`, `scripted`, or `fallback` for a
+  model call that failed, which is the one worth counting afterwards.
+
+`npm run check:gemini` makes one real call and prints what came back. The smoke
+test deliberately runs the tutor scripted, so it stays hermetic and free.
+
 A **snippet** is derived from the transcript rather than stored, so it stays
 correct as a thread grows. Only the decision about each one — keep it, and how it
 scored against the criteria — is persisted.
@@ -196,6 +223,10 @@ The client is not trusted with anything the study will later be read from:
   A student payload carries a criteria *count*, not the criteria.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is
   not readable before hint 1 is asked for.
+- **The model.** The API key, the system prompt and the whole request live on the
+  server; the browser sends what the student typed and gets one reply back. A
+  client-side call would put the key in the bundle and the prompt up for editing
+  by anyone with dev tools — and the prompt is the study's variable.
 - **Who can see whom.** Roles and reach are enforced in `services/users.js` and
   `services/activities.js`. The client's copies of those rules only avoid
   offering something that would be refused.
@@ -214,6 +245,7 @@ server/          the API — see server/README.md
   services/        the rules, in one place each
   store/           memory + mongo, identical interfaces
   lib/storage.js   uploads: local disk or DigitalOcean Spaces
+  lib/gemini.js    the tutor's model, over plain fetch
 src/
   routes/          one folder per audience: student, teacher, admin
   components/      the workspace panels, plus the shared chrome

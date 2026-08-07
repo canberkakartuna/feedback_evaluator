@@ -4,7 +4,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { readAsDataUrl } from '../../lib/attachments'
-import { useT } from '../../lib/i18n'
+import { useI18n } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 import QuestionList from '../../components/QuestionList'
 import QuestionPanel from '../../components/QuestionPanel'
@@ -72,7 +72,9 @@ function toState(question, answer, messages) {
 export default function Session() {
   const { sessionId } = useParams()
   const navigate = useNavigate()
-  const t = useT()
+  // `lang` as well as `t`: the tutor's replies are written by a model
+  // server-side, so which language to write them in has to be sent with the ask.
+  const { lang, t } = useI18n()
   // Only to name whoever is signed in; the session is what authorises the work.
   const { user } = useAuth()
 
@@ -404,14 +406,14 @@ export default function Session() {
   const send = useCallback(
     (text) => {
       if (!text.trim()) return
-      return converse(() => api.sendMessage(sessionId, activeId, text.trim()))
+      return converse(() => api.sendMessage(sessionId, activeId, text.trim(), lang))
     },
-    [activeId, converse, sessionId],
+    [activeId, converse, lang, sessionId],
   )
 
   const quickAction = useCallback(
-    (kind) => converse(() => api.runAction(sessionId, activeId, kind)),
-    [activeId, converse, sessionId],
+    (kind) => converse(() => api.runAction(sessionId, activeId, kind, lang)),
+    [activeId, converse, lang, sessionId],
   )
 
   const rateMessage = useCallback(

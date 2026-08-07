@@ -41,6 +41,28 @@ export function tutorRoutes(store, { resolveQuestion }) {
 
       const askText = action ? studentAsk(action, hintsUsed) : req.body.text.trim()
 
+      /**
+       * The thread as it stood before this ask, so the model reads the
+       * conversation rather than one isolated line. Fetched here rather than
+       * after the insert below, which would hand it its own prompt twice.
+       */
+      const history = await store.messages.list(session.id, question.id)
+
+      /**
+       * The prompt **the session was stamped with**, not whichever is active
+       * now.
+       *
+       * `session.promptVersion` is the record the study rests on — "which
+       * prompt produced this feedback?" — so the reply has to actually run on
+       * that version. A teacher publishing v3 mid-lesson must not silently
+       * change what v2's sessions are answering with and leave the transcript
+       * claiming otherwise. Falls back to the active one for a session recorded
+       * before any prompt existed.
+       */
+      const prompt =
+        (session.promptVersion ? await store.prompts.byVersion(session.promptVersion) : null) ??
+        (await store.prompts.active())
+
       // Both numbers up front, and from the store: the pair is what a snippet
       // is built from, so nothing may be numbered between them, and a
       // process-local counter would repeat itself across instances.
@@ -58,12 +80,21 @@ export function tutorRoutes(store, { resolveQuestion }) {
         createdAt: now(),
       })
 
-      const generated = reply({
+      const generated = await reply({
         question,
         answer,
         action,
         text: askText,
         promptVersion: session.promptVersion,
+        systemPrompt: prompt?.text ?? null,
+        thread: history,
+        /**
+         * Which language to answer in, sent per message rather than stored on
+         * the session: the toggle is in the workspace header and a student may
+         * switch mid-question, and the reply that follows should follow them.
+         * Anything unrecognised is English — the same default the interface has.
+         */
+        lang: req.body.lang === 'tr' ? 'tr' : 'en',
       })
 
       const tutor = await store.messages.insert({
@@ -76,7 +107,14 @@ export function tutorRoutes(store, { resolveQuestion }) {
         label: generated.label ?? null,
         text: generated.text,
         action,
+        /**
+         * Who wrote this: `gemini`, `scripted` (a teacher's own words, or the
+         * generic script where no model runs at all) or `fallback` (the model was
+         * asked and failed). The dataset is not readable without it — see
+         * services/tutor.js.
+         */
         source: generated.source,
+        model: generated.model ?? null,
         promptVersion: generated.promptVersion ?? null,
         rating: null,
         createdAt: now(),
@@ -101,7 +139,18 @@ export function tutorRoutes(store, { resolveQuestion }) {
           questionId: question.id,
           type: 'ai_feedback_shown',
           at: now(),
-          payload: { messageId: tutor.id, action, label: tutor.label },
+          payload: {
+            messageId: tutor.id,
+            action,
+            label: tutor.label,
+            source: tutor.source,
+            model: tutor.model,
+            // Why the model did not answer, when it did not: a timeout, a 429, a
+            // blocked prompt. The operational log is where this belongs rather
+            // than on the message, and "how often did the tutor fall back, and
+            // why" is a question about a lesson, not about one reply.
+            reason: generated.reason ?? null,
+          },
         },
       ])
 

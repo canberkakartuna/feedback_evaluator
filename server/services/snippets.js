@@ -32,7 +32,25 @@ export function buildSnippets(messages) {
       sessionId: ask.sessionId,
       questionId: ask.questionId,
       student: { text: ask.text, at: ask.createdAt },
-      tutor: { text: answer.text, label: answer.label ?? null, at: answer.createdAt },
+      tutor: {
+        text: answer.text,
+        label: answer.label ?? null,
+        /**
+         * Who wrote it: `gemini`, `scripted` (a teacher's own words) or
+         * `fallback` (the model failed) — see services/tutor.js. A label on
+         * generated feedback, a label on a teacher's hint and a label on a
+         * generic line the model never got to write are three different
+         * measurements, and without this they are one column of text. `null` on
+         * anything recorded before the field existed.
+         *
+         * Carried in the payload but deliberately not shown in the labelling
+         * screen: a teacher who can see which replies the model wrote is no
+         * longer labelling them blind.
+         */
+        source: answer.source ?? null,
+        model: answer.model ?? null,
+        at: answer.createdAt,
+      },
       rating: answer.rating ?? null,
       turnIndex: i,
     })

@@ -210,10 +210,20 @@ export const api = {
 
   messages: (sessionId, questionId) =>
     call('GET', `/api/sessions/${sessionId}/questions/${questionId}/messages`),
-  sendMessage: (sessionId, questionId, text) =>
-    call('POST', `/api/sessions/${sessionId}/questions/${questionId}/messages`, { text }),
-  runAction: (sessionId, questionId, action) =>
-    call('POST', `/api/sessions/${sessionId}/questions/${questionId}/messages`, { action }),
+
+  /**
+   * `lang` is which language the reply should be written in.
+   *
+   * The tutor is a model now, so its replies are prose generated per turn rather
+   * than strings from src/lib/strings.js — which means the language switch has
+   * to reach the server or a Turkish-speaking student gets tutored in English.
+   * Sent per message, not stored on the session, so switching mid-question
+   * switches the next reply too.
+   */
+  sendMessage: (sessionId, questionId, text, lang) =>
+    call('POST', `/api/sessions/${sessionId}/questions/${questionId}/messages`, { text, lang }),
+  runAction: (sessionId, questionId, action, lang) =>
+    call('POST', `/api/sessions/${sessionId}/questions/${questionId}/messages`, { action, lang }),
   rateMessage: (sessionId, messageId, value, note) =>
     call('POST', `/api/sessions/${sessionId}/messages/${messageId}/rating`, { value, note }),
 

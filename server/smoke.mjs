@@ -18,6 +18,7 @@
  * would. The signed-in student is the extra case, not the base one.
  */
 import { createApp } from './app.js'
+import { fallbackReplies } from '../shared/tutor-scripts.js'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -45,6 +46,18 @@ config.researchToken = 'smoke-token'
 // Set explicitly rather than left to fall back to the research token, so a
 // BOOTSTRAP_TOKEN in a local .env cannot change what these assertions mean.
 config.bootstrapToken = 'smoke-token'
+
+/**
+ * The tutor runs scripted here, whatever `.env.local` has in it.
+ *
+ * Not a shortcut: these assertions are about the parts of the tutor the server
+ * owns — that hints escalate one at a time, that a question with no script
+ * still gets one, that both turns are written atomically. A live model would
+ * make every one of them depend on the network, on a quota, and on a reply
+ * nobody can predict, and would bill someone for running the test suite.
+ * `npm run check:gemini` is the check that the key and the model work.
+ */
+config.gemini.apiKey = null
 
 /**
  * Which store to run against, decided here rather than inherited.
@@ -177,6 +190,11 @@ try {
   )
   check('persistence reported correctly', health.body.persistent === useMongo)
   check('health reports no users', health.body.users === 0)
+  check('tutor reported as scripted, as configured above', health.body.tutor === 'scripted')
+  check(
+    'and warns that no model is running',
+    health.body.warnings.some((warning) => warning.includes('GEMINI_API_KEY')),
+  )
   if (useMongo) {
     check('database reachable', health.body.databaseReachable === true)
     check('using the throwaway database', health.body.database === smokeDb)
@@ -928,6 +946,8 @@ try {
   check('hint returns both turns', hint1.status === 201 && Boolean(hint1.body.student && hint1.body.tutor))
   check('hint 1 labelled', hint1.body.tutor.label === 'Hint 1 of 3')
   check('it is the hint the teacher wrote', hint1.body.tutor.text.startsWith('Start outside'))
+  check('and it is recorded as scripted, not generated', hint1.body.tutor.source === 'scripted')
+  check('with no model against it', hint1.body.tutor.model === null)
 
   const hint2 = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
     body: { action: 'hint' },
@@ -962,6 +982,40 @@ try {
     { body: { value: 'up' } },
   )
   check('student turns cannot be rated', rateStudent.status === 400)
+
+  /**
+   * The failure path, which is the one that matters and the one nobody sees.
+   *
+   * A key that cannot work, pointed at a model that does not exist, so the call
+   * fails without reaching a real quota: a student must still get a whole
+   * sentence, and the record must say the model was asked and failed rather
+   * than quietly reading like a teacher wrote it.
+   */
+  config.gemini.apiKey = 'not-a-real-key'
+  config.gemini.model = 'no-such-model'
+  config.gemini.timeoutMs = 8000
+
+  const brokenModel = await call(
+    'POST',
+    `/api/sessions/${session.id}/questions/${bareQ.id}/messages`,
+    { body: { text: 'Does it still answer when the model is down?' } },
+  )
+  check('a failed model call still answers the student', brokenModel.status === 201)
+  check('with one of the whole scripted sentences', fallbackReplies.includes(brokenModel.body.tutor.text))
+  check('recorded as a fallback, not as a script', brokenModel.body.tutor.source === 'fallback')
+
+  const broken = await call('GET', `/api/research/sessions/${session.id}/transcript`, {
+    token: 'smoke-token',
+  })
+  check(
+    'and why it failed is in the event log',
+    broken.body.events.some(
+      (event) => event.type === 'ai_feedback_shown' && typeof event.payload?.reason === 'string',
+    ),
+  )
+
+  config.gemini.apiKey = null
+  config.gemini.model = 'gemini-flash-latest'
 
   console.log('\nuploads')
   const upload = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
@@ -1087,8 +1141,11 @@ try {
   check('another teacher sees none of it', strangerSessions.body.sessions.length === 0)
 
   const row = teacherSessions.body.sessions.find((entry) => entry.id === session.id)
-  check('message counts reported', row.counts.messages === 10)
-  check('snippet count reported', row.counts.snippets === 5)
+  // Twelve messages, six pairs: the tutor exchanges above plus the one that
+  // proves a failed model call still answers. Counted rather than sampled, so a
+  // turn that stopped being recorded shows up here.
+  check('message counts reported', row.counts.messages === 12)
+  check('snippet count reported', row.counts.snippets === 6)
 
   const transcript = await call('GET', `/api/research/sessions/${session.id}/transcript`, {
     token: teacherToken,
@@ -1108,10 +1165,20 @@ try {
   const snippets = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
     token: teacherToken,
   })
-  check('snippets are student+feedback pairs', snippets.body.snippets.length === 5)
+  check('snippets are student+feedback pairs', snippets.body.snippets.length === 6)
   check(
     'each snippet holds both turns',
     snippets.body.snippets.every((s) => s.student.text && s.tutor.text),
+  )
+  // Who wrote the feedback travels with it, or a label on a teacher's own hint
+  // and a label on a failed model call are the same row in the dataset.
+  check(
+    'and says where the feedback came from',
+    snippets.body.snippets.every((s) => ['gemini', 'scripted', 'fallback'].includes(s.tutor.source)),
+  )
+  check(
+    'including the one the model failed to write',
+    snippets.body.snippets.some((s) => s.tutor.source === 'fallback'),
   )
   check('labelling criteria offered', snippets.body.criteria.length === 5)
   check('undecided by default', snippets.body.snippets.every((s) => s.included === null))

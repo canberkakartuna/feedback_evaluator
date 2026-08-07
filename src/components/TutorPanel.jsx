@@ -79,8 +79,9 @@ export default function TutorPanel({
             {message.label ? <p className="tp-msg-label">{message.label}</p> : null}
             {/* An opening line nobody authored is chrome, so it is said here and
                 follows the language switch. Everything else in this thread is
-                either the student's own words or a reply written against what a
-                teacher authored, and is shown exactly as it came. */}
+                the student's own words, a teacher's authored hint, or a model
+                reply already written in the language they asked in — all shown
+                exactly as they came, none of it translated here. */}
             <p className="tp-msg-text">
               {message.text || (message.kind === 'opening' ? t('tp.opening') : null)}
             </p>

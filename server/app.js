@@ -127,6 +127,18 @@ export function createApp({ store = createStore() } = {}) {
       }
 
       /**
+       * A warning rather than a note, because a canned tutor is not a degraded
+       * feature — it is the study's independent variable switched off. The chat
+       * still answers, the system prompt is still versioned, and nothing in the
+       * interface says the model never ran, which is exactly why this has to.
+       */
+      if (!config.gemini.configured) {
+        warnings.push(
+          'GEMINI_API_KEY is unset, so the tutor answers from the scripted lines in shared/tutor-scripts.js and no model runs.',
+        )
+      }
+
+      /**
        * Counting users is also the accounts readiness check. Zero means
        * `POST /api/auth/bootstrap` is still open, and if no bootstrap token is
        * configured it is open to whoever calls it first — which on a reachable
@@ -152,6 +164,9 @@ export function createApp({ store = createStore() } = {}) {
         serverless: config.serverless,
         uploads: files.kind,
         uploadsReachable: filesReachable.ok,
+        /** Which of the two writes the tutor's replies — see services/tutor.js. */
+        tutor: config.gemini.configured ? 'gemini' : 'scripted',
+        tutorModel: config.gemini.configured ? config.gemini.model : null,
         researchEnabled: Boolean(config.researchToken),
         users,
         uptime: Math.round(process.uptime()),

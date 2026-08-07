@@ -422,6 +422,10 @@ export function createMemoryStore() {
       async active() {
         return clone(prompts.findLast((p) => p.active) ?? null)
       },
+      /** What a session was stamped with, which is not always what is active. */
+      async byVersion(versionId) {
+        return clone(prompts.find((p) => p.versionId === versionId) ?? null)
+      },
       async list() {
         return prompts.map(clone)
       },

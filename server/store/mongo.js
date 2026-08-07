@@ -89,7 +89,9 @@ const INDEXES = {
   events: [{ sessionId: 1, at: 1 }, { type: 1 }],
   ownQuestions: [{ sessionId: 1, createdAt: 1 }],
   uploads: [{ sessionId: 1 }],
-  prompts: [{ active: 1, _id: -1 }],
+  // `versionId` is looked up on every tutor message: a reply runs on the prompt
+  // version its session was stamped with, not on whatever is active now.
+  prompts: [{ active: 1, _id: -1 }, { versionId: 1 }],
 }
 
 /** Every read strips `_id`, so documents match the memory store's exactly. */
@@ -538,6 +540,10 @@ export function createMongoStore({ uri, dbName } = {}) {
       },
       async active() {
         return (await col('prompts')).findOne({ active: true }, { ...BARE, sort: { _id: -1 } })
+      },
+      /** What a session was stamped with, which is not always what is active. */
+      async byVersion(versionId) {
+        return (await col('prompts')).findOne({ versionId }, BARE)
       },
       async list() {
         return (await col('prompts')).find({}, { ...BARE, sort: { _id: 1 } }).toArray()
