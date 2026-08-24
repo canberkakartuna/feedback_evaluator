@@ -27,7 +27,6 @@ export default function QuestionPanel({
   onDetach,
   onSaveBoard,
   onCheck,
-  onAskHint,
   onStep,
   onOpenTutor,
 }) {
@@ -348,9 +347,6 @@ export default function QuestionPanel({
                   {t('qp.check')}
                 </button>
               ) : null}
-              <button type="button" className="qp-btn" onClick={onAskHint}>
-                {t('qp.hint')}
-              </button>
               {stale ? <p className="qp-stale">{t('qp.stale')}</p> : null}
             </div>
           </section>

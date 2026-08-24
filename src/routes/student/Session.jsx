@@ -463,11 +463,6 @@ export default function Session() {
     setMobileView('tutor')
   }, [])
 
-  const askForHint = useCallback(() => {
-    revealTutor()
-    quickAction('hint')
-  }, [quickAction, revealTutor])
-
   /* ── panel plumbing ──────────────────────────────────────── */
 
   const tutorVisible = tutorIsDocked ? !tutorCollapsed : mobileView === 'tutor' || tutorOpen
@@ -642,7 +637,6 @@ export default function Session() {
           onDetach={detach}
           onSaveBoard={saveBoard}
           onCheck={checkAnswer}
-          onAskHint={askForHint}
           onStep={step}
           onOpenTutor={revealTutor}
         />
