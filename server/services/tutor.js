@@ -1,4 +1,4 @@
-import { fallbackReplies } from '../../shared/tutor-scripts.js'
+import { fallbackReplyFor, ownTutorFor } from '../../shared/tutor-scripts.js'
 import { contentCount, hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
@@ -90,7 +90,7 @@ export async function reply({
   thread = [],
   lang = 'en',
 }) {
-  const scripted = scriptedReply({ question, answer, action, text, promptVersion })
+  const scripted = scriptedReply({ question, answer, action, text, promptVersion, lang })
 
   if (!config.gemini.configured) return scripted
   if (!modelAnswers({ question, answer, action })) return scripted
@@ -255,21 +255,54 @@ function turnsFor({ thread, text }) {
 }
 
 /**
+ * The two or three scripted lines that reference this particular question
+ * (its code, whether it has a rubric) rather than being subject-neutral like
+ * `ownTutor` — kept here rather than shared/tutor-scripts.js for that reason.
+ */
+const SCRIPT_STRINGS = {
+  en: {
+    lastHintWithRubric: (code) =>
+      `That was the last hint for ${code}. Write what you have and press Check my answer — I will mark it against the rubric and name what is missing.`,
+    lastHintNoRubric: (code) =>
+      `That was the last hint for ${code}. Write out your reasoning and I will read it back with you.`,
+    cannotReadDrawing:
+      'I cannot read a drawing or a photo yet, so I cannot check that working directly. Talk me through your reasoning here and I will tell you where it goes wrong.',
+    nothingToCheck:
+      'There is nothing to check yet. Put something in your answer and I will read it back to you.',
+  },
+  tr: {
+    lastHintWithRubric: (code) =>
+      `${code} için son ipucu buydu. Elindekini yaz ve "Cevabımı kontrol et"e bas — puanlama ölçütüne göre değerlendirip neyin eksik olduğunu söyleyeceğim.`,
+    lastHintNoRubric: (code) => `${code} için son ipucu buydu. Akıl yürütmeni yaz, birlikte okuyalım.`,
+    cannotReadDrawing:
+      'Henüz bir çizimi ya da fotoğrafı okuyamıyorum, o yüzden çözümünü doğrudan kontrol edemem. Akıl yürütmeni burada anlat, nerede yanlış gittiğini söyleyeyim.',
+    nothingToCheck: 'Kontrol edecek bir şey yok henüz. Cevabına bir şeyler yaz, birlikte okuyalım.',
+  },
+}
+
+const scriptFor = (lang) => SCRIPT_STRINGS[lang] ?? SCRIPT_STRINGS.en
+
+/**
  * The tutor with no model behind it: teacher-authored text, staged, and generic
  * lines where there is none.
  *
  * This is also the fallback, so it must not depend on anything that can fail.
+ * `lang` only changes the *generic* lines — a teacher's own hints, concept,
+ * example and misconception note are delivered exactly as they wrote them,
+ * whatever language that happens to be, same as the model path.
  */
-export function scriptedReply({ question, answer, action, text, promptVersion }) {
+export function scriptedReply({ question, answer, action, text, promptVersion, lang = 'en' }) {
   const hintsUsed = answer?.hintsUsed ?? 0
   const state = answerShape(answer)
   const base = { hintsUsed, source: 'scripted', promptVersion }
+  const own = ownTutorFor(lang)
+  const strings = scriptFor(lang)
 
   if (!action) {
     const words = wordCount(text ?? '')
     return {
       ...base,
-      text: fallbackReplies[words % fallbackReplies.length],
+      text: fallbackReplyFor(lang, words),
     }
   }
 
@@ -281,41 +314,53 @@ export function scriptedReply({ question, answer, action, text, promptVersion })
       return {
         ...base,
         text: question.rubric?.length
-          ? `That was the last hint for ${question.code}. Write what you have and press Check my answer — I will mark it against the rubric and name what is missing.`
-          : `That was the last hint for ${question.code}. Write out your reasoning and I will read it back with you.`,
+          ? strings.lastHintWithRubric(question.code)
+          : strings.lastHintNoRubric(question.code),
       }
     }
     return {
       ...base,
       label: `Hint ${hintsUsed + 1} of ${question.tutor.hints.length}`,
-      text: question.tutor.hints[hintsUsed],
+      text: question.tutor.authored.hints ? question.tutor.hints[hintsUsed] : own.hints[hintsUsed],
       hintsUsed: hintsUsed + 1,
     }
   }
 
   if (action === 'concept') {
-    return { ...base, label: 'The concept', text: question.tutor.concept }
+    return {
+      ...base,
+      label: 'The concept',
+      text: question.tutor.authored.concept ? question.tutor.concept : own.concept,
+    }
   }
 
   if (action === 'example') {
-    return { ...base, label: 'Worked example', text: question.tutor.example }
+    return {
+      ...base,
+      label: 'Worked example',
+      text: question.tutor.authored.example ? question.tutor.example : own.example,
+    }
   }
 
   // review
   if (state.mode === 'write' && wordCount(state.draft) >= 4) {
-    return { ...base, label: 'Watch for this', text: question.tutor.misconception }
+    return {
+      ...base,
+      label: 'Watch for this',
+      text: question.tutor.authored.misconception ? question.tutor.misconception : own.misconception,
+    }
   }
 
   if (hasContent(state)) {
     return {
       ...base,
-      text: 'I cannot read a drawing or a photo yet, so I cannot check that working directly. Talk me through your reasoning here and I will tell you where it goes wrong.',
+      text: strings.cannotReadDrawing,
     }
   }
 
   return {
     ...base,
-    text: 'There is nothing to check yet. Put something in your answer and I will read it back to you.',
+    text: strings.nothingToCheck,
   }
 }
 

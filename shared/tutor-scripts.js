@@ -33,21 +33,50 @@
  * and follow the same rule as the marking summaries: produced server-side, shown
  * as written. **They are the unconfigured and the failed path only.** With
  * `GEMINI_API_KEY` set, a question nobody wrote a script for is answered by the
- * model instead — which is also the only way it gets answered in Turkish, since
- * these are English wherever the interface is.
+ * model instead. Both paths follow the interface language now — `ownTutorFor`
+ * and `fallbackReplyFor` take it as an argument, since `withFallbacks` below
+ * has no `lang` in scope when it merges these onto a question.
  */
-export const ownTutor = {
-  hints: [
-    'Tell me what you have tried so far. The first line that stopped making sense is usually where to start.',
-    'Write down what you know and what you are looking for, then find the rule that connects the two.',
-    'Try the smallest version of this problem first — smaller numbers, one variable — then scale it back up.',
-  ],
-  concept:
-    'Tell me which topic this belongs to and I will lay out the idea behind it before we touch any numbers.',
-  example:
-    'Give me the exact question and I will work through a similar one line by line, then you try yours.',
-  misconception:
-    'Read your working back one line at a time and justify each step out loud. The first line you cannot justify is the line with the mistake in it.',
+/**
+ * One tree per language, same shape as `en` — mirrors the `DICTIONARIES`
+ * pattern in src/lib/strings.js rather than per-key `{ en, tr }` objects, so a
+ * translator can work from one language's tree at a time.
+ */
+const OWN_TUTOR = {
+  en: {
+    hints: [
+      'Tell me what you have tried so far. The first line that stopped making sense is usually where to start.',
+      'Write down what you know and what you are looking for, then find the rule that connects the two.',
+      'Try the smallest version of this problem first — smaller numbers, one variable — then scale it back up.',
+    ],
+    concept:
+      'Tell me which topic this belongs to and I will lay out the idea behind it before we touch any numbers.',
+    example:
+      'Give me the exact question and I will work through a similar one line by line, then you try yours.',
+    misconception:
+      'Read your working back one line at a time and justify each step out loud. The first line you cannot justify is the line with the mistake in it.',
+  },
+  tr: {
+    hints: [
+      'Bana şimdiye kadar ne denediğini anlat. Genelde işin mantığının kaybolduğu ilk satır, başlanması gereken yerdir.',
+      'Bildiklerini ve bulmaya çalıştığın şeyi yaz, sonra ikisini birbirine bağlayan kuralı bul.',
+      'Önce bu sorunun en küçük halini dene — daha küçük sayılar, tek bir bilinmeyen — sonra yeniden büyüt.',
+    ],
+    concept:
+      'Bunun hangi konuya ait olduğunu söyle, sayılara dokunmadan önce arkasındaki fikri anlatayım.',
+    example:
+      'Bana sorunun aynısını ver, benzer bir örneği satır satır çözeyim, sonra sırayı sana bırakayım.',
+    misconception:
+      'Çözümünü satır satır geriye doğru oku ve her adımı sesli olarak gerekçelendir. Gerekçelendiremediğin ilk satır, hatanın olduğu satırdır.',
+  },
+}
+
+/** English by default, unchanged for existing callers that never see a language. */
+export const ownTutor = OWN_TUTOR.en
+
+/** The generic script in a given interface language, English for anything unrecognised. */
+export function ownTutorFor(lang) {
+  return OWN_TUTOR[lang] ?? OWN_TUTOR.en
 }
 
 /**
@@ -76,10 +105,28 @@ export function withFallbacks(tutor) {
   }
 }
 
-export const fallbackReplies = [
-  'Good — say more about the second half of that. Which part are you least sure of?',
-  'That is the right instinct, but the step in between is missing. What links those two ideas?',
-  'Close. One term in there is doing the wrong job — read it back and tell me which one you would swap.',
-  'Yes. Now write it as one sentence in your answer box and I will read the phrasing.',
-  'Let us test that. If it were true, what would you expect the result to look like instead?',
-]
+const FALLBACK_REPLIES = {
+  en: [
+    'Good — say more about the second half of that. Which part are you least sure of?',
+    'That is the right instinct, but the step in between is missing. What links those two ideas?',
+    'Close. One term in there is doing the wrong job — read it back and tell me which one you would swap.',
+    'Yes. Now write it as one sentence in your answer box and I will read the phrasing.',
+    'Let us test that. If it were true, what would you expect the result to look like instead?',
+  ],
+  tr: [
+    'Güzel — bunun ikinci yarısını biraz daha anlat. En emin olamadığın kısım hangisi?',
+    'İçgüdün doğru, ama aradaki adım eksik. Bu iki fikri birbirine bağlayan şey ne?',
+    'Yaklaştın. İçindeki bir terim yanlış işi yapıyor — geri oku ve hangisini değiştirirdin, söyle.',
+    'Evet. Şimdi bunu cevap kutusuna tek bir cümle olarak yaz, ifadeni okuyayım.',
+    'Hadi bunu sınayalım. Bu doğru olsaydı, sonucun nasıl görünmesini beklerdin?',
+  ],
+}
+
+/** English by default, unchanged for existing callers that never see a language. */
+export const fallbackReplies = FALLBACK_REPLIES.en
+
+/** The generic free-text fallback in a given interface language. */
+export function fallbackReplyFor(lang, words) {
+  const replies = FALLBACK_REPLIES[lang] ?? FALLBACK_REPLIES.en
+  return replies[words % replies.length]
+}
