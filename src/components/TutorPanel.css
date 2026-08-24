@@ -206,51 +206,6 @@
   }
 }
 
-/* ── quick actions ──────────────────────────────────────────── */
-
-.tp-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex: none;
-  border-top: 1px solid var(--edge);
-  padding: var(--s-3) var(--s-4);
-}
-
-.tp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: var(--paper-raise);
-  padding: 5px 11px;
-  font-family: var(--f-display);
-  font-size: var(--t-12);
-  font-weight: 600;
-  color: var(--graphite);
-  transition:
-    border-color 0.14s ease,
-    color 0.14s ease;
-}
-
-.tp-chip:hover:not(:disabled) {
-  border-color: var(--pen);
-  color: var(--pen);
-}
-
-.tp-chip:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.tp-chip-count {
-  border-left: 1px solid var(--edge);
-  padding-left: 6px;
-  font-size: var(--t-11);
-  color: var(--graphite-faint);
-}
-
 /* ── composer ───────────────────────────────────────────────── */
 
 .tp-composer {

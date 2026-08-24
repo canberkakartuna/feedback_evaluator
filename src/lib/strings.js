@@ -276,10 +276,6 @@ const en = {
      */
     opening:
       'Ask me anything you are stuck on. Paste the question in, or just describe where you got lost, and we will work through it together.',
-    hintAction: 'Give me a hint',
-    conceptAction: 'Explain the concept',
-    exampleAction: 'Worked example',
-    reviewAction: 'Check my reasoning',
     helpful: 'Marked helpful',
     notHelpful: 'Marked not helpful',
     didThisHelp: 'Did this help?',
@@ -788,10 +784,6 @@ const tr = {
     close: 'Kapat',
     opening:
       'Takıldığın her şeyi bana sorabilirsin. Soruyu buraya yapıştır ya da nerede kaybolduğunu anlat, birlikte üzerinden geçelim.',
-    hintAction: 'Bana ipucu ver',
-    conceptAction: 'Konuyu açıkla',
-    exampleAction: 'Çözümlü örnek',
-    reviewAction: 'Akıl yürütmemi kontrol et',
     helpful: 'Yararlı olarak işaretlendi',
     notHelpful: 'Yararsız olarak işaretlendi',
     didThisHelp: 'Bu yardımcı oldu mu?',

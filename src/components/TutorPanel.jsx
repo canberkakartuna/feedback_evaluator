@@ -2,16 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { useT } from '../lib/i18n'
 import './TutorPanel.css'
 
-/** Ids the server understands; the words come from `tp.*Action` in strings.js. */
-const ACTIONS = ['hint', 'concept', 'example', 'review']
-
 export default function TutorPanel({
   question,
   state,
   pending,
   open,
   onSend,
-  onQuickAction,
   onRate,
   onClose,
   onCollapse,
@@ -29,8 +25,6 @@ export default function TutorPanel({
   useEffect(() => {
     if (open) closeButton.current?.focus()
   }, [open])
-
-  const hintsLeft = (question.hintCount ?? 0) - state.hintsUsed
 
   const submit = (event) => {
     event.preventDefault()
@@ -126,23 +120,6 @@ export default function TutorPanel({
             </p>
           </article>
         ) : null}
-      </div>
-
-      <div className="tp-actions">
-        {ACTIONS.map((action) => (
-          <button
-            key={action}
-            type="button"
-            className="tp-chip"
-            disabled={pending}
-            onClick={() => onQuickAction(action)}
-          >
-            {t(`tp.${action}Action`)}
-            {action === 'hint' ? (
-              <span className="tp-chip-count mono">{hintsLeft > 0 ? hintsLeft : 0}</span>
-            ) : null}
-          </button>
-        ))}
       </div>
 
       <form className="tp-composer" onSubmit={submit}>

@@ -411,11 +411,6 @@ export default function Session() {
     [activeId, converse, lang, sessionId],
   )
 
-  const quickAction = useCallback(
-    (kind) => converse(() => api.runAction(sessionId, activeId, kind, lang)),
-    [activeId, converse, lang, sessionId],
-  )
-
   const rateMessage = useCallback(
     async (messageId, value) => {
       patch(activeId, { ratings: { ...progress[activeId].ratings, [messageId]: value } })
@@ -681,7 +676,6 @@ export default function Session() {
             pending={pendingIds.includes(active.id)}
             open={tutorOpen}
             onSend={send}
-            onQuickAction={quickAction}
             onRate={rateMessage}
             onClose={() => setTutorOpen(false)}
             onCollapse={() => setTutorCollapsed(true)}
