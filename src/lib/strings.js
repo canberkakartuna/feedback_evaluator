@@ -92,6 +92,16 @@ const en = {
     staffAccounts: 'Teacher accounts are created by an administrator.',
   },
 
+  /** Shown once, to every signed-in account except an admin. See ConsentScreen.jsx. */
+  consent: {
+    eyebrow: 'Before you continue',
+    title: 'How this system uses your data',
+    lede: 'Everything you do in this system — every action you take and every piece of data you generate — is used for research. Please read this before continuing.',
+    agree: 'I have read, understood, and I approve',
+    submit: 'Submit',
+    submitting: 'Saving…',
+  },
+
   entry: {
     step: 'Step {current} of {total}',
 
@@ -587,6 +597,15 @@ const tr = {
     noAccount:
       'Hesabınız yok mu? Öğrenciler öğretmenlerinden aldıkları sınıf koduyla ya da listeden seçerek katılır.',
     staffAccounts: 'Öğretmen hesaplarını yönetici oluşturur.',
+  },
+
+  consent: {
+    eyebrow: 'Devam etmeden önce',
+    title: 'Verileriniz nasıl kullanılıyor',
+    lede: 'Bu sistemde yaptığınız her şey — her işlem ve oluşturduğunuz her veri — araştırma amacıyla kullanılır. Devam etmeden önce lütfen bunu okuyun.',
+    agree: 'Okudum, anladım ve onaylıyorum',
+    submit: 'Gönder',
+    submitting: 'Kaydediliyor…',
   },
 
   entry: {

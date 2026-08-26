@@ -29,7 +29,7 @@ present in one language only.
 
 | Route | Who | What they do |
 | --- | --- | --- |
-| `/` | students | Consent, then anonymously or signed in, pick an activity |
+| `/` | students | Anonymously or signed in, pick an activity |
 | `/join`, `/join/:code` | students | The same, reached by a class code or its link |
 | `/work/:sessionId` | students | The workspace: question, answer, tutor chat |
 | `/teacher` | teachers, managers | Write activities, read student work, label snippets |
@@ -77,30 +77,37 @@ students' list and the teacher's are filtered by it. The list is `TOPICS` in
 
 ### Who sees the consent notice, and when
 
-**Who you are is asked first, the notice second.** Opening the site asks how you
-are working — anonymously (then a nickname), or signed in — and only somebody who
-has just said they are a student is shown the research notice. That ordering is what keeps it out of
-the way of a teacher who has not signed in yet: their route to the sign-in screen
-no longer runs through a consent form written for somebody else.
+**Signing in comes first, the notice second.** The gate sits above every route —
+`ConsentGate` in `src/App.jsx` — so it does not matter what a person was about to
+open: a teacher heading for `/teacher`, a student with a password heading for `/`,
+both hit the same screen first if they have not agreed yet.
 
 | Who | Sees it |
 | --- | --- |
-| Nobody yet | Nothing, until they say which of the two they are |
-| Anonymous student | Every visit — there is no account to remember it against |
-| Student with a password | **Once, ever.** Agreeing records it on the account (`POST /api/auth/consent`), and `user.consented` is what later visits read |
-| Teacher, manager, admin | Never — they are sent to their console instead, see below |
+| Nobody signed in (anonymous) | Never asked here — see the note below |
+| Student, teacher or manager with an account | **Once, ever, immediately after signing in and before anything else.** Checking the box and pressing Submit calls `POST /api/auth/consent`; `user.consented` is what every later sign-in reads |
+| Admin | Never |
 
 Bumping `CONSENT_VERSION` asks everybody again, which is the point of having a
 version: an agreement to last term's wording is not an agreement to this term's.
 
-The gate itself lives in one place, `src/routes/student/StudentLayout.jsx`, which
-wraps every entry screen — so it is shown on the way *into* the student side
-rather than on the way into each screen, and a new entry screen inherits it.
+The screen itself is `src/components/ConsentScreen.jsx` — a required checkbox and
+a Submit button that stays disabled until it is checked. There is no decline
+button: the only way off the screen without agreeing is signing out.
+
+**Anonymous sessions are a separate, older mechanism.** `POST /api/sessions`
+still refuses to start a session without `consent: true` in the body (see
+`server/routes/sessions.js`), but the screen that used to ask an anonymous
+visitor for that was removed along with the old `ConsentCard`, and
+`StudentEntry.jsx`/`Join.jsx` now send `consent: true` unconditionally. In
+practice that means an anonymous, no-account visitor's consent is recorded as
+given without ever being asked. That gap predates this gate and is not what it
+fixes — it only covers people who sign in.
 
 A token that cannot be checked — the API down, a proxy 502 — is **not** treated as
-"anonymous". That fallback would quietly show a signed-in teacher a form written
-for a research subject, so the screen says it cannot tell who is asking and offers
-a retry instead.
+"anonymous". That fallback would quietly wave a signed-in teacher through as an
+anonymous visitor, so the student entry screen says it cannot tell who is asking
+and offers a retry instead.
 
 ### The student side is students only
 
