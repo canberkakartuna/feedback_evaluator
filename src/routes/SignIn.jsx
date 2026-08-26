@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import TopBar from '../components/TopBar'
@@ -51,7 +51,7 @@ export default function SignIn() {
     <main className="en-page">
       {/* No "My console" here — nobody is signed in yet, and no sign-out for the
           same reason. Home and the language switch are the useful pair. */}
-      <TopBar who={false} join />
+      <TopBar who={false} />
       <div className="en-card">
         <p className="eyebrow">{t('signin.eyebrow')}</p>
         <h1 className="en-title">{t('signin.title')}</h1>
@@ -101,14 +101,6 @@ export default function SignIn() {
         <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
           {t('signin.noAccount')} {t('signin.staffAccounts')}
         </p>
-
-        {/* No "start as a student" here — Home in the bar above already goes
-            there, and two buttons to one place read as two destinations. */}
-        <div className="en-actions">
-          <Link className="en-btn" to="/join">
-            {t('entry.pick.enterCode')}
-          </Link>
-        </div>
       </div>
     </main>
   )

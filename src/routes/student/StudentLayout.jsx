@@ -111,7 +111,7 @@ export default function StudentLayout() {
   if (needsWho && working !== 'anon') {
     return (
       <main className="en-page">
-        <TopBar join />
+        <TopBar />
         <div className="en-card">
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('who'), total: steps.length })}
@@ -151,7 +151,7 @@ export default function StudentLayout() {
   if (needsWho && !named) {
     return (
       <main className="en-page">
-        <TopBar join />
+        <TopBar />
         <div className="en-card">
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('nickname'), total: steps.length })}
@@ -209,7 +209,7 @@ export default function StudentLayout() {
   /* 3 — the work. */
   return (
     <main className="en-page">
-      <TopBar join />
+      <TopBar />
       <Outlet
         context={{
           /** Anonymous only: a signed-in session is labelled by its account. */
