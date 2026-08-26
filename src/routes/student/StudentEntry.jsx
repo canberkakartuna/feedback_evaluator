@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
@@ -127,12 +127,6 @@ export default function StudentEntry() {
           )}
         </>
       )}
-
-      <div className="en-actions">
-        <Link className="en-btn" to="/join">
-          {t('entry.pick.enterCode')}
-        </Link>
-      </div>
     </div>
   )
 }
