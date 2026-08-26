@@ -95,31 +95,6 @@ const en = {
   entry: {
     step: 'Step {current} of {total}',
 
-    consent: {
-      eyebrow: 'Consent',
-      title: 'Before you start',
-      lede: 'This workspace is part of a research study on how AI feedback helps students work through problems. Please read this before you start.',
-      recordedHead: 'What gets recorded',
-      recorded1: 'Everything you type to the tutor, and everything it replies.',
-      recorded2: 'Your answers — typed, drawn or uploaded — and the marks on them.',
-      recorded3: 'Which questions you open, how you mark them, and when.',
-      usedHead: 'How it is used',
-      used1: 'To build an anonymous dataset for research on AI feedback in teaching.',
-      used2: 'Your teacher may read your conversations and label them for the study.',
-      used3: 'You are not asked for your real name, your email or your school — anonymous work is labelled with a nickname you make up.',
-      warn: 'Do not type your name, anyone else’s name, or any other personal detail into the workspace. You can stop at any time, and delete everything you did, from inside the workspace.',
-      agree: 'I have read this, and I agree to my answers and conversations being recorded for this research.',
-      continue: 'Agree and continue',
-      decline: 'I do not agree',
-    },
-
-    declined: {
-      eyebrow: 'Not started',
-      title: 'Nothing has been recorded',
-      lede: 'The workspace only runs with consent, so there is nothing further to do here. You can close this tab.',
-      back: 'Back to the consent form',
-    },
-
     who: {
       title: 'How are you working today?',
       lede: 'Either is fine. Anonymous is the normal way in — you only need an account if your teacher set one up for you.',
@@ -343,7 +318,7 @@ const en = {
   activities: {
     eyebrow: 'Authoring',
     title: 'Activities',
-    lede: 'An activity is a set of questions. Publishing it is what puts it in front of students — they open the site or type its class code, agree to the consent notice, and start. Everything they say to the tutor is recorded against it.',
+    lede: 'An activity is a set of questions. Publishing it is what puts it in front of students — they open the site or type its class code, and start. Everything they say to the tutor is recorded against it.',
     new: 'New activity',
     titleLabel: 'Title',
     titlePlaceholder: 'Sharing a bill three ways',
@@ -376,7 +351,7 @@ const en = {
     shareHead: 'How students get in',
     shareCode: 'Class code',
     shareLink: 'Direct link',
-    shareHint: 'Read the code out, or hand out the link. Either takes a student straight to this activity — they still see the consent notice first.',
+    shareHint: 'Read the code out, or hand out the link. Either takes a student straight to this activity.',
     shareDraft: 'Both start working the moment you publish. Until then they say the activity is not open yet.',
     copyCode: 'Copy code',
     copyLink: 'Copy link',
@@ -617,31 +592,6 @@ const tr = {
   entry: {
     step: 'Adım {current} / {total}',
 
-    consent: {
-      eyebrow: 'Onay',
-      title: 'Başlamadan önce',
-      lede: 'Bu çalışma alanı, yapay zekâ geri bildiriminin öğrencilere problem çözmede nasıl yardımcı olduğunu inceleyen bir araştırmanın parçasıdır. Başlamadan önce lütfen bunu okuyun.',
-      recordedHead: 'Neler kaydedilir',
-      recorded1: 'Öğretmene yazdığınız her şey ve verdiği her yanıt.',
-      recorded2: 'Cevaplarınız — yazılan, çizilen ya da yüklenen — ve aldıkları puanlar.',
-      recorded3: 'Hangi soruları açtığınız, nasıl işaretlediğiniz ve ne zaman yaptığınız.',
-      usedHead: 'Nasıl kullanılır',
-      used1: 'Öğretimde yapay zekâ geri bildirimi araştırması için anonim bir veri kümesi oluşturmak üzere.',
-      used2: 'Öğretmeniniz konuşmalarınızı okuyabilir ve çalışma için etiketleyebilir.',
-      used3: 'Gerçek adınız, e-postanız veya okulunuz sorulmaz — anonim çalışmalar, kendinizin uydurduğu bir takma adla etiketlenir.',
-      warn: 'Çalışma alanına adınızı, başka birinin adını veya başka bir kişisel bilgiyi yazmayın. Dilediğiniz an durabilir ve yaptığınız her şeyi çalışma alanının içinden silebilirsiniz.',
-      agree: 'Bunu okudum; cevaplarımın ve konuşmalarımın bu araştırma için kaydedilmesini kabul ediyorum.',
-      continue: 'Kabul et ve devam et',
-      decline: 'Kabul etmiyorum',
-    },
-
-    declined: {
-      eyebrow: 'Başlatılmadı',
-      title: 'Hiçbir şey kaydedilmedi',
-      lede: 'Çalışma alanı yalnızca onayla çalışır, bu yüzden burada yapılacak başka bir şey yok. Bu sekmeyi kapatabilirsiniz.',
-      back: 'Onay formuna dön',
-    },
-
     who: {
       title: 'Bugün nasıl çalışıyorsunuz?',
       lede: 'İkisi de olur. Olağan yol anonim çalışmaktır — hesap yalnızca öğretmeniniz size bir hesap açtıysa gerekir.',
@@ -851,7 +801,7 @@ const tr = {
   activities: {
     eyebrow: 'Hazırlama',
     title: 'Etkinlikler',
-    lede: 'Etkinlik bir soru kümesidir. Onu öğrencilerin önüne koyan şey yayımlamaktır — siteyi açar ya da sınıf kodunu yazar, onay metnini kabul eder ve başlarlar. Öğretmene söyledikleri her şey bu etkinliğe kaydedilir.',
+    lede: 'Etkinlik bir soru kümesidir. Onu öğrencilerin önüne koyan şey yayımlamaktır — siteyi açar ya da sınıf kodunu yazar ve başlarlar. Öğretmene söyledikleri her şey bu etkinliğe kaydedilir.',
     new: 'Yeni etkinlik',
     titleLabel: 'Başlık',
     titlePlaceholder: 'Bir hesabı üç kişiye bölmek',
@@ -884,7 +834,7 @@ const tr = {
     shareHead: 'Öğrenciler nasıl girer',
     shareCode: 'Sınıf kodu',
     shareLink: 'Doğrudan bağlantı',
-    shareHint: 'Kodu okuyun ya da bağlantıyı paylaşın. İkisi de öğrenciyi doğrudan bu etkinliğe götürür — yine de önce onay metnini görürler.',
+    shareHint: 'Kodu okuyun ya da bağlantıyı paylaşın. İkisi de öğrenciyi doğrudan bu etkinliğe götürür.',
     shareDraft: 'İkisi de yayımladığınız anda çalışmaya başlar. O zamana kadar etkinliğin açık olmadığını söylerler.',
     copyCode: 'Kodu kopyala',
     copyLink: 'Bağlantıyı kopyala',

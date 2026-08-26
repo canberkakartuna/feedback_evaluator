@@ -18,7 +18,7 @@ import People from './routes/admin/People'
 /**
  * Three audiences on one deployment, told apart by role.
  *
- *   /            students — consent, then pick from a list
+ *   /            students — pick from a list
  *   /join        the same, reached by a class code (/join/:code resolves one)
  *   /work/:id    the workspace itself
  *   /teacher     authoring, rosters, transcripts, labelling
@@ -61,16 +61,14 @@ export default function App() {
       <AuthProvider>
         <Routes>
           {/**
-           * **One** StudentLayout over every entry screen, and that is the whole
-           * point of it: the consent notice is shown on the way *into* the
-           * student side, not on the way into each screen. Because these are
+           * **One** StudentLayout over every entry screen. Because these are
            * sibling children of a single parent route, the layout element stays
-           * mounted as they navigate between them — so a student who agrees on
-           * the list screen and then presses "Class code" is not asked a second
-           * time for the same visit.
+           * mounted as they navigate between them — so a student who has already
+           * given a nickname on the list screen and then presses "Class code" is
+           * not asked for one a second time in the same visit.
            *
            * Declaring it twice, once per branch, is what caused exactly that:
-           * two elements, two pieces of state, two notices.
+           * two elements, two pieces of state.
            *
            * /join has both spellings because a code is read out as often as it
            * is clicked: /join asks for one, /join/ABC234 resolves it.
@@ -81,9 +79,9 @@ export default function App() {
             <Route path="/join/:code" element={<Join />} />
           </Route>
 
-          {/* Outside the layout on purpose: this session's consent was recorded
-              when it was created, so asking again on every reload would be
-              asking a question that has an answer. */}
+          {/* Outside the layout on purpose: the workspace itself has nothing to
+              do with who is entering the student side, only with the session
+              that was already created. */}
           <Route path="/work/:sessionId" element={<Session />} />
           <Route path="/signin" element={<SignIn />} />
 

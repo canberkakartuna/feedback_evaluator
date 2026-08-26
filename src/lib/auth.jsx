@@ -41,9 +41,9 @@ export function AuthProvider({ children }) {
        * it, and this really is an anonymous visitor. Anything else — the API
        * down, a proxy 502, a dropped connection — is *not* an answer, and
        * treating it as one silently demotes a signed-in teacher to an anonymous
-       * participant. The student entry screen then shows them a research consent
-       * form addressed to somebody else, which is the one thing it must never
-       * do, so it reads `problem` and says it cannot tell instead.
+       * participant. The student entry screen then shows them a screen meant for
+       * somebody else, which is the one thing it must never do, so it reads
+       * `problem` and says it cannot tell instead.
        */
       setProblem(error.status === 401 ? null : error)
     } finally {
@@ -107,7 +107,7 @@ export function homeFor(user) {
  * /teacher/students, and returning them there is the whole point. Anything else
  * is a page they merely happened to be on: the student entry screen sets
  * `from: '/'` for its "Sign in" link, and honouring that would land a teacher
- * back on the student consent form instead of their console.
+ * back on the student entry screen instead of their console.
  */
 export function landingFor(user, from) {
   const home = homeFor(user)
