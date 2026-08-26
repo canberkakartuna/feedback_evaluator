@@ -6,8 +6,7 @@
   "regions": ["lhr1"],
   "functions": {
     "api/**": {
-      "maxDuration": 60,
-      "includeFiles": ".env"
+      "maxDuration": 60
     }
   },
   "rewrites": [

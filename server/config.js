@@ -7,26 +7,23 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(here, '..')
 
 /**
- * Config comes from `.env.local` and then `.env`, in development and deployment
- * alike, and is loaded before anything below is read.
+ * Config comes from `.env.local` and then `.env` — **in development only** —
+ * and is loaded before anything below is read.
  *
  * Precedence runs left to right and the first setter of a key wins, so:
- * real environment variables beat `.env.local`, which beats `.env`. A
- * host-injected value therefore overrides both files with no code change.
+ * real environment variables beat `.env.local`, which beats `.env`.
  *
- * The split matters. `.env` is committed — that is the only way a serverless
- * deployment reads it — so everything in it is public to anyone with repository
- * access, for good. `.env.local` is gitignored (`*.local`), which makes it the
- * place for credentials such as MONGODB_URI when working locally; in a
- * deployment those come from the host's own environment settings instead.
+ * The merge exists so local development can keep credentials such as
+ * GEMINI_API_KEY in the gitignored `.env.local` (`*.local`) while the shared
+ * knobs stay in the committed `.env`. On Vercel neither file is read: the
+ * deployment is configured entirely from the project's environment settings
+ * (Vercel → Project → Settings → Environment Variables).
  *
  * Vite applies the same two files in the same order to VITE_-prefixed keys, so
  * the client and the API never disagree about which value won.
  *
- * Both the repo root and the working directory are tried, because a bundled
- * serverless function does not necessarily run from the root. `vercel.json` has
- * to name `.env` under `includeFiles` too, or the file is not shipped with the
- * function at all.
+ * Both the repo root and the working directory are tried, because scripts and
+ * tests do not necessarily run from the root.
  */
 const candidates = [
   path.join(repoRoot, '.env.local'),
@@ -40,15 +37,19 @@ export const envFile = (() => {
   let applied = 0
   let skipped = 0
 
-  // Deduplicated: run from the repo root and both candidates for a name are the
-  // same file, which would otherwise be counted twice.
-  for (const candidate of new Set(candidates)) {
-    const result = loadEnvFile(candidate)
-    if (!result.loaded) continue
+  // Development only. On Vercel the deployment is configured by the host's
+  // environment settings, never by files baked into the bundle.
+  if (!process.env.VERCEL) {
+    // Deduplicated: run from the repo root and both candidates for a name are
+    // the same file, which would otherwise be counted twice.
+    for (const candidate of new Set(candidates)) {
+      const result = loadEnvFile(candidate)
+      if (!result.loaded) continue
 
-    files.push(candidate)
-    applied += result.applied
-    skipped += result.skipped
+      files.push(candidate)
+      applied += result.applied
+      skipped += result.skipped
+    }
   }
 
   return { loaded: files.length > 0, applied, skipped, files }
@@ -123,10 +124,10 @@ export const config = {
    * two is answering.
    *
    * The key lives in `.env.local`, so it has never been committed. Note what
-   * that costs: `.env.local` is not deployed, so a deployment answers scripted
-   * until `GEMINI_API_KEY` is set in the host's own environment settings — see
-   * the note in `.env`, which is committed and does carry the other
-   * credentials. Everything else here is a knob and belongs in `.env`.
+   * that costs: env files are read in development only, so a deployment
+   * answers scripted until `GEMINI_API_KEY` is set in the host's own
+   * environment settings (Vercel → Project → Settings → Environment
+   * Variables). Everything else here is a knob and belongs in `.env`.
    */
   gemini: {
     apiKey: process.env.GEMINI_API_KEY?.trim() || null,

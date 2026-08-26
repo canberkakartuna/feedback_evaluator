@@ -17,10 +17,11 @@ import { createApp } from '../server/app.js'
  * instances, so this is the cheap path, and the Mongo connection pool is shared
  * by every request an instance serves rather than opened per invocation.
  *
- * `MONGODB_URI` has to be set in the project's environment settings for that
- * store to be selected at all — it is a credential, so it is not in the
- * committed `.env`. Uploads are still per-instance and do not survive; see
- * server/README.md before pointing real students at a deployment.
+ * The deployment reads no `.env` file — server/config.js skips the merge when
+ * `VERCEL` is set — so `MONGODB_URI` and every other value have to come from
+ * the project's environment settings. Uploads are still per-instance and do
+ * not survive; see server/README.md before pointing real students at a
+ * deployment.
  */
 const app = createApp()
 

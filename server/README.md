@@ -17,7 +17,8 @@ Vite proxies `/api` to port 4000, so the client calls `/api/...` with no base UR
 
 ## Environment
 
-Two files at the repo root, read in development and in the deployment alike.
+Two files at the repo root, merged **in development only** — a deployment reads
+neither and is configured entirely in the host's environment settings.
 `.env.example` is the template:
 
 ```bash
@@ -32,17 +33,17 @@ with no code change — and the smoke test can set its own values before importi
 
 The split is the important part:
 
-- **`.env` is committed**, because that is the only way a serverless deployment
-  reads it. Everything in it is visible to anyone with repository access and
-  stays in git history, permanently. `RESEARCH_TOKEN` lives here and is rotated
-  by editing the value. **No credentials.**
+- **`.env` is committed** — the shared development defaults and knobs.
+  Everything in it is visible to anyone with repository access and stays in git
+  history, permanently. **No credentials.**
 - **`.env.local` is gitignored** (by the `*.local` rule) and overrides `.env`.
-  This is where `MONGODB_URI` goes when working locally.
-- **In a deployment, credentials come from the host's own environment settings**
-  (Vercel: Project → Settings → Environment Variables), which beat both files.
-  `.env.local` is not committed, so it is not deployed — that is the point.
-- **`vercel.json` names `.env` under `includeFiles`.** Without that the file is
-  not traced into the function bundle and none of this loads once deployed.
+  This is where credentials — `GEMINI_API_KEY`, `MONGODB_URI` — go when working
+  locally.
+- **A deployment reads neither file.** `server/config.js` skips both when
+  `VERCEL` is set, so in production every value — credentials and knobs alike —
+  comes from the host's own environment settings (Vercel: Project → Settings →
+  Environment Variables). Set everything the deployment needs there before
+  deploying.
 
 Vite applies the same two files in the same order to `VITE_`-prefixed keys, so
 the client and the API never disagree about which value won.
@@ -362,8 +363,10 @@ vercel            # preview
 vercel --prod
 ```
 
-Set `RESEARCH_TOKEN`, `MONGODB_URI`, `SPACES_KEY`/`SPACES_SECRET` and
-`GEMINI_API_KEY` in project settings — not in `.env`, which is committed; see
+The deployment reads no `.env` file at all, so set **everything it needs** in
+project settings (Vercel → Project → Settings → Environment Variables) — at
+minimum `RESEARCH_TOKEN`, `MONGODB_URI`, `MONGODB_DB`,
+`SPACES_KEY`/`SPACES_SECRET`, `GEMINI_API_KEY` and `CONSENT_VERSION`; see
 [Environment](#environment). Then create the first admin with
 `POST /api/auth/bootstrap`; `GET /api/health` reports `ready: false` while no user
 exists.

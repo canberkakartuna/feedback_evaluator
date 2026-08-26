@@ -262,7 +262,8 @@ src/
 
 ## Deploying
 
-Vercel runs Express natively, so the whole API is one function. See
-[Deploying to Vercel](server/README.md#deploying-to-vercel) for the environment
-split — in particular which secrets belong in the host's settings rather than in
-the committed `.env`.
+Vercel runs Express natively, so the whole API is one function. The `.env` /
+`.env.local` merge is development-only: a deployment reads neither file and is
+configured entirely in Vercel → Project → Settings → Environment Variables. See
+[Deploying to Vercel](server/README.md#deploying-to-vercel) for what has to be
+set there.
