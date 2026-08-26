@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { AuthProvider, homeFor, useAuth } from './lib/auth'
 import { useT } from './lib/i18n'
 import ConsentScreen from './components/ConsentScreen'
+import Profile from './routes/Profile'
 import SignIn from './routes/SignIn'
 import StudentLayout from './routes/student/StudentLayout'
 import StudentEntry from './routes/student/StudentEntry'
@@ -109,6 +110,7 @@ export default function App() {
                 that was already created. */}
             <Route path="/work/:sessionId" element={<Session />} />
             <Route path="/signin" element={<SignIn />} />
+            <Route path="/profil" element={<Profile />} />
 
             <Route
               path="/teacher"

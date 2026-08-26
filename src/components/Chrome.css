@@ -19,6 +19,13 @@
   margin: 0 auto var(--s-4);
 }
 
+/* On an entry screen the bar sits above a centred card, but it is not part of
+   that card — it belongs to the page as a whole, so it hugs the page's own
+   top-right corner rather than centring with the sheet below it. */
+.ch-bar[data-layout='page'] {
+  align-self: flex-end;
+}
+
 /* Inside a console sidebar the bar stacks instead, and owns no width. */
 .ch-bar[data-layout='stack'] {
   flex-direction: column;

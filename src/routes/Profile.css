@@ -1,0 +1,38 @@
+/* The key/value rows of the account section — see ./Profile.jsx. Sits inside
+   .en-terms, so it inherits that block's spacing from Entry.css. */
+
+.pf-list {
+  margin: 0;
+}
+
+.pf-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-14);
+}
+
+.pf-row:last-child {
+  border-bottom: none;
+}
+
+.pf-row dt {
+  color: var(--graphite);
+}
+
+.pf-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.pf-consent-note {
+  margin: var(--s-3) 0 0;
+  border-left: 2px solid var(--pen);
+  padding-left: var(--s-3);
+  font-size: var(--t-13);
+  color: var(--graphite);
+}

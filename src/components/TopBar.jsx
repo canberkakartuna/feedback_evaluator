@@ -18,8 +18,8 @@ import './Chrome.css'
  * What appears depends only on who is signed in:
  *
  *   nobody          Home · Class code · Sign in
- *   a student       Home · Class code · Sign out
- *   staff           My console · Sign out
+ *   a student       Home · Class code · Profile · Sign out
+ *   staff           My console · Profile · Sign out
  *
  * `layout` picks the arrangement, not the contents: `page` is the centred row
  * above an entry card, `stack` is a console sidebar, `bar` is the tight row at
@@ -31,6 +31,7 @@ export default function TopBar({
   homeKey = 'nav.home',
   join = false,
   console: showConsole = true,
+  profile = true,
   who = true,
   signOutTo = '/',
 }) {
@@ -92,6 +93,12 @@ export default function TopBar({
       {hasConsole ? (
         <Link className="ch-btn" to={consoleHref}>
           {t('nav.myConsole')}
+        </Link>
+      ) : null}
+
+      {profile && ready && user ? (
+        <Link className="ch-btn" to="/profil">
+          {t('nav.profile')}
         </Link>
       ) : null}
 

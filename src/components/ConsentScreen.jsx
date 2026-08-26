@@ -41,7 +41,7 @@ export default function ConsentScreen() {
 
   return (
     <main className="en-page">
-      <TopBar home={false} join={false} console={false} />
+      <TopBar home={false} join={false} console={false} profile={false} />
       <div className="en-card">
         <p className="eyebrow">{t('consent.eyebrow')}</p>
         <h1 className="en-title">{t('consent.title')}</h1>

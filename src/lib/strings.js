@@ -67,6 +67,7 @@ const en = {
     signingOut: 'Signing out…',
     myConsole: 'My console',
     joinWithCode: 'Class code',
+    profile: 'Profile',
     language: 'Language',
     signedInAs: 'Signed in as {name}',
     working: 'Working anonymously',
@@ -100,6 +101,18 @@ const en = {
     agree: 'I have read, understood, and I approve',
     submit: 'Submit',
     submitting: 'Saving…',
+  },
+
+  /** The account's own record: who they are, and the notice they agreed to. See routes/Profile.jsx. */
+  profile: {
+    eyebrow: 'Your account',
+    title: 'Profile',
+    accountHead: 'Account',
+    name: 'Name',
+    email: 'Email',
+    consentHead: 'Research consent',
+    consentGiven: 'Submitted {date}.',
+    consentNone: 'No consent has been recorded on this account yet.',
   },
 
   entry: {
@@ -573,6 +586,7 @@ const tr = {
     signingOut: 'Çıkılıyor…',
     myConsole: 'Konsolum',
     joinWithCode: 'Sınıf kodu',
+    profile: 'Profil',
     language: 'Dil',
     signedInAs: '{name} olarak giriş yapıldı',
     working: 'Anonim çalışıyorsunuz',
@@ -606,6 +620,17 @@ const tr = {
     agree: 'Okudum, anladım ve onaylıyorum',
     submit: 'Gönder',
     submitting: 'Kaydediliyor…',
+  },
+
+  profile: {
+    eyebrow: 'Hesabınız',
+    title: 'Profil',
+    accountHead: 'Hesap',
+    name: 'Ad',
+    email: 'E-posta',
+    consentHead: 'Araştırma onayı',
+    consentGiven: '{date} tarihinde gönderildi.',
+    consentNone: 'Bu hesapta henüz kayıtlı bir onay yok.',
   },
 
   entry: {
