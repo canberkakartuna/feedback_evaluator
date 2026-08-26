@@ -7,6 +7,50 @@
    has finished should not have to hunt for the way out.
    ───────────────────────────────────────────────────────────── */
 
+/* ── the navbar ──────────────────────────────────────────────── */
+
+/* Fixed rather than sticky: the student entry screens and the two consoles
+   scroll in different containers (one is its own scroll region, the other is
+   the window), and a fixed strip is the one positioning scheme that sits
+   above either without caring which. Every page that renders this owes it
+   `padding-top: var(--nb-h)` up top, or its own first pixels land underneath. */
+.nb-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  height: var(--nb-h);
+  padding: 0 var(--s-5);
+  background: var(--paper);
+  border-bottom: 1px solid var(--edge);
+}
+
+.nb-brand {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.nb-brand-name {
+  font-family: var(--f-display);
+  font-size: var(--t-16);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 640px) {
+  .nb-bar {
+    padding: 0 var(--s-3);
+    gap: var(--s-2);
+  }
+}
+
 .ch-bar {
   display: flex;
   flex-wrap: wrap;
@@ -194,4 +238,42 @@
     flex-wrap: wrap;
     justify-content: flex-end;
   }
+}
+
+/* ── the navbar copy ─────────────────────────────────────────── */
+
+/* Lives inside .nb-bar, which is fixed to a single height — so unlike 'page'
+   or 'bar' this one never wraps, whatever it holds. Past the point where its
+   buttons no longer fit, it scrolls sideways instead of growing taller and
+   pushing the fixed strip's height out from under the page below it. */
+.ch-bar[data-layout='nav'] {
+  flex: 1;
+  /* Lets the row actually shrink to the space left of the brand, rather than
+     forcing .nb-bar itself wider than the viewport — the scrolling below
+     depends on that. */
+  min-width: 0;
+  flex-wrap: nowrap;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  /* `safe` is the point: plain flex-end hides whatever doesn't fit off the
+     *left*, past scrollLeft 0, with no hint it's there. `safe` falls back to
+     flex-start the moment content overflows, so the scrollable overflow
+     always starts from something visible. */
+  justify-content: safe flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ch-bar[data-layout='nav'] .ch-btn {
+  flex-shrink: 0;
+}
+
+.ch-bar[data-layout='nav'] .ch-lang {
+  flex-shrink: 0;
+}
+
+.ch-bar[data-layout='nav'] .ch-who {
+  flex-shrink: 0;
+  white-space: nowrap;
 }

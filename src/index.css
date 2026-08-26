@@ -50,6 +50,9 @@
   /* the square */
   --sq: 24px;
 
+  /* the fixed navbar every screen sits under */
+  --nb-h: 56px;
+
   --s-1: 4px;
   --s-2: 8px;
   --s-3: 12px;

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
-import TopBar from '../components/TopBar'
+import Navbar from '../components/Navbar'
 import './console.css'
 import '../components/Entry.css'
 
@@ -51,7 +51,7 @@ export default function SignIn() {
     <main className="en-page">
       {/* No "My console" here — nobody is signed in yet, and no sign-out for the
           same reason. Home and the language switch are the useful pair. */}
-      <TopBar who={false} />
+      <Navbar who={false} />
       <div className="en-card">
         <p className="eyebrow">{t('signin.eyebrow')}</p>
         <h1 className="en-title">{t('signin.title')}</h1>

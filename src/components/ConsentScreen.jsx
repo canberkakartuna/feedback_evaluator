@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
-import TopBar from './TopBar'
+import Navbar from './Navbar'
 import './Entry.css'
 
 /**
@@ -16,9 +16,9 @@ import './Entry.css'
  * `api.recordConsent()` returns the updated user; handing it to `setUser`
  * flips the gate closed without a reload.
  *
- * The only way off this screen without agreeing is signing out, via TopBar —
- * there is no decline button, because there is nothing to decline *into*:
- * every account in this system is a participant.
+ * The only way off this screen without agreeing is signing out, via the
+ * navbar — there is no decline button, because there is nothing to decline
+ * *into*: every account in this system is a participant.
  */
 export default function ConsentScreen() {
   const t = useT()
@@ -41,7 +41,7 @@ export default function ConsentScreen() {
 
   return (
     <main className="en-page">
-      <TopBar home={false} join={false} console={false} profile={false} />
+      <Navbar home={false} join={false} console={false} profile={false} />
       <div className="en-card">
         <p className="eyebrow">{t('consent.eyebrow')}</p>
         <h1 className="en-title">{t('consent.title')}</h1>

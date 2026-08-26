@@ -4,7 +4,7 @@ import { NICKNAME_MAX } from '../../../shared/session'
 import { isStaff } from '../../../shared/roles'
 import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
-import TopBar from '../../components/TopBar'
+import Navbar from '../../components/Navbar'
 import '../../components/Entry.css'
 import '../console.css'
 
@@ -70,7 +70,7 @@ export default function StudentLayout() {
   if (problem) {
     return (
       <main className="en-page">
-        <TopBar join={false} console={false} />
+        <Navbar join={false} console={false} />
         <div className="en-card">
           <p className="eyebrow">{t('entry.unknown.eyebrow')}</p>
           <h1 className="en-title">{t('entry.unknown.title')}</h1>
@@ -111,7 +111,7 @@ export default function StudentLayout() {
   if (needsWho && working !== 'anon') {
     return (
       <main className="en-page">
-        <TopBar />
+        <Navbar />
         <div className="en-card">
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('who'), total: steps.length })}
@@ -146,7 +146,7 @@ export default function StudentLayout() {
   if (needsWho && !named) {
     return (
       <main className="en-page">
-        <TopBar />
+        <Navbar />
         <div className="en-card">
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('nickname'), total: steps.length })}
@@ -204,7 +204,7 @@ export default function StudentLayout() {
   /* 3 — the work. */
   return (
     <main className="en-page">
-      <TopBar />
+      <Navbar />
       <Outlet
         context={{
           /** Anonymous only: a signed-in session is labelled by its account. */

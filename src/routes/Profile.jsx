@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
-import TopBar from '../components/TopBar'
+import Navbar from '../components/Navbar'
 import '../components/Entry.css'
 import './Profile.css'
 
@@ -40,7 +40,7 @@ export default function Profile() {
 
   return (
     <main className="en-page">
-      <TopBar profile={false} />
+      <Navbar profile={false} />
       <div className="en-card">
         <p className="eyebrow">{t('profile.eyebrow')}</p>
         <h1 className="en-title">{t('profile.title')}</h1>

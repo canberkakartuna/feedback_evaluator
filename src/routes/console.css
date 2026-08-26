@@ -14,10 +14,13 @@
 
 /* ── shell ───────────────────────────────────────────────────── */
 
+/* Pushed down by the fixed navbar above it — see components/Navbar.jsx — so
+   neither column starts underneath that strip. */
 .cs {
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
   min-height: 100dvh;
+  padding-top: var(--nb-h);
   background: var(--paper-sunk);
 }
 
@@ -29,23 +32,11 @@
   background: var(--paper);
   border-right: 1px solid var(--edge);
   position: sticky;
-  top: 0;
-  height: 100dvh;
+  /* Sticks just below the navbar rather than at the very top of the
+     viewport, or it would tuck in underneath the fixed strip once scrolled. */
+  top: var(--nb-h);
+  height: calc(100dvh - var(--nb-h));
   overflow-y: auto;
-}
-
-.cs-brand {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-}
-
-.cs-brand-name {
-  margin: 0;
-  font-family: var(--f-display);
-  font-size: var(--t-16);
-  font-weight: 650;
-  letter-spacing: -0.01em;
 }
 
 .cs-links {

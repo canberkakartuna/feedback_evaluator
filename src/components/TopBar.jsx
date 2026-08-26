@@ -21,9 +21,11 @@ import './Chrome.css'
  *   a student       Home · Class code · Profile · Sign out
  *   staff           My console · Profile · Sign out
  *
- * `layout` picks the arrangement, not the contents: `page` is the centred row
- * above an entry card, `stack` is a console sidebar, `bar` is the tight row at
- * the right of the workspace header. See Chrome.css.
+ * `layout` picks the arrangement, not the contents: `nav` is the fixed navbar
+ * every screen sits under (see Navbar.jsx), `stack` is a console sidebar,
+ * `bar` is the tight row at the right of the workspace header. `page` is what
+ * `nav` replaced and stays only for a screen that renders TopBar without one.
+ * See Chrome.css.
  */
 export default function TopBar({
   layout = 'page',
@@ -70,7 +72,7 @@ export default function TopBar({
     <nav className="ch-bar" data-layout={layout} aria-label={t('nav.label')}>
       {/* Only once `me` has settled, or the bar would flicker from "Sign in"
           to "Sign out" on every page load for someone already signed in. */}
-      {who && ready && layout === 'page' ? (
+      {who && ready && (layout === 'page' || layout === 'nav') ? (
         <p className="ch-who">
           {user ? t('nav.signedInAs', { name: user.name }) : t('nav.working')}
         </p>

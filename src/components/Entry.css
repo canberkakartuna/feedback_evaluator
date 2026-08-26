@@ -1,15 +1,15 @@
 /* The cover of the exercise book: one sheet, the margin rule down its side. */
 
-/* A column, because every entry screen now carries the bar of direct buttons
-   above its sheet — see components/TopBar.jsx. With one child it centres
-   exactly as it did when the card was the only thing here. */
+/* The card, centred under the fixed navbar every entry screen renders above
+   it — see components/Navbar.jsx. `padding-top` clears that strip, since the
+   navbar is fixed to the viewport rather than sitting in this flow. */
 .en-page {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   min-height: 100%;
-  padding: var(--s-5) var(--s-4);
+  padding: calc(var(--nb-h) + var(--s-5)) var(--s-4) var(--s-5);
   background: var(--paper-sunk);
   overflow-y: auto;
 }
@@ -194,7 +194,7 @@
 @media (max-width: 759px) {
   .en-page {
     align-items: flex-start;
-    padding: var(--s-4) var(--s-3);
+    padding: calc(var(--nb-h) + var(--s-4)) var(--s-3) var(--s-3);
   }
 
   .en-card {

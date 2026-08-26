@@ -1,7 +1,7 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { roleStringKey, useT } from '../../lib/i18n'
-import TopBar from '../../components/TopBar'
+import Navbar from '../../components/Navbar'
 import '../console.css'
 
 /**
@@ -21,39 +21,38 @@ export default function AdminLayout() {
   const t = useT()
 
   return (
-    <div className="cs">
-      <nav className="cs-nav" aria-label={t('admin.sections')}>
-        <Link className="cs-brand" to="/admin">
-          <p className="eyebrow">{t('admin.eyebrow')}</p>
-          <h1 className="cs-brand-name">Dropshot</h1>
-        </Link>
+    <>
+      {/* who: false — the sidebar's own name-and-role block already says who
+          this is, and console: false — pointless in the console it names. */}
+      <Navbar who={false} console={false} signOutTo="/signin" />
 
-        <ul className="cs-links">
-          <li>
-            <NavLink className="cs-link" to="/admin" end>
-              {t('admin.people')}
-            </NavLink>
-          </li>
-          <li>
-            <NavLink className="cs-link" to="/teacher">
-              {t('admin.teacherConsole')}
-            </NavLink>
-          </li>
-        </ul>
+      <div className="cs">
+        <nav className="cs-nav" aria-label={t('admin.sections')}>
+          <ul className="cs-links">
+            <li>
+              <NavLink className="cs-link" to="/admin" end>
+                {t('admin.people')}
+              </NavLink>
+            </li>
+            <li>
+              <NavLink className="cs-link" to="/teacher">
+                {t('admin.teacherConsole')}
+              </NavLink>
+            </li>
+          </ul>
 
-        <div className="cs-who">
-          <p className="cs-who-name">{user.name}</p>
-          <p className="cs-who-role eyebrow">{t(roleStringKey(user.role))}</p>
-          {/* As in the teacher console: / is not a place staff can go. */}
-          <TopBar layout="stack" who={false} console={false} signOutTo="/signin" />
-        </div>
-      </nav>
+          <div className="cs-who">
+            <p className="cs-who-name">{user.name}</p>
+            <p className="cs-who-role eyebrow">{t(roleStringKey(user.role))}</p>
+          </div>
+        </nav>
 
-      <main className="cs-main">
-        <div className="cs-wrap">
-          <Outlet />
-        </div>
-      </main>
-    </div>
+        <main className="cs-main">
+          <div className="cs-wrap">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </>
   )
 }
