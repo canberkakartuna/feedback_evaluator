@@ -120,11 +120,6 @@ export default function StudentLayout() {
           <p className="en-lede">{t('entry.who.lede')}</p>
 
           <div className="en-topics">
-            <button type="button" className="en-topic" onClick={() => setWorking('anon')}>
-              <span className="en-topic-name">{t('entry.who.anon')}</span>
-              <span className="en-topic-meta">{t('entry.who.anonMeta')}</span>
-            </button>
-
             {/* The way in for staff as well, and now nothing stands in front of
                 it: this is the first screen anybody sees. */}
             <Link className="en-topic" to="/signin" state={{ from: '/' }}>
