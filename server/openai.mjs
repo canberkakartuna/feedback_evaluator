@@ -1,8 +1,8 @@
 /**
  * Check that the tutor's model is reachable, and see what it sounds like.
  *
- *   npm run check:gemini
- *   npm run check:gemini -- "your own question here"
+ *   npm run check:openai
+ *   npm run check:openai -- "your own question here"
  *
  * One real request against one real question, with the same system instruction
  * a student's turn would get — which is the point: an API key that authenticates
@@ -10,23 +10,24 @@
  * budget, and that is the failure this catches. The smoke test deliberately runs
  * the tutor scripted, so this is the only place the live path is exercised.
  *
- * Costs a fraction of a cent per run and writes nothing anywhere.
+ * Costs a fraction of a cent per run — nothing at all inside the free tier's
+ * daily allowance — and writes nothing anywhere.
  */
 import { config } from './config.js'
 import { reply } from './services/tutor.js'
 import { withFallbacks } from '../shared/tutor-scripts.js'
 
-if (!config.gemini.configured) {
+if (!config.openai.configured) {
   console.error(`
-GEMINI_API_KEY is not set, so the tutor is answering from the scripted lines in
+OPENAI_API_KEY is not set, so the tutor is answering from the scripted lines in
 shared/tutor-scripts.js and no model runs.
 
 Create a key at
-  https://aistudio.google.com/apikey
+  https://platform.openai.com/api-keys
 
 then put it in .env.local, which is gitignored:
 
-  GEMINI_API_KEY=...
+  OPENAI_API_KEY=...
 
 Never in .env — that file is committed, so a key in it is shared with everyone
 who can read the repository, permanently. The model name and the rest of the
@@ -52,10 +53,10 @@ const question = {
 
 const answer = { mode: 'write', draft: 'I did 150 divided by 12 which is 12.5 and then halved it.', hintsUsed: 0 }
 
-console.log(`\nmodel    ${config.gemini.model}`)
-console.log(`timeout  ${config.gemini.timeoutMs}ms`)
+console.log(`\nmodel    ${config.openai.model}`)
+console.log(`timeout  ${config.openai.timeoutMs}ms`)
 console.log(
-  `thinking ${config.gemini.thinking ? JSON.stringify(config.gemini.thinking) : "the model's own default"} · ${config.gemini.maxOutputTokens} output tokens for thinking and reply together`,
+  `effort   ${config.openai.reasoningEffort ?? 'not a reasoning model'} · temperature ${config.openai.temperature ?? "the model's own default"} · ${config.openai.maxOutputTokens} output tokens for reasoning and reply together`,
 )
 console.log(`\nquestion ${question.prompt}`)
 console.log(`answer   ${answer.draft}\n`)
@@ -91,7 +92,7 @@ for (const turn of turns) {
     lang: turn.lang,
   })
 
-  const expected = turn.authored ? 'scripted' : 'gemini'
+  const expected = turn.authored ? 'scripted' : 'openai'
   const ok = generated.source === expected
 
   if (!ok) failed += 1
@@ -102,7 +103,7 @@ for (const turn of turns) {
 
 if (failed) {
   console.error(
-    `${failed} of ${turns.length} turns did not come from where they should. A "fallback" where "gemini" was expected is a failed call — the reason is on the line above it, logged by services/tutor.js.\n`,
+    `${failed} of ${turns.length} turns did not come from where they should. A "fallback" where "openai" was expected is a failed call — the reason is on the line above it, logged by services/tutor.js.\n`,
   )
   process.exit(1)
 }

@@ -108,7 +108,7 @@ export function tutorRoutes(store, { resolveQuestion }) {
         text: generated.text,
         action,
         /**
-         * Who wrote this: `gemini`, `scripted` (a teacher's own words, or the
+         * Who wrote this: `openai`, `scripted` (a teacher's own words, or the
          * generic script where no model runs at all) or `fallback` (the model was
          * asked and failed). The dataset is not readable without it — see
          * services/tutor.js.

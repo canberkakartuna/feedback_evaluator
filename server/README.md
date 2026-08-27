@@ -37,7 +37,7 @@ The split is the important part:
   Everything in it is visible to anyone with repository access and stays in git
   history, permanently. **No credentials.**
 - **`.env.local` is gitignored** (by the `*.local` rule) and overrides `.env`.
-  This is where credentials — `GEMINI_API_KEY`, `MONGODB_URI` — go when working
+  This is where credentials — `OPENAI_API_KEY`, `MONGODB_URI` — go when working
   locally.
 - **A deployment reads neither file.** `server/config.js` skips both when
   `VERCEL` is set, so in production every value — credentials and knobs alike —
@@ -58,12 +58,12 @@ the client and the API never disagree about which value won.
 | `AUTH_TOKEN_TTL_DAYS` | `30` | How long a login lasts. |
 | `BOOTSTRAP_TOKEN` | falls back to `RESEARCH_TOKEN` | Guards `POST /api/auth/bootstrap`. **Set one of the two before deploying** — with neither, whoever calls that route first on an empty database becomes the admin. |
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
-| `GEMINI_API_KEY` | *unset* | **A credential. Kept in `.env.local`, which means the deployment needs it set in the host's settings** — `.env.local` is not deployed, so without that the deployed tutor answers scripted and nothing on screen says so. Unset anywhere means the scripted lines in `shared/tutor-scripts.js` and no model; `/api/health` warns while that is so. [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| `GEMINI_MODEL` | `gemini-flash-latest` | Just a name. The alias survives a model retirement; pin an exact version while a study is running so replies stay comparable. |
-| `GEMINI_MAX_OUTPUT_TOKENS` | `2000` | **Not the reply length** — the prompt caps that at 120 words. Thinking is billed to this allowance and spent first, so a tight number truncates the answer rather than saving money. |
-| `GEMINI_THINKING_LEVEL` | `low` | `low` or `high` on Gemini 3, which cannot be told not to think. Empty sends nothing. `GEMINI_THINKING_BUDGET` is the 2.5-era token count and wins if set — sending it to a 3.x model is a 400. |
-| `GEMINI_TIMEOUT_MS` | `20000` | A student is watching a typing indicator. |
-| `GEMINI_TEMPERATURE` | `0.6` | |
+| `OPENAI_API_KEY` | *unset* | **A credential. Kept in `.env.local`, which means the deployment needs it set in the host's settings** — `.env.local` is not deployed, so without that the deployed tutor answers scripted and nothing on screen says so. Unset anywhere means the scripted lines in `shared/tutor-scripts.js` and no model; `/api/health` warns while that is so. [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Just a name, and the cheapest one the free tier serves. The bare name is an alias that moves to the newest snapshot; pin a dated one (`gpt-4o-mini-2024-07-18`) while a study is running so replies stay comparable. |
+| `OPENAI_MAX_OUTPUT_TOKENS` | `2000` | **Not the reply length** — the prompt caps that at 120 words. On a reasoning model the hidden reasoning is billed to this allowance and spent first, so a tight number truncates the answer rather than saving money. |
+| `OPENAI_REASONING_EFFORT` | *unset* | `minimal`/`low`/`medium`/`high`, for reasoning models (o-series, gpt-5-\*) only — gpt-4o-mini rejects it with a 400. Set it alongside an empty `OPENAI_TEMPERATURE`: reasoning models only accept the default temperature. |
+| `OPENAI_TIMEOUT_MS` | `20000` | A student is watching a typing indicator. |
+| `OPENAI_TEMPERATURE` | `0.6` | Empty sends nothing, which is what a reasoning model requires. |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
 | `MONGODB_DB` | `dropshot` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
@@ -251,9 +251,9 @@ staged hints. `shared/activity.js` holds the helpers every reader uses so that
 
 ## The tutor
 
-`services/tutor.js` decides who answers a turn, and `lib/gemini.js` makes the
-call — plain `fetch` against Google's Generative Language API, no SDK, because
-the whole surface used is one POST with a key header.
+`services/tutor.js` decides who answers a turn, and `lib/openai.js` makes the
+call — plain `fetch` against OpenAI's Chat Completions API, no SDK, because
+the whole surface used is one POST with a bearer token.
 
 **Three sources, and which one speaks is decided per turn.**
 
@@ -269,10 +269,10 @@ the whole surface used is one POST with a key header.
 3. **The scripted lines** in `shared/tutor-scripts.js`, when there is no key or
    the call failed. Not a placeholder any more — a student who pressed send is
    owed a sentence, and this is the one they get. `GET /api/health` reports
-   `tutor: "gemini" | "scripted"` and warns while no model is running.
+   `tutor: "openai" | "scripted"` and warns while no model is running.
 
 Every reply records `source` and `model`, on the message and on the snippet:
-`gemini`, `scripted` (a teacher's own words, or the generic script where no model
+`openai`, `scripted` (a teacher's own words, or the generic script where no model
 runs at all) or **`fallback`** — the model was asked and failed. That third value
 is the one to watch. Nothing in the interface shows a failed call, so without it a
 rate-limited lesson and a well-authored one look identical in the data. The
@@ -283,21 +283,22 @@ whatever is active now — `store.prompts.byVersion`. Publishing v3 mid-lesson m
 not quietly change what v2's sessions are answering with while the transcript
 still says v2.
 
-**Two things about the API that cost a debugging session to find**, both
-documented at the top of `lib/gemini.js`: thinking tokens are billed to
-`maxOutputTokens` and spent *first*, so a tight allowance truncates the reply
-rather than saving money; and thinking is configured differently per model
-generation — `thinkingLevel` on 3.x, `thinkingBudget` on 2.5 — with the wrong
-field a flat 400.
+**Two things about the API worth knowing before touching the knobs**, both
+documented at the top of `lib/openai.js`: on reasoning models the hidden
+reasoning tokens are billed to `max_completion_tokens` and spent *first*, so a
+tight allowance truncates the reply rather than saving money; and the knobs are
+not accepted uniformly — reasoning models reject `temperature` and take
+`reasoning_effort`, non-reasoning models the reverse, and the wrong one is a
+flat 400.
 
 **Rate limits are the thing to check before a class uses this.** The free tier
-allows a handful of requests a minute across the whole key, which one classroom
-exceeds immediately; a 429 is not retried (the quota does not clear in
-milliseconds) and every student over the limit silently gets a scripted line
-instead. Enable billing on the Google Cloud project before a real session, and
-read the `source` field afterwards to see what actually happened.
+allows a handful of requests a minute and a daily token cap across the whole
+key, which one classroom exceeds immediately; a 429 is not retried (the quota
+does not clear in milliseconds) and every student over the limit silently gets
+a scripted line instead. Add billing to the OpenAI account before a real
+session, and read the `source` field afterwards to see what actually happened.
 
-Not sent to the model yet: whiteboard strokes and photographs of working. Gemini
+Not sent to the model yet: whiteboard strokes and photographs of working. The model
 reads images and the bytes are in Spaces, so this is a fetch-and-attach away —
 until then the honest scripted line ("I cannot read a drawing or a photo yet")
 stands in, and `services/tutor.js` says so where it decides.
@@ -366,13 +367,13 @@ vercel --prod
 The deployment reads no `.env` file at all, so set **everything it needs** in
 project settings (Vercel → Project → Settings → Environment Variables) — at
 minimum `RESEARCH_TOKEN`, `MONGODB_URI`, `MONGODB_DB`,
-`SPACES_KEY`/`SPACES_SECRET`, `GEMINI_API_KEY` and `CONSENT_VERSION`; see
+`SPACES_KEY`/`SPACES_SECRET`, `OPENAI_API_KEY` and `CONSENT_VERSION`; see
 [Environment](#environment). Then create the first admin with
 `POST /api/auth/bootstrap`; `GET /api/health` reports `ready: false` while no user
 exists.
 
 The function is capped at 60s and a tutor turn takes a few seconds, so nothing
-here needs a longer budget — but `GEMINI_TIMEOUT_MS` has to stay well under that
+here needs a longer budget — but `OPENAI_TIMEOUT_MS` has to stay well under that
 cap, or a slow model becomes a platform timeout with no reply and no fallback.
 
 ### One thing still assumes a single long-lived process

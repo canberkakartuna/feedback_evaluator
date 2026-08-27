@@ -3,7 +3,7 @@ import { contentCount, hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
 import { config } from '../config.js'
-import { generate } from '../lib/gemini.js'
+import { generate } from '../lib/openai.js'
 
 /**
  * Where the tutor's replies come from.
@@ -15,12 +15,12 @@ import { generate } from '../lib/gemini.js'
  *   somebody authored is delivered exactly as written. It is their teaching,
  *   the study is about the feedback students actually receive, and a model
  *   paraphrasing a carefully staged hint would quietly replace both.
- * - **The model** (Gemini, `lib/gemini.js`). Everything addressed to what the
+ * - **The model** (OpenAI, `lib/openai.js`). Everything addressed to what the
  *   student actually wrote — free text, "check my reasoning" — plus every turn
  *   nobody authored a script for, which is the whole of a student's own
  *   question and any tutor field a teacher left blank.
  *
- * `scriptedReply` is the third state: no `GEMINI_API_KEY`, or the call failed.
+ * `scriptedReply` is the third state: no `OPENAI_API_KEY`, or the call failed.
  * It is the function this module used to be, unchanged, and it stays the
  * fallback for every path — so the app runs end to end with no key at all and a
  * student never waits on an empty bubble. `source` on the stored message says
@@ -33,7 +33,7 @@ import { generate } from '../lib/gemini.js'
  * would reveal.
  *
  * Not sent to the model yet: whiteboard strokes and photographs of working.
- * Gemini reads images, the bytes are in Spaces, and the honest scripted line
+ * The model reads images, the bytes are in Spaces, and the honest scripted line
  * ("I cannot read a drawing or a photo yet") is what stands in until they are
  * fetched and attached — the obvious next step for this file.
  */
@@ -92,7 +92,7 @@ export async function reply({
 }) {
   const scripted = scriptedReply({ question, answer, action, text, promptVersion, lang })
 
-  if (!config.gemini.configured) return scripted
+  if (!config.openai.configured) return scripted
   if (!modelAnswers({ question, answer, action })) return scripted
 
   try {
@@ -112,7 +112,7 @@ export async function reply({
       // but "Watch for this" belongs to the teacher's misconception line, and a
       // reply that reads this student's own working is not that.
       label: action === 'review' ? null : scripted.label,
-      source: 'gemini',
+      source: 'openai',
       model: result.model,
     }
   } catch (error) {
@@ -125,7 +125,7 @@ export async function reply({
     // being one value would make a rate-limited lesson indistinguishable from a
     // well-authored one in the dataset. Nothing in the interface shows this
     // happening, so the record and the log are the only places it is visible.
-    console.warn(`[tutor] gemini failed, using the script: ${error.message}`)
+    console.warn(`[tutor] openai failed, using the script: ${error.message}`)
     return { ...scripted, source: 'fallback', reason: error.message }
   }
 }

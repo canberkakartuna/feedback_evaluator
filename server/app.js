@@ -132,9 +132,9 @@ export function createApp({ store = createStore() } = {}) {
        * still answers, the system prompt is still versioned, and nothing in the
        * interface says the model never ran, which is exactly why this has to.
        */
-      if (!config.gemini.configured) {
+      if (!config.openai.configured) {
         warnings.push(
-          'GEMINI_API_KEY is unset, so the tutor answers from the scripted lines in shared/tutor-scripts.js and no model runs.',
+          'OPENAI_API_KEY is unset, so the tutor answers from the scripted lines in shared/tutor-scripts.js and no model runs.',
         )
       }
 
@@ -165,8 +165,8 @@ export function createApp({ store = createStore() } = {}) {
         uploads: files.kind,
         uploadsReachable: filesReachable.ok,
         /** Which of the two writes the tutor's replies — see services/tutor.js. */
-        tutor: config.gemini.configured ? 'gemini' : 'scripted',
-        tutorModel: config.gemini.configured ? config.gemini.model : null,
+        tutor: config.openai.configured ? 'openai' : 'scripted',
+        tutorModel: config.openai.configured ? config.openai.model : null,
         researchEnabled: Boolean(config.researchToken),
         users,
         uptime: Math.round(process.uptime()),

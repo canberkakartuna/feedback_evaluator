@@ -11,7 +11,7 @@
     "test:api": "node server/smoke.mjs",
     "test:api:mongo": "SMOKE_MONGO=1 node server/smoke.mjs",
     "check:strings": "node server/strings.mjs",
-    "check:gemini": "node server/gemini.mjs",
+    "check:openai": "node server/openai.mjs",
     "setup:spaces": "node server/spaces.mjs",
     "build": "vite build",
     "lint": "oxlint",

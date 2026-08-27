@@ -36,7 +36,7 @@ export function buildSnippets(messages) {
         text: answer.text,
         label: answer.label ?? null,
         /**
-         * Who wrote it: `gemini`, `scripted` (a teacher's own words) or
+         * Who wrote it: `openai`, `scripted` (a teacher's own words) or
          * `fallback` (the model failed) — see services/tutor.js. A label on
          * generated feedback, a label on a teacher's hint and a label on a
          * generic line the model never got to write are three different

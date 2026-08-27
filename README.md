@@ -10,12 +10,12 @@ documentation in [server/README.md](server/README.md); this file is the map.
 
 ```bash
 npm install
-cp .env.example .env          # then MONGODB_URI and GEMINI_API_KEY in .env.local
+cp .env.example .env          # then MONGODB_URI and OPENAI_API_KEY in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
 npm run test:api              # 297 end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
-npm run check:gemini          # one real call to the tutor's model
+npm run check:openai          # one real call to the tutor's model
 ```
 
 The interface is in **English or Turkish**, switched by the EN/TR control that
@@ -193,8 +193,8 @@ helpers that make it mean the same thing everywhere.
 
 ## The tutor
 
-The chat is **Google Gemini**, called server-side per turn against the system
-prompt the session was stamped with. `server/lib/gemini.js` is the client — plain
+The chat is **OpenAI**, called server-side per turn against the system
+prompt the session was stamped with. `server/lib/openai.js` is the client — plain
 `fetch`, no SDK — and `server/services/tutor.js` decides who answers, which is
 not the same decision every turn:
 
@@ -207,14 +207,14 @@ not the same decision every turn:
   student's own questions. It reads the question, the rubric's criteria (never
   its keywords), the answer as it stands and the thread so far, and replies in
   the student's chosen language.
-- **Scripted lines are the floor.** No `GEMINI_API_KEY`, a timeout, a blocked
+- **Scripted lines are the floor.** No `OPENAI_API_KEY`, a timeout, a blocked
   prompt or a rate limit and the student gets a generic line from
   `shared/tutor-scripts.js` rather than an error. The app runs end to end with no
   key at all; `GET /api/health` warns while that is the case, and every reply
-  records which of the three wrote it — `gemini`, `scripted`, or `fallback` for a
+  records which of the three wrote it — `openai`, `scripted`, or `fallback` for a
   model call that failed, which is the one worth counting afterwards.
 
-`npm run check:gemini` makes one real call and prints what came back. The smoke
+`npm run check:openai` makes one real call and prints what came back. The smoke
 test deliberately runs the tutor scripted, so it stays hermetic and free.
 
 A **snippet** is derived from the transcript rather than stored, so it stays
@@ -252,7 +252,7 @@ server/          the API — see server/README.md
   services/        the rules, in one place each
   store/           memory + mongo, identical interfaces
   lib/storage.js   uploads: local disk or DigitalOcean Spaces
-  lib/gemini.js    the tutor's model, over plain fetch
+  lib/openai.js    the tutor's model, over plain fetch
 src/
   routes/          one folder per audience: student, teacher, admin
   components/      the workspace panels, plus the shared chrome

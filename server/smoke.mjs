@@ -55,9 +55,9 @@ config.bootstrapToken = 'smoke-token'
  * still gets one, that both turns are written atomically. A live model would
  * make every one of them depend on the network, on a quota, and on a reply
  * nobody can predict, and would bill someone for running the test suite.
- * `npm run check:gemini` is the check that the key and the model work.
+ * `npm run check:openai` is the check that the key and the model work.
  */
-config.gemini.apiKey = null
+config.openai.apiKey = null
 
 /**
  * Which store to run against, decided here rather than inherited.
@@ -193,7 +193,7 @@ try {
   check('tutor reported as scripted, as configured above', health.body.tutor === 'scripted')
   check(
     'and warns that no model is running',
-    health.body.warnings.some((warning) => warning.includes('GEMINI_API_KEY')),
+    health.body.warnings.some((warning) => warning.includes('OPENAI_API_KEY')),
   )
   if (useMongo) {
     check('database reachable', health.body.databaseReachable === true)
@@ -991,9 +991,9 @@ try {
    * sentence, and the record must say the model was asked and failed rather
    * than quietly reading like a teacher wrote it.
    */
-  config.gemini.apiKey = 'not-a-real-key'
-  config.gemini.model = 'no-such-model'
-  config.gemini.timeoutMs = 8000
+  config.openai.apiKey = 'not-a-real-key'
+  config.openai.model = 'no-such-model'
+  config.openai.timeoutMs = 8000
 
   const brokenModel = await call(
     'POST',
@@ -1014,8 +1014,8 @@ try {
     ),
   )
 
-  config.gemini.apiKey = null
-  config.gemini.model = 'gemini-flash-latest'
+  config.openai.apiKey = null
+  config.openai.model = 'gpt-4o-mini'
 
   console.log('\nuploads')
   const upload = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
@@ -1174,7 +1174,7 @@ try {
   // and a label on a failed model call are the same row in the dataset.
   check(
     'and says where the feedback came from',
-    snippets.body.snippets.every((s) => ['gemini', 'scripted', 'fallback'].includes(s.tutor.source)),
+    snippets.body.snippets.every((s) => ['openai', 'scripted', 'fallback'].includes(s.tutor.source)),
   )
   check(
     'including the one the model failed to write',

@@ -14,7 +14,7 @@ const repoRoot = path.join(here, '..')
  * real environment variables beat `.env.local`, which beats `.env`.
  *
  * The merge exists so local development can keep credentials such as
- * GEMINI_API_KEY in the gitignored `.env.local` (`*.local`) while the shared
+ * OPENAI_API_KEY in the gitignored `.env.local` (`*.local`) while the shared
  * knobs stay in the committed `.env`. On Vercel neither file is read: the
  * deployment is configured entirely from the project's environment settings
  * (Vercel → Project → Settings → Environment Variables).
@@ -115,7 +115,7 @@ export const config = {
   },
 
   /**
-   * The tutor's model: Google Gemini, through the Generative Language API.
+   * The tutor's model: OpenAI, through the Chat Completions API.
    *
    * `configured` is the switch services/tutor.js reads. Unset the key and the
    * tutor falls back to the scripted lines in shared/tutor-scripts.js — the app
@@ -125,53 +125,49 @@ export const config = {
    *
    * The key lives in `.env.local`, so it has never been committed. Note what
    * that costs: env files are read in development only, so a deployment
-   * answers scripted until `GEMINI_API_KEY` is set in the host's own
+   * answers scripted until `OPENAI_API_KEY` is set in the host's own
    * environment settings (Vercel → Project → Settings → Environment
    * Variables). Everything else here is a knob and belongs in `.env`.
    */
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY?.trim() || null,
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY?.trim() || null,
     /**
-     * The `-latest` alias, so a model retirement does not take the tutor down
-     * with it — it resolves to `gemini-3.6-flash` today. Pin that exact name
-     * while a study is running and the replies have to stay comparable; the
-     * trade is that a retired version stops answering (`gemini-2.5-flash` is
-     * already a 404 for a new key) where the alias moves on instead.
+     * `gpt-4o-mini`: the cheapest model the free tier serves, and a tutor turn
+     * — a judgement about one short answer — does not need more. Pin an exact
+     * dated snapshot (`gpt-4o-mini-2024-07-18`) while a study is running and
+     * the replies have to stay comparable; the bare name is an alias that
+     * moves to the newest snapshot.
      */
-    model: process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest',
+    model: process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini',
     /** A student is watching a typing indicator, so this is deliberately short. */
-    timeoutMs: Number(process.env.GEMINI_TIMEOUT_MS ?? 20000),
+    timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 20000),
     /**
-     * Not the length of the reply — the prompt's word cap does that. This has
-     * to cover the model's *thinking as well*, which is billed to the same
-     * allowance and spent first: measured at `thinkingLevel: low`, a 400-token
-     * allowance left 14 tokens for the answer and truncated it. 2000 leaves
-     * room for a few hundred tokens of reasoning and a few sentences of tutor.
-     * Lowering it does not save money, it produces cut-off replies.
+     * Not the length of the reply — the prompt's word cap does that. On the
+     * reasoning models (o-series, gpt-5-*) this has to cover the model's
+     * *reasoning as well*, which is billed to the same allowance and spent
+     * first — a tight number truncates the answer rather than saving money.
+     * 2000 leaves room for a few hundred tokens of reasoning and a few
+     * sentences of tutor; on gpt-4o-mini it is simply generous headroom.
      */
-    maxOutputTokens: Number(process.env.GEMINI_MAX_OUTPUT_TOKENS ?? 2000),
-    temperature: Number(process.env.GEMINI_TEMPERATURE ?? 0.6),
+    maxOutputTokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS ?? 2000),
     /**
-     * How hard the model thinks first, passed to the API verbatim — because the
-     * field it goes in changed between model generations and sending the wrong
-     * one is a 400 rather than a warning:
-     *
-     * - 3.x: `{ thinkingLevel: 'low' | 'high' }`. It cannot be switched off.
-     * - 2.5: `{ thinkingBudget: <tokens> }`, and `0` switched it off.
-     *
-     * `low` because a tutor turn is a judgement about one short answer, not a
-     * proof, and every thinking token is a token of reply given up. Set
-     * `GEMINI_THINKING_LEVEL=` (empty) to send nothing at all and let the model
-     * pick its own default; set `GEMINI_THINKING_BUDGET` instead and that wins,
-     * for a model old enough to want it.
+     * The reasoning models reject any temperature but the default, so set
+     * `OPENAI_TEMPERATURE=` (empty) to send nothing when running one of those.
+     * Null omits the field entirely.
      */
-    thinking: (() => {
-      const level = process.env.GEMINI_THINKING_LEVEL?.trim()
-      const budget = process.env.GEMINI_THINKING_BUDGET?.trim()
-      if (budget) return { thinkingBudget: Number(budget) }
-      if (level === '') return null
-      return { thinkingLevel: level || 'low' }
-    })(),
+    temperature:
+      process.env.OPENAI_TEMPERATURE?.trim() === ''
+        ? null
+        : Number(process.env.OPENAI_TEMPERATURE ?? 0.6),
+    /**
+     * How hard a reasoning model thinks first (`minimal`/`low`/`medium`/`high`),
+     * sent verbatim as `reasoning_effort`. Unset by default because the default
+     * model is not a reasoning model, and sending it to one of those is a 400
+     * rather than a warning. Set it — and empty out OPENAI_TEMPERATURE — when
+     * pointing OPENAI_MODEL at an o-series or gpt-5-* model; `low` is the
+     * sensible pick, every reasoning token being a token of reply given up.
+     */
+    reasoningEffort: process.env.OPENAI_REASONING_EFFORT?.trim() || null,
     get configured() {
       return Boolean(this.apiKey)
     },

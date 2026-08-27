@@ -13,7 +13,7 @@
  * belongs on the question, authored by the teacher who set it.
  *
  * `fallbackReplies` is what the tutor says when the model cannot: no
- * `GEMINI_API_KEY`, a timeout, a rate limit, a blocked prompt. They are not
+ * `OPENAI_API_KEY`, a timeout, a rate limit, a blocked prompt. They are not
  * decoration — a student pressing send is owed a sentence, and an empty bubble
  * or a stack trace is worse than a generic nudge. Keep them answerable against
  * any question, because that is the situation they are read in.
@@ -32,7 +32,7 @@
  * The rest of these lines are delivered as tutor *replies*, a step at a time,
  * and follow the same rule as the marking summaries: produced server-side, shown
  * as written. **They are the unconfigured and the failed path only.** With
- * `GEMINI_API_KEY` set, a question nobody wrote a script for is answered by the
+ * `OPENAI_API_KEY` set, a question nobody wrote a script for is answered by the
  * model instead. Both paths follow the interface language now — `ownTutorFor`
  * and `fallbackReplyFor` take it as an argument, since `withFallbacks` below
  * has no `lang` in scope when it merges these onto a question.
