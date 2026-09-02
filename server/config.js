@@ -58,6 +58,81 @@ export const envFile = (() => {
 /** Vercel and friends: read-only filesystem, no instance affinity. */
 const serverless = Boolean(process.env.VERCEL)
 
+/**
+ * The tutor's model: OpenAI, through the Chat Completions API.
+ *
+ * `configured` is the switch services/tutor.js reads. Unset the key and the
+ * tutor falls back to the scripted lines in shared/tutor-scripts.js — the app
+ * still works end to end, the chat is just canned, which is what a bare
+ * checkout and the smoke test both want. `GET /api/health` says which of the
+ * two is answering.
+ *
+ * The key lives in `.env.local`, so it has never been committed. Note what
+ * that costs: env files are read in development only, so a deployment
+ * answers scripted until `OPENAI_API_KEY` is set in the host's own
+ * environment settings (Vercel → Project → Settings → Environment
+ * Variables). Everything else here is a knob and belongs in `.env`.
+ *
+ * **Two of the knobs depend on which model family is named**, and the API
+ * turns a mismatch into a 400 on every call — which the tutor masks as its
+ * scripted fallback, so nothing on screen ever says why. The reasoning models
+ * (o-series, gpt-5-*) reject any temperature but the default and take
+ * `reasoning_effort`; the non-reasoning models the exact reverse. So the
+ * defaults are derived from the model name rather than fixed: point
+ * OPENAI_MODEL at either family and a bare switch works. The env vars still
+ * override — `OPENAI_TEMPERATURE=` (empty) forces "send nothing", a number
+ * forces that number, and the same shape holds for OPENAI_REASONING_EFFORT.
+ */
+function openaiConfig() {
+  /**
+   * `gpt-5-mini`: a reasoning model — noticeably better tutoring than the
+   * gpt-4o-mini this ran on before, reads the question images well, and still
+   * cheap enough for a classroom. `gpt-5` is the premium step up. Pin an exact
+   * dated snapshot while a study is running and the replies have to stay
+   * comparable; the bare name is an alias that moves to the newest snapshot.
+   */
+  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini'
+  const reasoningModel = /^(o\d|gpt-5)/.test(model)
+
+  const temperatureEnv = process.env.OPENAI_TEMPERATURE?.trim()
+  const effortEnv = process.env.OPENAI_REASONING_EFFORT?.trim()
+
+  return {
+    apiKey: process.env.OPENAI_API_KEY?.trim() || null,
+    model,
+    /** A student is watching a typing indicator, so this is deliberately short. */
+    timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 20000),
+    /**
+     * Not the length of the reply — the prompt's word cap does that. On the
+     * reasoning models this has to cover the model's *reasoning as well*,
+     * which is billed to the same allowance and spent first — a tight number
+     * truncates the answer rather than saving money, and a truncated answer is
+     * treated as a failure and replaced by the scripted line. 4000 leaves
+     * comfortable room for low-effort reasoning over a question image plus the
+     * reply; on a non-reasoning model it is simply generous headroom.
+     */
+    maxOutputTokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS ?? 4000),
+    /** Null omits the field entirely, which is what a reasoning model requires. */
+    temperature:
+      temperatureEnv === undefined
+        ? (reasoningModel ? null : 0.6)
+        : temperatureEnv === ''
+          ? null
+          : Number(temperatureEnv),
+    /**
+     * How hard a reasoning model thinks first (`minimal`/`low`/`medium`/`high`),
+     * sent verbatim as `reasoning_effort`. `low` by default on the reasoning
+     * family — every reasoning token is a token of reply given up and a
+     * student is waiting — and omitted entirely on the models that reject it.
+     */
+    reasoningEffort:
+      effortEnv === undefined ? (reasoningModel ? 'low' : null) : effortEnv || null,
+    get configured() {
+      return Boolean(this.apiKey)
+    },
+  }
+}
+
 export const config = {
   serverless,
   port: Number(process.env.PORT ?? 4000),
@@ -114,64 +189,8 @@ export const config = {
     },
   },
 
-  /**
-   * The tutor's model: OpenAI, through the Chat Completions API.
-   *
-   * `configured` is the switch services/tutor.js reads. Unset the key and the
-   * tutor falls back to the scripted lines in shared/tutor-scripts.js — the app
-   * still works end to end, the chat is just canned, which is what a bare
-   * checkout and the smoke test both want. `GET /api/health` says which of the
-   * two is answering.
-   *
-   * The key lives in `.env.local`, so it has never been committed. Note what
-   * that costs: env files are read in development only, so a deployment
-   * answers scripted until `OPENAI_API_KEY` is set in the host's own
-   * environment settings (Vercel → Project → Settings → Environment
-   * Variables). Everything else here is a knob and belongs in `.env`.
-   */
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY?.trim() || null,
-    /**
-     * `gpt-4o-mini`: the cheapest model the free tier serves, and a tutor turn
-     * — a judgement about one short answer — does not need more. Pin an exact
-     * dated snapshot (`gpt-4o-mini-2024-07-18`) while a study is running and
-     * the replies have to stay comparable; the bare name is an alias that
-     * moves to the newest snapshot.
-     */
-    model: process.env.OPENAI_MODEL?.trim() || 'gpt-4o-mini',
-    /** A student is watching a typing indicator, so this is deliberately short. */
-    timeoutMs: Number(process.env.OPENAI_TIMEOUT_MS ?? 20000),
-    /**
-     * Not the length of the reply — the prompt's word cap does that. On the
-     * reasoning models (o-series, gpt-5-*) this has to cover the model's
-     * *reasoning as well*, which is billed to the same allowance and spent
-     * first — a tight number truncates the answer rather than saving money.
-     * 2000 leaves room for a few hundred tokens of reasoning and a few
-     * sentences of tutor; on gpt-4o-mini it is simply generous headroom.
-     */
-    maxOutputTokens: Number(process.env.OPENAI_MAX_OUTPUT_TOKENS ?? 2000),
-    /**
-     * The reasoning models reject any temperature but the default, so set
-     * `OPENAI_TEMPERATURE=` (empty) to send nothing when running one of those.
-     * Null omits the field entirely.
-     */
-    temperature:
-      process.env.OPENAI_TEMPERATURE?.trim() === ''
-        ? null
-        : Number(process.env.OPENAI_TEMPERATURE ?? 0.6),
-    /**
-     * How hard a reasoning model thinks first (`minimal`/`low`/`medium`/`high`),
-     * sent verbatim as `reasoning_effort`. Unset by default because the default
-     * model is not a reasoning model, and sending it to one of those is a 400
-     * rather than a warning. Set it — and empty out OPENAI_TEMPERATURE — when
-     * pointing OPENAI_MODEL at an o-series or gpt-5-* model; `low` is the
-     * sensible pick, every reasoning token being a token of reply given up.
-     */
-    reasoningEffort: process.env.OPENAI_REASONING_EFFORT?.trim() || null,
-    get configured() {
-      return Boolean(this.apiKey)
-    },
-  },
+  /** The tutor's model — assembled above, where the family rules are explained. */
+  openai: openaiConfig(),
 
   /**
    * Researcher endpoints read every student's transcript, so they stay shut
