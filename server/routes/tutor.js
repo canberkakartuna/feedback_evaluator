@@ -88,6 +88,9 @@ export function tutorRoutes(store, { resolveQuestion }) {
         promptVersion: session.promptVersion,
         systemPrompt: prompt?.text ?? null,
         thread: history,
+        // For the question's own uploaded image, which travels to the model —
+        // see imageForModel in services/tutor.js.
+        store,
         /**
          * Which language to answer in, sent per message rather than stored on
          * the session: the toggle is in the workspace header and a student may

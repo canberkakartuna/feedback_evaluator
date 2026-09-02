@@ -1,10 +1,12 @@
+import fs from 'node:fs/promises'
 import { fallbackReplyFor, ownTutorFor } from '../../shared/tutor-scripts.js'
-import { hasAnswer } from '../../shared/activity.js'
+import { hasAnswer, totalPoints } from '../../shared/activity.js'
 import { contentCount, hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
 import { config } from '../config.js'
 import { generate } from '../lib/openai.js'
+import { storage } from '../lib/storage.js'
 
 /**
  * Where the tutor's replies come from.
@@ -33,10 +35,18 @@ import { generate } from '../lib/openai.js'
  * the model is asked for hint *n* and told nothing about what hint *n + 1*
  * would reveal.
  *
- * Not sent to the model yet: whiteboard strokes and photographs of working.
- * The model reads images, the bytes are in Spaces, and the honest scripted line
- * ("I cannot read a drawing or a photo yet") is what stands in until they are
- * fetched and attached — the obvious next step for this file.
+ * **The question's own image does travel.** A teacher who photographs a
+ * question instead of typing it used to produce a tutor that had never seen
+ * the question at all — the system instruction carried an empty prompt and the
+ * model deflected. Now the uploaded question (JPG, PNG or WebP) is attached to
+ * the conversation as an image the model reads; HEIC and PDF are formats the
+ * API refuses, so for those the instruction says honestly that the question is
+ * a file it cannot view. See imageForModel below.
+ *
+ * Still not sent to the model: whiteboard strokes and photographs of the
+ * student's *working*. The honest scripted line ("I cannot read a drawing or a
+ * photo yet") stands in until they are fetched and attached the same way — the
+ * obvious next step for this file.
  */
 
 export const ACTIONS = ['hint', 'concept', 'example', 'review']
@@ -79,6 +89,10 @@ const HOUSE_RULES = `Rules for this reply, which override anything above that co
 - Do not give the complete final answer, even if asked directly.`
 
 /**
+ * `store` is optional and only read on the model path: it is what fetches the
+ * question's uploaded image, and a caller without one (the check:openai
+ * script) simply gets a reply that never saw the picture.
+ *
  * @returns {{ text: string, label?: string, hintsUsed: number, source: string }}
  */
 export async function reply({
@@ -90,6 +104,7 @@ export async function reply({
   systemPrompt = null,
   thread = [],
   lang = 'en',
+  store = null,
 }) {
   const scripted = scriptedReply({ question, answer, action, text, promptVersion, lang })
 
@@ -97,9 +112,11 @@ export async function reply({
   if (!modelAnswers({ question, answer, action })) return scripted
 
   try {
+    const image = await imageForModel(store, question)
+
     const result = await generate({
-      system: systemInstruction({ question, answer, action, lang, systemPrompt }),
-      turns: turnsFor({ thread, text }),
+      system: systemInstruction({ question, answer, action, lang, systemPrompt, image }),
+      turns: turnsFor({ thread, text, image }),
     })
 
     return {
@@ -163,6 +180,70 @@ function modelAnswers({ question, answer, action }) {
   return state.mode === 'write' && wordCount(state.draft) > 0
 }
 
+/** The image formats OpenAI's vision input accepts. HEIC and PDF are refused. */
+const MODEL_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+
+/**
+ * The uploaded question, in a form the model can fetch.
+ *
+ * Spaces hands out a short-lived signed URL and the model fetches the bytes
+ * itself; local disk has no URL to sign, so the bytes are read and inlined as
+ * a data URL instead. `null` when there is no image, no store to read it with,
+ * the format is one the API refuses, or the fetch failed — and a failure is a
+ * warning, not an error, because a reply that has not seen the picture is
+ * still better than no reply.
+ */
+async function imageForModel(store, question) {
+  const image = question.image
+  if (!store || !image?.id || !MODEL_IMAGE_TYPES.has(image.type)) return null
+
+  try {
+    const upload = await store.uploads.findById(image.id)
+    if (!upload) return null
+
+    const files = storage()
+    const signed = await files.signedUrl(upload.key)
+    if (signed) return { url: signed }
+
+    const bytes = await fs.readFile(upload.path)
+    return { url: `data:${upload.type};base64,${bytes.toString('base64')}` }
+  } catch (error) {
+    console.warn(`[tutor] could not fetch the question image: ${error.message}`)
+    return null
+  }
+}
+
+/**
+ * The question as the system instruction states it. Three shapes:
+ *
+ * - a typed prompt, quoted verbatim (with a note when a picture rides along);
+ * - a picture the model can see, pointed at rather than quoted;
+ * - a file the model cannot view (HEIC, PDF, or a failed fetch), said
+ *   honestly — the model must ask the student to read it out, not guess. The
+ *   old version of this block printed an empty string here, and the tutor
+ *   spent whole conversations deflecting about a question it had never seen.
+ */
+function questionBlock(question, image) {
+  const marks = totalPoints(question)
+  const heading = `The question (${question.code}${marks ? `, ${marks} marks` : ''})`
+  const prompt = question.prompt?.trim()
+
+  if (prompt) {
+    const alsoImage = image
+      ? '\n\nThe question also includes the picture attached to the first message of the conversation.'
+      : question.image
+        ? `\n\nThe question also includes an uploaded file (${question.image.name}) you cannot view; the student can see it.`
+        : ''
+    return `${heading}:\n${prompt}${alsoImage}`
+  }
+
+  if (image) {
+    return `${heading} was uploaded as a picture: it is attached to the first message of the conversation. Read the question from that picture — the student is looking at the same one.`
+  }
+
+  return `${heading} was uploaded as a file (${question.image?.name ?? 'unnamed'}) in a format you cannot view. The student can see it. Do not guess what it says — ask the student to read out the part they are working on.`
+}
+
 /**
  * Everything the model is told before the conversation itself: the active
  * system prompt, the house rules, the question, the teacher's answer when one
@@ -172,7 +253,7 @@ function modelAnswers({ question, answer, action }) {
  * has versions, and the student's answer changes between one message and the
  * next.
  */
-function systemInstruction({ question, answer, action, lang, systemPrompt }) {
+function systemInstruction({ question, answer, action, lang, systemPrompt, image = null }) {
   const language = LANGUAGES[lang] ?? LANGUAGES.en
   const state = answerShape(answer)
   const hintsUsed = answer?.hintsUsed ?? 0
@@ -180,8 +261,7 @@ function systemInstruction({ question, answer, action, lang, systemPrompt }) {
   const blocks = [
     (systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT),
     HOUSE_RULES.replaceAll('{{language}}', language),
-    `The question (${question.code}${question.points ? `, ${question.points} marks` : ''}):
-${question.prompt}`,
+    questionBlock(question, image),
   ]
 
   if (question.stimulus?.trim()) blocks.push(`Material the question refers to:\n${question.stimulus}`)
@@ -262,14 +342,25 @@ ${step === total ? 'This is the last hint they get, so make it the one that unbl
  *
  * Capped at the last ten turns. A tutor chat about one question does not need
  * more, and an unbounded thread is an unbounded bill.
+ *
+ * When the question is a picture, it opens the conversation as a synthetic
+ * student turn — a system message cannot carry an image, and first is where
+ * the question belongs. Re-sent every call because the API is stateless; the
+ * system instruction's question block points at it.
  */
-function turnsFor({ thread, text }) {
+function turnsFor({ thread, text, image = null }) {
   const history = thread
     .filter((message) => message.text?.trim())
     .slice(-10)
     .map((message) => ({ role: message.from === 'tutor' ? 'model' : 'user', text: message.text }))
 
-  return [...history, { role: 'user', text }]
+  return [
+    ...(image
+      ? [{ role: 'user', text: 'Here is the question I am working on.', images: [image.url] }]
+      : []),
+    ...history,
+    { role: 'user', text },
+  ]
 }
 
 /**

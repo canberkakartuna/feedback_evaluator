@@ -98,8 +98,11 @@ function readReply(payload) {
  * @param {object} options
  * @param {string} [options.system] System instruction — the active prompt plus
  *   whatever context the caller has assembled.
- * @param {Array<{ role: 'user' | 'model', text: string }>} options.turns The
- *   conversation, oldest first, ending with what the student just said.
+ * @param {Array<{ role: 'user' | 'model', text: string, images?: string[] }>} options.turns The
+ *   conversation, oldest first, ending with what the student just said. A turn
+ *   may carry `images` — https or data URLs the model can view (JPG, PNG,
+ *   WebP) — which become image parts alongside the text. User turns only: the
+ *   API takes images from the user, not the assistant.
  * @returns {Promise<{ text: string, model: string, finishReason: string|null, usage: object, ms: number }>}
  */
 export async function generate({
@@ -120,8 +123,17 @@ export async function generate({
     model,
     messages: [
       ...(system ? [{ role: 'system', content: system }] : []),
-      // The tutor's turn shape says `model`; this API says `assistant`.
-      ...turns.map((turn) => ({ role: turn.role === 'model' ? 'assistant' : 'user', content: turn.text })),
+      // The tutor's turn shape says `model`; this API says `assistant`. A turn
+      // with images becomes content parts; a plain one stays a plain string.
+      ...turns.map((turn) => ({
+        role: turn.role === 'model' ? 'assistant' : 'user',
+        content: turn.images?.length
+          ? [
+              { type: 'text', text: turn.text },
+              ...turn.images.map((url) => ({ type: 'image_url', image_url: { url } })),
+            ]
+          : turn.text,
+      })),
     ],
     max_completion_tokens: maxOutputTokens,
     // Both omitted when null, because each is a 400 on the model family that

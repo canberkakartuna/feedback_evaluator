@@ -272,8 +272,9 @@ the whole surface used is one POST with a bearer token.
    field a teacher left blank. It receives the system prompt, the question, the
    rubric's **criteria and coaching notes but never its keywords**, the teacher's
    answer when one was written (with a standing instruction to steer toward it,
-   never recite it), the student's answer as it stands, the last ten turns of the
-   thread, and the language to reply in.
+   never recite it), the question's uploaded image when there is one, the
+   student's answer as it stands, the last ten turns of the thread, and the
+   language to reply in.
 3. **The scripted lines** in `shared/tutor-scripts.js`, when there is no key or
    the call failed. Not a placeholder any more — a student who pressed send is
    owed a sentence, and this is the one they get. `GET /api/health` reports
@@ -306,10 +307,19 @@ does not clear in milliseconds) and every student over the limit silently gets
 a scripted line instead. Add billing to the OpenAI account before a real
 session, and read the `source` field afterwards to see what actually happened.
 
-Not sent to the model yet: whiteboard strokes and photographs of working. The model
-reads images and the bytes are in Spaces, so this is a fetch-and-attach away —
-until then the honest scripted line ("I cannot read a drawing or a photo yet")
-stands in, and `services/tutor.js` says so where it decides.
+**The question's own image travels to the model.** A question uploaded as a
+picture (JPG, PNG or WebP) is attached to the conversation — via a short-lived
+signed URL from Spaces, or inlined from disk — so the tutor has actually read
+the question it is tutoring. HEIC and PDF are formats the vision API refuses;
+for those the instruction says honestly that the question is a file it cannot
+view and must ask the student to read out. Before this, a photographed question
+produced a tutor that had never seen the question at all.
+
+Not sent to the model yet: whiteboard strokes and photographs of the student's
+*working*. The model reads images and the bytes are in Spaces, so this is a
+fetch-and-attach away — until then the honest scripted line ("I cannot read a
+drawing or a photo yet") stands in, and `services/tutor.js` says so where it
+decides.
 
 ## Reading and labelling
 
