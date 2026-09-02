@@ -229,6 +229,25 @@ export function parseQuestionInput(body, { forCreate } = {}) {
     patch.prompt = ''
   }
 
+  /**
+   * The teacher's own answer. Optional everywhere: `null` and `''` both mean
+   * "no answer written", stored as `''` so no reader meets three shapes of
+   * absence. It goes to the tutor as context and never into a student payload —
+   * see publicQuestion in shared/activity.js.
+   */
+  const answer = body?.answer
+  if (answer !== undefined) {
+    if (answer === null) {
+      patch.answer = ''
+    } else if (typeof answer !== 'string') {
+      throw badRequest('"answer" must be a string')
+    } else if (answer.length > LIMITS.answer) {
+      throw badRequest(`"answer" must be at most ${LIMITS.answer} characters`)
+    } else {
+      patch.answer = answer.trim()
+    }
+  }
+
   if (body?.kind !== undefined) {
     if (!isQuestionKind(body.kind)) {
       throw badRequest(`"kind" must be one of: ${QUESTION_KINDS.join(', ')}`)
@@ -375,6 +394,7 @@ export function newQuestion({ activityId, position, code, ...rest }) {
     prompt: '',
     image: null,
     stimulus: null,
+    answer: '',
     workingExpected: false,
     rubric: [],
     tutor: blankTutor(),

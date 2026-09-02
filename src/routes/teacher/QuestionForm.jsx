@@ -10,6 +10,11 @@ import { useT } from '../../lib/i18n'
  * off a worksheet and upload that. Both together is fine — a diagram with a
  * line of instruction over it — but neither is refused.
  *
+ * Below them sits one optional field: the teacher's own **answer**. It is never
+ * shown to a student — it goes to the AI tutor so its guidance steers toward
+ * the answer the teacher actually wants, rather than whatever the model would
+ * have decided on its own. Leaving it empty is fine and changes nothing else.
+ *
  * This form used to carry four more controls: a question kind, a
  * worked-on-paper flag, a per-criterion mark scheme, and a set of hints to
  * release one at a time. They are gone. Setting work should take as long as
@@ -25,6 +30,7 @@ import { useT } from '../../lib/i18n'
 export default function QuestionForm({ question, onSave, onCancel, busy }) {
   const t = useT()
   const [prompt, setPrompt] = useState(question?.prompt ?? '')
+  const [answer, setAnswer] = useState(question?.answer ?? '')
 
   // `undefined` means "leave whatever is stored alone", which is what the API
   // wants too — so the three states line up and nothing has to be translated.
@@ -69,6 +75,7 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
     try {
       await onSave({
         prompt,
+        answer,
         // Omitted entirely when untouched, so editing the wording does not
         // re-upload a picture that has not changed.
         ...(image === undefined
@@ -144,6 +151,22 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
             {imageError}
           </p>
         ) : null}
+      </div>
+
+      <div className="cs-field">
+        <label className="cs-label" htmlFor="q-answer">
+          {t('qform.answer')}
+        </label>
+        <textarea
+          id="q-answer"
+          className="cs-textarea"
+          rows={3}
+          maxLength={LIMITS.answer}
+          placeholder={t('qform.answerPlaceholder')}
+          value={answer}
+          onChange={(event) => setAnswer(event.target.value)}
+        />
+        <p className="cs-hint">{t('qform.answerHint')}</p>
       </div>
 
       {error ? (

@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (257 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (259)
+npm run test:api         # end-to-end check over real HTTP, in-memory (311 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (313)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
@@ -77,7 +77,7 @@ the client and the API never disagree about which value won.
 
 - **Consent.** There is no route that creates a session without `consent: true` — with one deliberate exception: **staff** (teacher, manager, admin) are not asked, because the notice is addressed to a research participant and they are not one. Their session is stamped `staffPreview: true` with `consent.given: false` and `waived: 'staff-preview'`, rather than claiming an agreement nobody gave. The UI gate is a courtesy; this is the gate.
 - **The questions themselves.** Teachers author them; nothing is hard-coded. A student reaches an activity by picking it from `GET /api/activities/available`, or by its **class code** through `GET /api/activities/code/:code` — and both refuse a draft, so **publishing is the whole access decision** and the code is a shortcut, not a credential. See [Activity endpoints](#activity-endpoints).
-- **The mark scheme.** No student-facing route returns rubric keywords or tutor scripts; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
+- **The mark scheme.** No student-facing route returns rubric keywords, tutor scripts or the teacher's answer; `shared/activity.js` `publicQuestion` is the one place that decides what travels. Marking runs in `POST .../check`. Previously a student could read every answer out of the JS bundle.
 - **Hint escalation.** The server counts hints and holds their text, so hint 3 is not readable before hint 1 is asked for. True whether the hint was authored or generated: the model is asked for hint *n* and told nothing about hint *n + 1*.
 - **The model call.** The API key, the system prompt and the request are all server-side — see [The tutor](#the-tutor). The browser sends what the student typed and receives one reply.
 - **One answer per question.** Changing `mode` clears what the previous mode held, so a stored answer is never two answers.
@@ -202,7 +202,7 @@ from another's list.
 | `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
 | `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
 | `DELETE` | `/api/activities/:id` | 409 once any student has worked on it — unpublish instead |
-| `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
+| `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, answer?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
 | `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
 | `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
@@ -224,6 +224,12 @@ prompt and the answer is passed on unmarked rather than scored against criteria
 nobody wrote. Fill them in and the same question gains per-criterion marking and
 staged hints. `shared/activity.js` holds the helpers every reader uses so that
 "no rubric" means one thing everywhere.
+
+**So is the teacher's answer** — `answer`, a plain string. It is what a correct
+response actually says, written by the teacher so the tutor guides toward *their*
+answer rather than the model's own idea of one. It travels to the model with the
+rubric and under the same rule (context, never recited — see [The tutor](#the-tutor)),
+and like the rubric keywords it appears in no student-facing payload.
 
 ## Student endpoints
 
@@ -264,8 +270,10 @@ the whole surface used is one POST with a bearer token.
 2. **The model.** Free text, "check my reasoning", and every turn on a question
    nobody wrote that field for — all of a student's own questions, and any tutor
    field a teacher left blank. It receives the system prompt, the question, the
-   rubric's **criteria and coaching notes but never its keywords**, the answer as
-   it stands, the last ten turns of the thread, and the language to reply in.
+   rubric's **criteria and coaching notes but never its keywords**, the teacher's
+   answer when one was written (with a standing instruction to steer toward it,
+   never recite it), the student's answer as it stands, the last ten turns of the
+   thread, and the language to reply in.
 3. **The scripted lines** in `shared/tutor-scripts.js`, when there is no key or
    the call failed. Not a placeholder any more — a student who pressed send is
    owed a sentence, and this is the one they get. `GET /api/health` reports

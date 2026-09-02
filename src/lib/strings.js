@@ -401,6 +401,10 @@ const en = {
     promptHint: 'Leave this empty if you are uploading the question as a picture instead.',
     orUpload: 'Or upload the question',
     imageHint: 'A photo or scan of the question. JPG, PNG or PDF, up to 10 MB.',
+    answer: 'Answer (optional)',
+    answerPlaceholder: '750 g — the recipe scales by 10 ÷ 4, so 300 g × 2.5.',
+    answerHint:
+      'Students never see this. The AI tutor reads it so its hints steer toward your answer instead of its own.',
     needSomething: 'Write the question above, or upload a picture of it.',
     saveChanges: 'Save changes',
     add: 'Add question',
@@ -905,6 +909,10 @@ const tr = {
     promptHint: 'Soruyu görsel olarak yükleyecekseniz burayı boş bırakın.',
     orUpload: 'Ya da soruyu yükleyin',
     imageHint: 'Sorunun fotoğrafı ya da taraması. JPG, PNG veya PDF, en fazla 10 MB.',
+    answer: 'Cevap (isteğe bağlı)',
+    answerPlaceholder: '750 g — tarif 10 ÷ 4 ile ölçeklenir, yani 300 g × 2,5.',
+    answerHint:
+      'Öğrenciler bunu asla görmez. Yapay zekâ eğitmeni bunu okur; ipuçları kendi cevabına değil sizin cevabınıza yönlendirir.',
     needSomething: 'Yukarıya soruyu yazın ya da bir görselini yükleyin.',
     saveChanges: 'Değişiklikleri kaydet',
     add: 'Soru ekle',

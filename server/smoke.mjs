@@ -133,12 +133,15 @@ const PNG =
  * A real rubric with real keywords, because the point of several checks below
  * is that none of this reaches the browser. "water potential" appears in a
  * keyword and in a hint and in no public field, so finding it in a student
- * payload means something leaked.
+ * payload means something leaked. The teacher's answer carries its own marker
+ * phrase — "exerts an opposing pressure" — for the same reason.
  */
 const OSMOSIS = {
   prompt:
     'A red blood cell is placed in distilled water. Within a minute it swells and bursts. Explain why, and say why a plant cell in the same beaker would not burst.',
   kind: 'Explain',
+  answer:
+    'Water enters both cells by osmosis, down the water potential gradient across the partially permeable membrane. The red blood cell has no wall, so it swells until it lyses; the plant cell wall exerts an opposing pressure and the cell only becomes turgid.',
   rubric: [
     {
       label: 'Names the water potential gradient',
@@ -491,6 +494,12 @@ try {
   })
   check('negative points rejected', badPoints.status === 400)
 
+  const badAnswer = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { prompt: 'Fine prompt', answer: 42 },
+  })
+  check('a non-string answer is rejected', badAnswer.status === 400)
+
   const marked = await call('POST', `/api/activities/${activity.id}/questions`, {
     token: teacherToken,
     body: OSMOSIS,
@@ -501,6 +510,7 @@ try {
   check('the rubric came back to its author', markedQ.rubric.length === 3)
   check('criteria were given ids', markedQ.rubric.every((c) => typeof c.id === 'string' && c.id))
   check('keywords were lower-cased', markedQ.rubric[0].keywords.includes('water potential'))
+  check('the answer came back to its author', markedQ.answer === OSMOSIS.answer)
 
   const bare = await call('POST', `/api/activities/${activity.id}/questions`, {
     token: teacherToken,
@@ -511,6 +521,7 @@ try {
   check('it is numbered Q2', bareQ.code === 'Q2')
   check('its rubric is empty, not absent', Array.isArray(bareQ.rubric) && bareQ.rubric.length === 0)
   check('its tutor script is empty, not absent', bareQ.tutor.hints.length === 0)
+  check('its answer is empty, not absent', bareQ.answer === '')
 
   const dataQ = (
     await call('POST', `/api/activities/${activity.id}/questions`, {
@@ -607,6 +618,23 @@ try {
   )
   check('a question can have both', bothWays.body.question.prompt && bothWays.body.question.image)
 
+  const answered = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { answer: '  A conical flask feeding a gas syringe.  ' } },
+  )
+  check(
+    'an answer can be added after the fact, trimmed',
+    answered.body.question.answer === 'A conical flask feeding a gas syringe.',
+  )
+
+  const unanswered = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { answer: null } },
+  )
+  check('and cleared again with null', unanswered.body.question.answer === '')
+
   await call('DELETE', `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`, {
     token: teacherToken,
   })
@@ -670,8 +698,10 @@ try {
   check('preview returns every question', preview.body.activity.questions.length === 3)
   check('no rubric on a previewed question', !('rubric' in preview.body.activity.questions[0]))
   check('no tutor script either', !('tutor' in preview.body.activity.questions[0]))
+  check('no teacher answer either', !('answer' in preview.body.activity.questions[0]))
   check('no keyword survives the trip', !previewText.includes('water potential'))
   check('no hint text survives it', !previewText.includes('Start outside the cell'))
+  check('no answer text survives it', !previewText.includes('exerts an opposing pressure'))
   check('criteria are counted, not listed', preview.body.activity.questions[0].criteriaCount === 3)
   check('and the count is honest', preview.body.activity.questions[0].points === 3)
   check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
@@ -888,6 +918,10 @@ try {
   check(
     'no mark scheme in the session payload',
     !JSON.stringify(started.body).includes('water potential'),
+  )
+  check(
+    'no teacher answer in the session payload',
+    !JSON.stringify(started.body).includes('exerts an opposing pressure'),
   )
 
   check('it still has a short code, as a label for the teacher', /^[A-Z2-9]{6}$/.test(session.code))

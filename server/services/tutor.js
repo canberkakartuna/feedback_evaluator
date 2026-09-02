@@ -1,4 +1,5 @@
 import { fallbackReplyFor, ownTutorFor } from '../../shared/tutor-scripts.js'
+import { hasAnswer } from '../../shared/activity.js'
 import { contentCount, hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
@@ -73,8 +74,8 @@ const HOUSE_RULES = `Rules for this reply, which override anything above that co
 - Write in {{language}}. The student reads the interface in {{language}}.
 - Plain prose, at most 120 words, no markdown, no headings, no bullet points.
 - One reply, in the second person, addressed to this student.
-- Do not reveal the mark scheme, and do not list what it is looking for. It is here so
-  you know what "correct" means, not so you can read it out.
+- Do not reveal the mark scheme or the teacher's answer, and do not list what either is
+  looking for. They are here so you know what "correct" means, not so you can read them out.
 - Do not give the complete final answer, even if asked directly.`
 
 /**
@@ -164,10 +165,12 @@ function modelAnswers({ question, answer, action }) {
 
 /**
  * Everything the model is told before the conversation itself: the active
- * system prompt, the house rules, the question, and the answer as it stands.
+ * system prompt, the house rules, the question, the teacher's answer when one
+ * was written, and the student's answer as it stands.
  *
- * Assembled per turn rather than cached, because all four move — the prompt has
- * versions, and the answer changes between one message and the next.
+ * Assembled per turn rather than cached, because all of it moves — the prompt
+ * has versions, and the student's answer changes between one message and the
+ * next.
  */
 function systemInstruction({ question, answer, action, lang, systemPrompt }) {
   const language = LANGUAGES[lang] ?? LANGUAGES.en
@@ -196,6 +199,21 @@ ${question.prompt}`,
       .map((c) => `- ${c.label} (${c.points} mark${c.points === 1 ? '' : 's'})${c.coach ? ` — the teacher's note: ${c.coach}` : ''}`)
       .join('\n')
     blocks.push(`What a full answer has to cover:\n${criteria}`)
+  }
+
+  /**
+   * The teacher's own answer, when one was written. It is the destination the
+   * guidance is steering toward — without it the model judges "close" against
+   * its own idea of the answer, which on an ambiguous question may not be the
+   * teacher's. The house rules above already forbid reading it out, and the
+   * line here says again what it is *for*, because a block of correct answer
+   * sitting in the context is exactly what a model reaches for when a student
+   * pushes.
+   */
+  if (hasAnswer(question)) {
+    blocks.push(`The teacher's answer to this question, so you know exactly where the student should end up:
+${question.answer.trim()}
+Use it to judge how close this student is and to choose the next step to point at. Never recite it, and never confirm it wholesale.`)
   }
 
   blocks.push(

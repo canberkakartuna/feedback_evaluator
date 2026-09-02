@@ -8,7 +8,7 @@
  *
  *   activity  { id, code, title, blurb, topic, ownerId, status,
  *               createdAt, updatedAt }
- *   question  { id, activityId, code, kind, prompt, image, stimulus,
+ *   question  { id, activityId, code, kind, prompt, image, stimulus, answer,
  *               workingExpected, rubric[], tutor{}, position, ... }
  *
  * **An activity carries a class code.** Six characters, generated once, shown to
@@ -31,6 +31,13 @@
  * downstream — marking, the tutor, the student payload — reads the helpers here
  * rather than testing for empty arrays itself, so "no rubric" means the same
  * thing everywhere.
+ *
+ * **The answer is optional too, and it is the teacher's, never the student's.**
+ * `answer` is the teacher's own answer to the question — what a correct
+ * response actually says. It exists so the tutor knows where the student is
+ * heading and can guide toward it instead of guessing; it is handed to the
+ * model the same way rubric criteria are, and like the rubric keywords it never
+ * reaches the browser — `publicQuestion` below does not carry it.
  *
  * This file is in shared/ because the teacher's authoring form and the server's
  * validation have to agree on the same limits. The client's copy is a courtesy:
@@ -88,6 +95,7 @@ export const LIMITS = {
   title: 200,
   blurb: 500,
   prompt: 5000,
+  answer: 5000,
   code: 24, // a question's own label, e.g. "BIO-101". An activity's class code
   //           is generated rather than typed — see services/activities.js
   criterionLabel: 300,
@@ -125,6 +133,13 @@ export const totalPoints = (question) =>
 export const hintCount = (question) => question?.tutor?.hints?.length ?? 0
 
 /**
+ * Whether a teacher wrote their own answer to this question. Read this rather
+ * than the field, so "no answer" means the same thing to the tutor, the
+ * validation and any export.
+ */
+export const hasAnswer = (question) => Boolean(question?.answer?.trim())
+
+/**
  * Whether this question puts a question to the student at all.
  *
  * Either half is enough. Requiring the prompt when there is a legible photo of
@@ -137,10 +152,11 @@ export const hasQuestion = (question) =>
 /**
  * What a student is allowed to receive.
  *
- * Rubric keywords and tutor scripts stay on the server. Shipping them would put
- * the mark scheme and every hint in the page source — the client sees a
- * criterion label only once its own answer has been marked against it, and
- * `criteriaCount` is a count precisely so the labels themselves stay back.
+ * Rubric keywords, tutor scripts and the teacher's answer stay on the server.
+ * Shipping them would put the mark scheme, every hint and the answer itself in
+ * the page source — the client sees a criterion label only once its own answer
+ * has been marked against it, and `criteriaCount` is a count precisely so the
+ * labels themselves stay back.
  */
 export function publicQuestion(question, activity) {
   return {
