@@ -69,7 +69,9 @@ const LANGUAGES = { en: 'English', tr: 'Turkish' }
 /** The one the tutor runs on when nobody has written one yet. */
 const DEFAULT_SYSTEM_PROMPT = `You are a patient secondary-school tutor helping one student with one question.
 Lead them to their own answer: ask what they have tried, name the specific step that
-is wrong, and give the smallest push that unblocks them. Never state the final answer.`
+is wrong, and give the smallest push that unblocks them. Never hand over a final answer
+the student has not reached — but the moment they do reach it, say clearly that they are
+right and stop coaching. A correct student who is never told so has been failed.`
 
 /**
  * Rules the platform needs whatever a teacher typed into the system prompt.
@@ -86,7 +88,10 @@ const HOUSE_RULES = `Rules for this reply, which override anything above that co
 - One reply, in the second person, addressed to this student.
 - Do not reveal the mark scheme or the teacher's answer, and do not list what either is
   looking for. They are here so you know what "correct" means, not so you can read them out.
-- Do not give the complete final answer, even if asked directly.`
+- Do not give away a final answer the student has not reached themselves, even if asked
+  directly. This is not a rule against agreeing: when the student's own answer is correct,
+  say so plainly and directly — confirming their answer is not revealing it. Do not keep
+  coaching a student who is already right.`
 
 /**
  * `store` is optional and only read on the model path: it is what fetches the
@@ -293,7 +298,9 @@ function systemInstruction({ question, answer, action, lang, systemPrompt, image
   if (hasAnswer(question)) {
     blocks.push(`The teacher's answer to this question, so you know exactly where the student should end up:
 ${question.answer.trim()}
-Use it to judge how close this student is and to choose the next step to point at. Never recite it, and never confirm it wholesale.`)
+Use it to judge how close this student is and to choose the next step to point at. Never
+recite it before they get there — but the moment their answer matches it, tell them
+plainly that they are right.`)
   }
 
   blocks.push(
@@ -333,7 +340,7 @@ ${step === total ? 'This is the last hint they get, so make it the one that unbl
     return 'The student asked for a worked example. Work through a similar question — not this one — line by line, then tell them to try theirs.'
   }
 
-  return `The student asked you to check their reasoning. Read what they wrote, say what is right about it, then name the first thing that goes wrong and why. ${question.tutor?.authored?.misconception ? "Use the teacher's note above if this student has made that mistake, and ignore it if they have not." : ''}`.trim()
+  return `The student asked you to check their reasoning. Read what they wrote. If it is correct and complete, say so plainly — do not invent a fault or ask for more steps. Otherwise say what is right about it, then name the first thing that goes wrong and why. ${question.tutor?.authored?.misconception ? "Use the teacher's note above if this student has made that mistake, and ignore it if they have not." : ''}`.trim()
 }
 
 /**
