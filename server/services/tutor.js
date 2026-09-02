@@ -43,6 +43,11 @@ import { storage } from '../lib/storage.js'
  * API refuses, so for those the instruction says honestly that the question is
  * a file it cannot view. See imageForModel below.
  *
+ * **So does the teacher's answer, when it was uploaded as a picture.** It rides
+ * in a synthetic turn explicitly labelled as the teacher's answer key, the
+ * system instruction says the student cannot see that turn, and the standing
+ * rule against reciting the answer covers it the same as the typed one.
+ *
  * Still not sent to the model: whiteboard strokes and photographs of the
  * student's *working*. The honest scripted line ("I cannot read a drawing or a
  * photo yet") stands in until they are fetched and attached the same way — the
@@ -117,11 +122,14 @@ export async function reply({
   if (!modelAnswers({ question, answer, action })) return scripted
 
   try {
-    const image = await imageForModel(store, question)
+    const [image, answerImage] = await Promise.all([
+      imageForModel(store, question.image),
+      imageForModel(store, question.answerImage),
+    ])
 
     const result = await generate({
-      system: systemInstruction({ question, answer, action, lang, systemPrompt, image }),
-      turns: turnsFor({ thread, text, image }),
+      system: systemInstruction({ question, answer, action, lang, systemPrompt, image, answerImage }),
+      turns: turnsFor({ thread, text, image, answerImage }),
     })
 
     return {
@@ -189,7 +197,8 @@ function modelAnswers({ question, answer, action }) {
 const MODEL_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 /**
- * The uploaded question, in a form the model can fetch.
+ * An uploaded picture — the question, or the teacher's answer — in a form the
+ * model can fetch.
  *
  * Spaces hands out a short-lived signed URL and the model fetches the bytes
  * itself; local disk has no URL to sign, so the bytes are read and inlined as
@@ -198,8 +207,7 @@ const MODEL_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
  * warning, not an error, because a reply that has not seen the picture is
  * still better than no reply.
  */
-async function imageForModel(store, question) {
-  const image = question.image
+async function imageForModel(store, image) {
   if (!store || !image?.id || !MODEL_IMAGE_TYPES.has(image.type)) return null
 
   try {
@@ -213,7 +221,7 @@ async function imageForModel(store, question) {
     const bytes = await fs.readFile(upload.path)
     return { url: `data:${upload.type};base64,${bytes.toString('base64')}` }
   } catch (error) {
-    console.warn(`[tutor] could not fetch the question image: ${error.message}`)
+    console.warn(`[tutor] could not fetch an uploaded picture (${image.id}): ${error.message}`)
     return null
   }
 }
@@ -250,6 +258,36 @@ function questionBlock(question, image) {
 }
 
 /**
+ * The teacher's answer as the system instruction states it, mirroring the
+ * shapes of questionBlock: typed text (quoted, possibly with a picture riding
+ * along), a picture the model can see (pointed at — it travels in a turn
+ * labelled as the answer key, see turnsFor), or a file it cannot view (HEIC,
+ * PDF, or a failed fetch), said honestly so the model judges from the rubric
+ * rather than guessing at a mark scheme it never saw.
+ */
+function answerBlock(question, answerImage) {
+  const text = question.answer?.trim()
+  const heading = "The teacher's answer to this question, so you know exactly where the student should end up"
+  const rules = `Use it to judge how close this student is and to choose the next step to point at. Never
+recite it before they get there — but the moment their answer matches it, tell them
+plainly that they are right.`
+
+  const picture = answerImage
+    ? '\n\nThe answer also comes as a picture, attached to the conversation in the message labelled as the teacher\'s answer key. The student cannot see that message — it is for you alone.'
+    : question.answerImage
+      ? `\n\nThe teacher also uploaded their answer as a file (${question.answerImage.name}) you cannot view.`
+      : ''
+
+  if (text) return `${heading}:\n${text}${picture}\n${rules}`
+
+  if (answerImage) {
+    return `${heading} was uploaded as a picture: it is attached to the conversation in the message labelled as the teacher's answer key. The student cannot see that message — it is for you alone. Read the answer from that picture.\n${rules}`
+  }
+
+  return `${heading} was uploaded as a file (${question.answerImage?.name ?? 'unnamed'}) in a format you cannot view. Do not guess what it says — judge the student's work from the question and the criteria instead.`
+}
+
+/**
  * Everything the model is told before the conversation itself: the active
  * system prompt, the house rules, the question, the teacher's answer when one
  * was written, and the student's answer as it stands.
@@ -258,7 +296,7 @@ function questionBlock(question, image) {
  * has versions, and the student's answer changes between one message and the
  * next.
  */
-function systemInstruction({ question, answer, action, lang, systemPrompt, image = null }) {
+function systemInstruction({ question, answer, action, lang, systemPrompt, image = null, answerImage = null }) {
   const language = LANGUAGES[lang] ?? LANGUAGES.en
   const state = answerShape(answer)
   const hintsUsed = answer?.hintsUsed ?? 0
@@ -287,20 +325,16 @@ function systemInstruction({ question, answer, action, lang, systemPrompt, image
   }
 
   /**
-   * The teacher's own answer, when one was written. It is the destination the
-   * guidance is steering toward — without it the model judges "close" against
-   * its own idea of the answer, which on an ambiguous question may not be the
-   * teacher's. The house rules above already forbid reading it out, and the
-   * line here says again what it is *for*, because a block of correct answer
-   * sitting in the context is exactly what a model reaches for when a student
-   * pushes.
+   * The teacher's own answer, when one was given — typed, uploaded as a
+   * picture, or both. It is the destination the guidance is steering toward —
+   * without it the model judges "close" against its own idea of the answer,
+   * which on an ambiguous question may not be the teacher's. The house rules
+   * above already forbid reading it out, and the line here says again what it
+   * is *for*, because a block of correct answer sitting in the context is
+   * exactly what a model reaches for when a student pushes.
    */
   if (hasAnswer(question)) {
-    blocks.push(`The teacher's answer to this question, so you know exactly where the student should end up:
-${question.answer.trim()}
-Use it to judge how close this student is and to choose the next step to point at. Never
-recite it before they get there — but the moment their answer matches it, tell them
-plainly that they are right.`)
+    blocks.push(answerBlock(question, answerImage))
   }
 
   blocks.push(
@@ -352,10 +386,15 @@ ${step === total ? 'This is the last hint they get, so make it the one that unbl
  *
  * When the question is a picture, it opens the conversation as a synthetic
  * student turn — a system message cannot carry an image, and first is where
- * the question belongs. Re-sent every call because the API is stateless; the
- * system instruction's question block points at it.
+ * the question belongs. The teacher's answer picture follows the same way,
+ * but in a turn that says on its face it is the answer key and not something
+ * the student sent: the API only takes images from the user role, so the
+ * labelling in the text and in the system instruction is what keeps the model
+ * from treating it as the student's work — or reading it back to them.
+ * Re-sent every call because the API is stateless; the system instruction's
+ * question and answer blocks point at them.
  */
-function turnsFor({ thread, text, image = null }) {
+function turnsFor({ thread, text, image = null, answerImage = null }) {
   const history = thread
     .filter((message) => message.text?.trim())
     .slice(-10)
@@ -364,6 +403,15 @@ function turnsFor({ thread, text, image = null }) {
   return [
     ...(image
       ? [{ role: 'user', text: 'Here is the question I am working on.', images: [image.url] }]
+      : []),
+    ...(answerImage
+      ? [
+          {
+            role: 'user',
+            text: "[Teacher's answer key — attached for the tutor's reference only. The student did not send this and cannot see it. Never recite or describe it.]",
+            images: [answerImage.url],
+          },
+        ]
       : []),
     ...history,
     { role: 'user', text },

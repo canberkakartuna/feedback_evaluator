@@ -1,32 +1,99 @@
 import { useState } from 'react'
 import { LIMITS } from '../../../shared/activity'
+import MathText from '../../components/MathText'
 import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/attachments'
+import { hasMath } from '../../lib/latex'
 import { useT } from '../../lib/i18n'
 
 /**
- * Writing or editing one question.
+ * Writing or editing one question. Two blocks, question and answer, and each
+ * block is the same shape: type it, attach a picture of it, or both.
  *
- * Two fields, and a question needs **one** of them: type it, or photograph it
- * off a worksheet and upload that. Both together is fine — a diagram with a
- * line of instruction over it — but neither is refused.
+ * The **question** needs one of the two — retyping a worksheet is the slowest
+ * part of setting work, so a photo alone is a whole question. The **answer**
+ * is optional entirely: it is never shown to a student — it goes to the AI
+ * tutor so its guidance steers toward the answer the teacher actually wants,
+ * rather than whatever the model would have decided on its own.
  *
- * Below them sits one optional field: the teacher's own **answer**. It is never
- * shown to a student — it goes to the AI tutor so its guidance steers toward
- * the answer the teacher actually wants, rather than whatever the model would
- * have decided on its own. Leaving it empty is fine and changes nothing else.
+ * Both text fields take LaTeX ($…$, $$…$$, \(…\), \[…\]) anywhere in the
+ * prose, and a preview appears under the box the moment a formula shows up —
+ * only then, because a teacher typing plain words has nothing to preview and
+ * the box would be noise. Students see the rendered mathematics; the model is
+ * handed the source, which it reads natively.
  *
  * This form used to carry four more controls: a question kind, a
  * worked-on-paper flag, a per-criterion mark scheme, and a set of hints to
  * release one at a time. They are gone. Setting work should take as long as
  * typing the question, and everything that made it take longer than that was
- * optional anyway.
- *
- * The API still accepts all four, and questions authored earlier keep whatever
- * they were given — this stopped sending them, it did not delete them. What
- * that means in practice is that new questions are unmarked and the tutor
- * answers from the system prompt, which is the path the whole application
- * already supports and the smoke test already covers.
+ * optional anyway. The API still accepts all four, and questions authored
+ * earlier keep whatever they were given.
  */
+
+/**
+ * One attached picture: the button when there is none, the thumbnail and a
+ * remove when there is. `shown` is what would be kept on save — the fresh
+ * upload, or the stored one.
+ */
+function PicturePicker({ id, shown, error, onPick, onRemove }) {
+  const t = useT()
+
+  return (
+    <>
+      {shown ? (
+        <div className="cs-qimage">
+          <img
+            src={shown.preview ?? shown.url}
+            alt={shown.name}
+            className="cs-qimage-thumb"
+          />
+          <div className="cs-qimage-meta">
+            <p className="cs-qimage-name">{shown.name}</p>
+            {shown.size ? <p className="cs-hint mono">{formatBytes(shown.size)}</p> : null}
+          </div>
+          <button type="button" className="cs-btn cs-btn-sm cs-btn-danger" onClick={onRemove}>
+            {t('common.remove')}
+          </button>
+        </div>
+      ) : (
+        <label className="cs-attach" htmlFor={id}>
+          <input
+            id={id}
+            className="sr-only"
+            type="file"
+            accept={ACCEPT}
+            onChange={(event) => {
+              onPick(event.target.files)
+              event.target.value = ''
+            }}
+          />
+          <span aria-hidden="true">＋</span> {t('qform.attach')}
+        </label>
+      )}
+
+      {error ? (
+        <p className="cs-note" data-tone="bad" role="alert">
+          {error}
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+/** The rendered mathematics, shown only once there is any to render. */
+function MathPreview({ text }) {
+  const t = useT()
+  if (!hasMath(text)) return null
+
+  return (
+    <div className="cs-math-preview">
+      <span className="cs-math-preview-tag">{t('qform.preview')}</span>
+      <p className="cs-math-preview-body">
+        <MathText text={text} />
+      </p>
+    </div>
+  )
+}
+
 export default function QuestionForm({ question, onSave, onCancel, busy }) {
   const t = useT()
   const [prompt, setPrompt] = useState(question?.prompt ?? '')
@@ -34,37 +101,58 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
 
   // `undefined` means "leave whatever is stored alone", which is what the API
   // wants too — so the three states line up and nothing has to be translated.
-  const [image, setImage] = useState(undefined)
-  const [imageError, setImageError] = useState(null)
+  const [images, setImages] = useState({ image: undefined, answerImage: undefined })
+  const [imageErrors, setImageErrors] = useState({ image: null, answerImage: null })
   const [error, setError] = useState(null)
 
-  /** What the student would see: the new upload, or the stored one, or nothing. */
-  const shownImage = image === undefined ? (question?.image ?? null) : image
-  const asksSomething = Boolean(prompt.trim() || shownImage)
+  /** What would be kept on save: the new upload, or the stored one, or nothing. */
+  const shown = (field) =>
+    images[field] === undefined ? (question?.[field] ?? null) : images[field]
 
-  const pickImage = async (fileList) => {
+  const asksSomething = Boolean(prompt.trim() || shown('image'))
+
+  const pick = (field) => async (fileList) => {
     const { accepted, rejected } = partitionFiles(Array.from(fileList ?? []))
     if (rejected.length) {
-      setImageError(`${rejected[0].name} ${rejected[0].reason}.`)
+      setImageErrors((prior) => ({ ...prior, [field]: `${rejected[0].name} ${rejected[0].reason}.` }))
       return
     }
     if (!accepted.length) return
 
     const file = accepted[0]
-    setImageError(null)
+    setImageErrors((prior) => ({ ...prior, [field]: null }))
     try {
-      setImage({
+      const picked = {
         name: file.name,
         type: file.type,
         size: file.size,
         dataUrl: await readAsDataUrl(file),
         // Shown immediately; a stored one comes back with a url instead.
         preview: URL.createObjectURL(file),
-      })
+      }
+      setImages((prior) => ({ ...prior, [field]: picked }))
     } catch (failure) {
-      setImageError(failure.message)
+      setImageErrors((prior) => ({ ...prior, [field]: failure.message }))
     }
   }
+
+  const remove = (field) => () => {
+    if (images[field]?.preview) URL.revokeObjectURL(images[field].preview)
+    setImages((prior) => ({ ...prior, [field]: null }))
+    setImageErrors((prior) => ({ ...prior, [field]: null }))
+  }
+
+  /** Omitted entirely when untouched, so editing the wording does not
+      re-upload a picture that has not changed. */
+  const imagePatch = (field) =>
+    images[field] === undefined
+      ? {}
+      : {
+          [field]: images[field] && {
+            name: images[field].name,
+            dataUrl: images[field].dataUrl,
+          },
+        }
 
   const submit = async (event) => {
     event.preventDefault()
@@ -76,11 +164,8 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
       await onSave({
         prompt,
         answer,
-        // Omitted entirely when untouched, so editing the wording does not
-        // re-upload a picture that has not changed.
-        ...(image === undefined
-          ? {}
-          : { image: image && { name: image.name, dataUrl: image.dataUrl } }),
+        ...imagePatch('image'),
+        ...imagePatch('answerImage'),
       })
     } catch (failure) {
       setError(failure.message)
@@ -102,55 +187,15 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
         />
+        <MathPreview text={prompt} />
+        <PicturePicker
+          id="q-image"
+          shown={shown('image')}
+          error={imageErrors.image}
+          onPick={pick('image')}
+          onRemove={remove('image')}
+        />
         <p className="cs-hint">{t('qform.promptHint')}</p>
-      </div>
-
-      <div className="cs-field">
-        <label className="cs-label" htmlFor="q-image">
-          {t('qform.orUpload')}
-        </label>
-
-        {shownImage ? (
-          <div className="cs-qimage">
-            <img
-              src={shownImage.preview ?? shownImage.url}
-              alt={shownImage.name}
-              className="cs-qimage-thumb"
-            />
-            <div className="cs-qimage-meta">
-              <p className="cs-qimage-name">{shownImage.name}</p>
-              {shownImage.size ? (
-                <p className="cs-hint mono">{formatBytes(shownImage.size)}</p>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              className="cs-btn cs-btn-sm cs-btn-danger"
-              onClick={() => {
-                if (image?.preview) URL.revokeObjectURL(image.preview)
-                setImage(null)
-                setImageError(null)
-              }}
-            >
-              {t('common.remove')}
-            </button>
-          </div>
-        ) : (
-          <input
-            id="q-image"
-            className="cs-input"
-            type="file"
-            accept={ACCEPT}
-            onChange={(event) => pickImage(event.target.files)}
-          />
-        )}
-
-        <p className="cs-hint">{t('qform.imageHint')}</p>
-        {imageError ? (
-          <p className="cs-note" data-tone="bad" role="alert">
-            {imageError}
-          </p>
-        ) : null}
       </div>
 
       <div className="cs-field">
@@ -165,6 +210,14 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           placeholder={t('qform.answerPlaceholder')}
           value={answer}
           onChange={(event) => setAnswer(event.target.value)}
+        />
+        <MathPreview text={answer} />
+        <PicturePicker
+          id="q-answer-image"
+          shown={shown('answerImage')}
+          error={imageErrors.answerImage}
+          onPick={pick('answerImage')}
+          onRemove={remove('answerImage')}
         />
         <p className="cs-hint">{t('qform.answerHint')}</p>
       </div>

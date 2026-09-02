@@ -42,9 +42,11 @@ export function activityRoutes(store) {
   })
 
   /**
-   * The uploaded half of a question.
+   * An uploaded picture on a question — the question itself (`image`) or the
+   * teacher's answer to it (`answerImage`). Same shape, same rules; `source`
+   * on the upload record is what tells them apart afterwards.
    *
-   * Three cases, distinguished by what `body.image` is:
+   * Three cases, distinguished by what the field carries:
    *
    *   undefined  leave whatever is there alone
    *   null       remove it
@@ -55,16 +57,16 @@ export function activityRoutes(store) {
    * `activityId` set and `sessionId` null, because a question outlives every
    * session that ever showed it and must not be swept up when one is deleted.
    */
-  async function resolveImage(activity, body, existing) {
-    if (body?.image === undefined) return { changed: false }
-    if (body.image === null) return { changed: true, image: null, replaced: existing }
+  async function resolveImage(activity, value, existing, { field, source }) {
+    if (value === undefined) return { changed: false }
+    if (value === null) return { changed: true, image: null, replaced: existing }
 
-    if (typeof body.image !== 'object' || Array.isArray(body.image)) {
-      throw badRequest('"image" must be an object or null')
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw badRequest(`"${field}" must be an object or null`)
     }
 
-    const { type, bytes } = decodeDataUrl(body.image.dataUrl)
-    const name = safeName(body.image.name, type)
+    const { type, bytes } = decodeDataUrl(value.dataUrl)
+    const name = safeName(value.name, type)
 
     const uploadId = id('upl')
     const files = storage()
@@ -79,7 +81,7 @@ export function activityRoutes(store) {
       name,
       type,
       size: bytes.length,
-      source: 'question',
+      source,
       storage: files.kind,
       key,
       path: written.path,
@@ -110,9 +112,29 @@ export function activityRoutes(store) {
     if (upload) await removeBytes(upload)
   }
 
-  /** Every question image in an activity, for when the activity itself goes. */
+  /** Every question and answer image in an activity, for when it goes. */
   async function discardAll(questions) {
-    await Promise.all(questions.map((question) => discard(question.image)))
+    await Promise.all(
+      questions.flatMap((question) => [discard(question.image), discard(question.answerImage)]),
+    )
+  }
+
+  /**
+   * Both pictures a question may carry, resolved together. `assertAsksSomething`
+   * still has to run after this — and when it refuses, both sets of bytes just
+   * written have to come back out, which is why the pair travels as one.
+   */
+  async function resolveImages(question, body, activity) {
+    return {
+      image: await resolveImage(activity, body?.image, question?.image ?? null, {
+        field: 'image',
+        source: 'question',
+      }),
+      answerImage: await resolveImage(activity, body?.answerImage, question?.answerImage ?? null, {
+        field: 'answerImage',
+        source: 'answer',
+      }),
+    }
   }
 
   /**
@@ -333,15 +355,17 @@ export function activityRoutes(store) {
       const existing = await store.questions.list({ activityId: activity.id })
       const fields = parseQuestionInput(req.body, { forCreate: true })
 
-      const uploaded = await resolveImage(activity, req.body, null)
-      if (uploaded.changed) fields.image = uploaded.image
+      const uploaded = await resolveImages(null, req.body, activity)
+      if (uploaded.image.changed) fields.image = uploaded.image.image
+      if (uploaded.answerImage.changed) fields.answerImage = uploaded.answerImage.image
 
       try {
         assertAsksSomething(fields)
       } catch (error) {
         // The bytes are already written at this point, so take them back out
         // rather than leaving an orphan nothing will ever reference.
-        await discard(uploaded.image)
+        await discard(uploaded.image.image)
+        await discard(uploaded.answerImage.image)
         throw error
       }
 
@@ -368,15 +392,17 @@ export function activityRoutes(store) {
 
       const patch = parseQuestionInput(req.body)
 
-      const uploaded = await resolveImage(activity, req.body, question.image)
-      if (uploaded.changed) patch.image = uploaded.image
+      const uploaded = await resolveImages(question, req.body, activity)
+      if (uploaded.image.changed) patch.image = uploaded.image.image
+      if (uploaded.answerImage.changed) patch.answerImage = uploaded.answerImage.image
 
       if (!Object.keys(patch).length) throw badRequest('Nothing to update')
 
       try {
         assertAsksSomething({ ...question, ...patch })
       } catch (error) {
-        await discard(uploaded.image)
+        await discard(uploaded.image.image)
+        await discard(uploaded.answerImage.image)
         throw error
       }
 
@@ -384,7 +410,8 @@ export function activityRoutes(store) {
 
       // Only once the write succeeded — an image dropped before a failed update
       // would leave the question pointing at bytes that no longer exist.
-      if (uploaded.changed) await discard(uploaded.replaced)
+      if (uploaded.image.changed) await discard(uploaded.image.replaced)
+      if (uploaded.answerImage.changed) await discard(uploaded.answerImage.replaced)
 
       await store.activities.update(activity.id, { updatedAt: now() })
 
@@ -422,6 +449,7 @@ export function activityRoutes(store) {
 
       await store.questions.remove(question.id)
       await discard(question.image)
+      await discard(question.answerImage)
       await store.activities.update(activity.id, { updatedAt: now() })
 
       res.json({ deleted: true, questionId: question.id })

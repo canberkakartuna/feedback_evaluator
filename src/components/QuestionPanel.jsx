@@ -5,6 +5,7 @@ import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
 import { useT } from '../lib/i18n'
+import MathText from './MathText'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
 
@@ -124,7 +125,11 @@ export default function QuestionPanel({
 
       <div className="qp-scroll" ref={sheet}>
         <article className="qp-sheet">
-          {question.prompt ? <p className="qp-prompt">{question.prompt}</p> : null}
+          {question.prompt ? (
+            <p className="qp-prompt">
+              <MathText text={question.prompt} />
+            </p>
+          ) : null}
 
           {/* The teacher photographed the question instead of typing it. */}
           {question.image ? (

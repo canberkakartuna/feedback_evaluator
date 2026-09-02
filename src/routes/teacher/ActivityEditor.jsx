@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { TOPICS } from '../../../shared/activity'
+import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
 import { useT } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
@@ -206,7 +207,11 @@ export default function ActivityEditor() {
                 <div className="cs-q-head">
                   <span className="cs-q-code">{question.code}</span>
                   <p className="cs-q-prompt">
-                    {question.prompt || <em>{t('editor.uploadedNoText')}</em>}
+                    {question.prompt ? (
+                      <MathText text={question.prompt} />
+                    ) : (
+                      <em>{t('editor.uploadedNoText')}</em>
+                    )}
                   </p>
 
                   {question.image ? (

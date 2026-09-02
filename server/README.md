@@ -202,7 +202,7 @@ from another's list.
 | `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
 | `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
 | `DELETE` | `/api/activities/:id` | 409 once any student has worked on it — unpublish instead |
-| `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, answer?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
+| `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, answer?, answerImage?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |
 | `DELETE` | `/api/activities/:id/questions/:qid` | 409 once students have seen it |
 | `POST` | `/api/activities/:id/questions/reorder` | `{ questionIds: […] }` — every id, exactly once |
@@ -225,11 +225,15 @@ nobody wrote. Fill them in and the same question gains per-criterion marking and
 staged hints. `shared/activity.js` holds the helpers every reader uses so that
 "no rubric" means one thing everywhere.
 
-**So is the teacher's answer** — `answer`, a plain string. It is what a correct
-response actually says, written by the teacher so the tutor guides toward *their*
-answer rather than the model's own idea of one. It travels to the model with the
+**So is the teacher's answer** — `answer`, a plain string, and/or `answerImage`,
+the same photographed-instead-of-typed option the question itself has (same
+`{ name, dataUrl }` / `null` / omitted protocol as `image`). It is what a correct
+response actually says, given by the teacher so the tutor guides toward *their*
+answer rather than the model's own idea of one. Both travel to the model with the
 rubric and under the same rule (context, never recited — see [The tutor](#the-tutor)),
-and like the rubric keywords it appears in no student-facing payload.
+and like the rubric keywords neither appears in any student-facing payload. The
+text may contain LaTeX — the client renders it for the teacher, and the model
+reads the source as written.
 
 ## Student endpoints
 
@@ -271,8 +275,9 @@ the whole surface used is one POST with a bearer token.
    nobody wrote that field for — all of a student's own questions, and any tutor
    field a teacher left blank. It receives the system prompt, the question, the
    rubric's **criteria and coaching notes but never its keywords**, the teacher's
-   answer when one was written (with a standing instruction to steer toward it,
-   never recite it), the question's uploaded image when there is one, the
+   answer when one was given — typed, and/or uploaded as a picture attached in a
+   turn labelled as the answer key (with a standing instruction to steer toward
+   it, never recite it) — the question's uploaded image when there is one, the
    student's answer as it stands, the last ten turns of the thread, and the
    language to reply in.
 3. **The scripted lines** in `shared/tutor-scripts.js`, when there is no key or

@@ -115,6 +115,8 @@
   line-height: 1.58;
   letter-spacing: -0.003em;
   text-wrap: pretty;
+  /* A teacher's line breaks are theirs — a two-part question stays two parts. */
+  white-space: pre-wrap;
 }
 
 /* ── stimulus ───────────────────────────────────────────────── */

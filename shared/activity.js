@@ -9,7 +9,7 @@
  *   activity  { id, code, title, blurb, topic, ownerId, status,
  *               createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, image, stimulus, answer,
- *               workingExpected, rubric[], tutor{}, position, ... }
+ *               answerImage, workingExpected, rubric[], tutor{}, position, ... }
  *
  * **An activity carries a class code.** Six characters, generated once, shown to
  * the teacher so a class can be pointed straight at one activity — typed into
@@ -37,7 +37,9 @@
  * response actually says. It exists so the tutor knows where the student is
  * heading and can guide toward it instead of guessing; it is handed to the
  * model the same way rubric criteria are, and like the rubric keywords it never
- * reaches the browser — `publicQuestion` below does not carry it.
+ * reaches the browser — `publicQuestion` below does not carry it. The same goes
+ * for `answerImage`, the answer photographed off a mark scheme instead of
+ * typed: same upload shape as `image`, same secrecy as `answer`.
  *
  * This file is in shared/ because the teacher's authoring form and the server's
  * validation have to agree on the same limits. The client's copy is a courtesy:
@@ -133,11 +135,12 @@ export const totalPoints = (question) =>
 export const hintCount = (question) => question?.tutor?.hints?.length ?? 0
 
 /**
- * Whether a teacher wrote their own answer to this question. Read this rather
- * than the field, so "no answer" means the same thing to the tutor, the
- * validation and any export.
+ * Whether a teacher gave their own answer to this question — typed, uploaded
+ * as a picture, or both. Read this rather than the fields, so "no answer"
+ * means the same thing to the tutor, the validation and any export.
  */
-export const hasAnswer = (question) => Boolean(question?.answer?.trim())
+export const hasAnswer = (question) =>
+  Boolean(question?.answer?.trim() || question?.answerImage)
 
 /**
  * Whether this question puts a question to the student at all.

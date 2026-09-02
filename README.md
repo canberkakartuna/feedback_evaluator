@@ -13,7 +13,7 @@ npm install
 cp .env.example .env          # then MONGODB_URI and OPENAI_API_KEY in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 311 end-to-end assertions over real HTTP
+npm run test:api              # 316 end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
 npm run check:openai          # one real call to the tutor's model
 ```
@@ -179,7 +179,13 @@ which is why it is offered whenever a delete is refused.
 
 A **question** has to ask something — a typed prompt, an uploaded photo of the
 question, or both. Nobody should have to retype a question out of a textbook.
-Two further extras are optional and change what the question can do:
+Typed prompts take LaTeX anywhere in the prose (`$…$`, `$$…$$`, `\(…\)`,
+`\[…\]`), rendered with KaTeX wherever the question is shown and previewed live
+in the form. The teacher's own **answer** works the same two ways — typed (LaTeX
+included) or photographed — and either way it stays off the student's screen:
+it goes to the AI tutor so its guidance steers toward the answer the teacher
+actually wants. Two further extras are optional and change what the question
+can do:
 
 - a **rubric** — criteria with keywords — turns on automatic marking with
   per-criterion feedback;

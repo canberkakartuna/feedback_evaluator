@@ -398,14 +398,15 @@ const en = {
   qform: {
     question: 'Question',
     placeholder: 'A recipe for four uses 300 g of flour. How much flour is needed for ten?',
-    promptHint: 'Leave this empty if you are uploading the question as a picture instead.',
-    orUpload: 'Or upload the question',
-    imageHint: 'A photo or scan of the question. JPG, PNG or PDF, up to 10 MB.',
+    promptHint:
+      'Type it, attach a photo of it, or both — either alone is enough. LaTeX renders for students: $\\frac{3}{4}$ becomes a real fraction.',
+    attach: 'Attach a picture',
     answer: 'Answer (optional)',
     answerPlaceholder: '750 g — the recipe scales by 10 ÷ 4, so 300 g × 2.5.',
     answerHint:
-      'Students never see this. The AI tutor reads it so its hints steer toward your answer instead of its own.',
-    needSomething: 'Write the question above, or upload a picture of it.',
+      'Students never see this. The AI tutor reads it — typed (LaTeX works here too) or as a picture — so its hints steer toward your answer instead of its own.',
+    preview: 'Preview',
+    needSomething: 'Write the question above, or attach a picture of it.',
     saveChanges: 'Save changes',
     add: 'Add question',
   },
@@ -906,14 +907,15 @@ const tr = {
   qform: {
     question: 'Soru',
     placeholder: 'Dört kişilik bir tarifte 300 g un kullanılıyor. On kişi için ne kadar un gerekir?',
-    promptHint: 'Soruyu görsel olarak yükleyecekseniz burayı boş bırakın.',
-    orUpload: 'Ya da soruyu yükleyin',
-    imageHint: 'Sorunun fotoğrafı ya da taraması. JPG, PNG veya PDF, en fazla 10 MB.',
+    promptHint:
+      'Yazın, fotoğrafını ekleyin ya da ikisini birden yapın — biri tek başına yeterli. LaTeX öğrencilere işlenmiş görünür: $\\frac{3}{4}$ gerçek bir kesir olur.',
+    attach: 'Görsel ekle',
     answer: 'Cevap (isteğe bağlı)',
     answerPlaceholder: '750 g — tarif 10 ÷ 4 ile ölçeklenir, yani 300 g × 2,5.',
     answerHint:
-      'Öğrenciler bunu asla görmez. Yapay zekâ eğitmeni bunu okur; ipuçları kendi cevabına değil sizin cevabınıza yönlendirir.',
-    needSomething: 'Yukarıya soruyu yazın ya da bir görselini yükleyin.',
+      'Öğrenciler bunu asla görmez. Yapay zekâ eğitmeni bunu okur — yazılı (burada da LaTeX çalışır) ya da görsel olarak — böylece ipuçları kendi cevabına değil sizin cevabınıza yönlendirir.',
+    preview: 'Önizleme',
+    needSomething: 'Yukarıya soruyu yazın ya da bir görselini ekleyin.',
     saveChanges: 'Değişiklikleri kaydet',
     add: 'Soru ekle',
   },

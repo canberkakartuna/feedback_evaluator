@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
@@ -91,7 +92,9 @@ export default function StudentWork() {
             </div>
 
             {question.prompt ? (
-              <p style={{ marginTop: 0 }}>{question.prompt}</p>
+              <p style={{ marginTop: 0 }}>
+                <MathText text={question.prompt} />
+              </p>
             ) : (
               <p className="cs-hint">{t('transcript.removedQuestion')}</p>
             )}

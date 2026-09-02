@@ -635,6 +635,35 @@ try {
   )
   check('and cleared again with null', unanswered.body.question.answer === '')
 
+  /**
+   * The answer photographed off a mark scheme instead of typed. Same upload
+   * shape as the question's own image, same three-state protocol — and the
+   * question is deleted afterwards still carrying one, which is what exercises
+   * the cleanup path for its bytes.
+   */
+  const answerShot = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { answerImage: { name: 'key.png', dataUrl: PNG } } },
+  )
+  check('the answer can be a picture', answerShot.status === 200)
+  check(
+    'it comes back to the teacher with a url',
+    answerShot.body.question.answerImage.url.startsWith('/api/uploads/'),
+  )
+
+  const answerShotGone = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { answerImage: null } },
+  )
+  check('and removed again with null', answerShotGone.body.question.answerImage === null)
+
+  await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`,
+    { token: teacherToken, body: { answerImage: { name: 'key.png', dataUrl: PNG } } },
+  )
   await call('DELETE', `/api/activities/${activity.id}/questions/${uploadedQ.body.question.id}`, {
     token: teacherToken,
   })
@@ -691,6 +720,16 @@ try {
   })
 
   console.log('\nnothing leaks to the student')
+
+  // An answer picture on the first question, so the leak checks below have one
+  // to fail on. Its upload id must never appear in a student payload.
+  const answerKey = (
+    await call('PATCH', `/api/activities/${activity.id}/questions/${markedQ.id}`, {
+      token: teacherToken,
+      body: { answerImage: { name: 'mark-scheme.png', dataUrl: PNG } },
+    })
+  ).body.question.answerImage
+
   const preview = await call('GET', `/api/activities/${activity.id}/preview`, {
     token: teacherToken,
   })
@@ -699,6 +738,8 @@ try {
   check('no rubric on a previewed question', !('rubric' in preview.body.activity.questions[0]))
   check('no tutor script either', !('tutor' in preview.body.activity.questions[0]))
   check('no teacher answer either', !('answer' in preview.body.activity.questions[0]))
+  check('no answer picture either', !('answerImage' in preview.body.activity.questions[0]))
+  check('no answer picture url survives it', !previewText.includes(answerKey.id))
   check('no keyword survives the trip', !previewText.includes('water potential'))
   check('no hint text survives it', !previewText.includes('Start outside the cell'))
   check('no answer text survives it', !previewText.includes('exerts an opposing pressure'))

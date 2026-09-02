@@ -471,6 +471,15 @@
   color: var(--graphite);
 }
 
+/* Rendered LaTeX in the one-line list row: display math stays inline so a
+   $$formula$$ cannot turn a row into a centred block. */
+.cs-q-prompt .katex-display,
+.cs-q-prompt .katex-display > .katex {
+  display: inline;
+  margin: 0;
+  text-align: inherit;
+}
+
 .cs-q-body {
   padding: var(--s-4);
   display: grid;
@@ -613,7 +622,54 @@
   }
 }
 
-/* ── an uploaded question, in the authoring form ──────────────── */
+/* ── an uploaded picture, in the authoring form ───────────────── */
+
+/* The "attach" affordance: a quiet dashed target, not a native file input. */
+.cs-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  justify-self: start;
+  padding: 5px var(--s-3);
+  font-size: var(--t-12);
+  color: var(--graphite);
+  background: var(--paper);
+  border: 1px dashed var(--edge);
+  border-radius: var(--r-2);
+  cursor: pointer;
+}
+
+.cs-attach:hover {
+  border-color: var(--pen);
+  color: var(--pen-deep);
+}
+
+.cs-attach:focus-within {
+  outline: 2px solid var(--pen);
+  outline-offset: 1px;
+}
+
+/* Rendered LaTeX, live, under the box it is typed into. */
+.cs-math-preview {
+  padding: var(--s-2) var(--s-3);
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+}
+
+.cs-math-preview-tag {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--graphite-faint);
+}
+
+.cs-math-preview-body {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-14);
+  white-space: pre-wrap;
+}
 
 .cs-qimage {
   display: flex;

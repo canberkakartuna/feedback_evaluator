@@ -395,6 +395,7 @@ export function newQuestion({ activityId, position, code, ...rest }) {
     image: null,
     stimulus: null,
     answer: '',
+    answerImage: null,
     workingExpected: false,
     rubric: [],
     tutor: blankTutor(),
