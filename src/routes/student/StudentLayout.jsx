@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { NICKNAME_MAX } from '../../../shared/session'
+import { STUDENT_NUMBER_MAX } from '../../../shared/student-number'
 import { isStaff } from '../../../shared/roles'
 import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
@@ -12,45 +12,63 @@ import '../console.css'
  * Everything before a session starts, in the order the questions actually have
  * to be asked:
  *
- *   1  who are you    anonymously, or signed in with a password
- *   2  a nickname     anonymous only, and optional — see ./nickname below
- *   3  the work       pick from the list, or the activity a class code named
+ *   1  who are you    a student number off the class list, or an email and
+ *                     password for the few students with a full account
+ *   —  the notice     once, ever, the first time they sign in — that is the
+ *                     ConsentGate in App.jsx, not a step here
+ *   2  the work       pick from the list, or the activity a class code named
  *
  * Who gets asked, and how often:
  *
- *   nobody yet               nothing, until they say which they are
- *   anonymous student        the nickname step, every visit
- *   student with an account  nothing further: they go straight to the work
+ *   nobody yet               their student number, on every path — the list
+ *                            and a class code alike
+ *   student, signed in       nothing further: they go straight to the work
  *   teacher, manager, admin  nothing: they are sent to their console instead
  *
+ * There is no anonymous way in any more. The server refuses a session without
+ * a signed-in student (`studentSignInRequired` in server/config.js), because
+ * the class list is what keeps the tutor to the class — so a screen offering
+ * one would end in a refusal.
+ *
  * Because every branch is derived from who is signed in rather than stored as a
- * step, signing out from the bar above puts the questions back in order: whoever
- * is left behind is an unidentified visitor again.
+ * step, signing out from the bar above puts the questions back in order.
  */
 export default function StudentLayout() {
   const t = useT()
   const { pathname } = useLocation()
-  const { user, ready, problem, refresh } = useAuth()
+  const { user, ready, problem, refresh, signInWithNumber } = useAuth()
 
-  const [working, setWorking] = useState(null) // 'anon' once they choose
-  const [nickname, setNickname] = useState('')
-  const [named, setNamed] = useState(false) // the nickname step is behind them
+  const [studentNumber, setStudentNumber] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
 
-  /**
-   * Only the list flow asks who.
-   *
-   * Arriving with a class code is already a declaration — nobody types the code
-   * their teacher read out unless they are in that class — and anyone who meant
-   * to be signed in instead has the bar at the top of every one of these screens.
-   */
-  const needsWho = ready && !user && pathname === '/'
+  const needsWho = ready && !user
 
   /**
    * Which steps this person's flow has, so the numbering is theirs rather than a
-   * constant that would be wrong for the other two cases above.
+   * constant that would be wrong for someone already signed in.
    */
-  const steps = [...(needsWho ? ['who', 'nickname'] : []), 'work']
+  const steps = [...(needsWho ? ['who'] : []), 'work']
   const stepOf = (name) => steps.indexOf(name) + 1
+
+  const signIn = async (event) => {
+    event.preventDefault()
+    if (!studentNumber.trim()) return
+
+    setBusy(true)
+    setError(null)
+    try {
+      await signInWithNumber(studentNumber)
+      // Nothing to navigate to: `user` is set, so this same route now renders
+      // the notice (first time only) and then the work.
+    } catch (failure) {
+      // A 401 is the one answer worth putting in their language: the number is
+      // not on a list. Anything else is shown as the server said it.
+      setError(failure.status === 401 ? t('entry.who.notListed') : failure.message)
+    } finally {
+      setBusy(false)
+    }
+  }
 
   // Nothing renders before `me` settles. Every branch below reads who is asking,
   // and guessing for one frame means showing the wrong person the wrong screen.
@@ -107,8 +125,8 @@ export default function StudentLayout() {
    */
   if (isStaff(user?.role)) return <Navigate to={homeFor(user)} replace />
 
-  /* 1 — who. Skipped by anyone already signed in, and by the class-code flow. */
-  if (needsWho && working !== 'anon') {
+  /* 1 — who. Skipped by anyone already signed in. */
+  if (needsWho) {
     return (
       <main className="en-page">
         <Navbar />
@@ -119,81 +137,44 @@ export default function StudentLayout() {
           <h1 className="en-title">{t('entry.who.title')}</h1>
           <p className="en-lede">{t('entry.who.lede')}</p>
 
-          <div className="en-topics">
-            {/* The way in for staff as well, and now nothing stands in front of
-                it: this is the first screen anybody sees. */}
-            <Link className="en-topic" to="/signin" state={{ from: '/' }}>
-              <span className="en-topic-name">{t('entry.who.signIn')}</span>
-              <span className="en-topic-meta">{t('entry.who.signInMeta')}</span>
-            </Link>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
-  /**
-   * 2 — the nickname, asked once they have chosen to work anonymously.
-   *
-   * "Anonymously" otherwise leaves a teacher with nothing to call the work but a
-   * six-character session code, which tells them nothing about whose it is. A
-   * nickname answers that: made up, **optional**, and never checked against
-   * anything. Requiring one would push a child into typing their real name.
-   *
-   * Held in this component until a session starts, so nothing about them
-   * reaches the server until they actually begin an activity.
-   */
-  if (needsWho && !named) {
-    return (
-      <main className="en-page">
-        <Navbar />
-        <div className="en-card">
-          <p className="eyebrow">
-            {t('entry.step', { current: stepOf('nickname'), total: steps.length })}
-          </p>
-          <h1 className="en-title">{t('entry.nickname.title')}</h1>
-          <p className="en-lede">{t('entry.nickname.lede')}</p>
-
-          <form
-            className="cs-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              setNamed(true)
-            }}
-          >
+          <form className="cs-form" onSubmit={signIn}>
             <div className="cs-field">
-              <label className="cs-label" htmlFor="nickname">
-                {t('entry.nickname.label')}
+              <label className="cs-label" htmlFor="student-number">
+                {t('entry.who.numberLabel')}
               </label>
               <input
-                id="nickname"
-                className="cs-input"
+                id="student-number"
+                className="cs-input mono"
                 autoFocus
-                autoComplete="off"
-                maxLength={NICKNAME_MAX}
-                placeholder={t('entry.nickname.placeholder')}
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
+                autoComplete="username"
+                inputMode="text"
+                spellCheck="false"
+                maxLength={STUDENT_NUMBER_MAX + 8}
+                placeholder={t('entry.who.numberPlaceholder')}
+                value={studentNumber}
+                onChange={(event) => setStudentNumber(event.target.value)}
               />
-              <p className="cs-hint">{t('entry.nickname.hint')}</p>
+              <p className="cs-hint">{t('entry.who.numberHint')}</p>
             </div>
 
+            {error ? (
+              <p className="cs-note" data-tone="bad" role="alert">
+                {error}
+              </p>
+            ) : null}
+
             <div className="en-actions">
-              {/* Enabled with the field empty: staying unnamed is a choice, and
-                  the session code labels the work as it always did. */}
-              <button type="submit" className="en-btn en-btn-primary">
-                {t('entry.nickname.go')}
-              </button>
               <button
-                type="button"
-                className="en-btn"
-                onClick={() => {
-                  setWorking(null)
-                  setNickname('')
-                }}
+                type="submit"
+                className="en-btn en-btn-primary"
+                disabled={busy || !studentNumber.trim()}
               >
-                {t('common.back')}
+                {busy ? t('entry.who.busy') : t('entry.who.go')}
               </button>
+              {/* The way in for staff, and for the few students with a password. */}
+              <Link className="en-btn" to="/signin" state={{ from: pathname }}>
+                {t('entry.who.signIn')}
+              </Link>
             </div>
           </form>
         </div>
@@ -201,14 +182,12 @@ export default function StudentLayout() {
     )
   }
 
-  /* 3 — the work. */
+  /* 2 — the work. */
   return (
     <main className="en-page">
       <Navbar />
       <Outlet
         context={{
-          /** Anonymous only: a signed-in session is labelled by its account. */
-          nickname: user ? '' : nickname.trim(),
           step: stepOf('work'),
           totalSteps: steps.length,
         }}

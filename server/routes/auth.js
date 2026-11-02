@@ -4,7 +4,9 @@ import { bearerToken, issueToken, requireAuth } from '../lib/auth.js'
 import { burnPassword, hashPassword, verifyPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
+import { cleanStudentNumber } from '../../shared/student-number.js'
 import {
+  classListEmail,
   hasCurrentConsent,
   newUser,
   publicUser,
@@ -108,6 +110,45 @@ export function authRoutes(store) {
           type: 'user_signed_in',
           at: now(),
           payload: { role: user.role },
+        },
+      ])
+
+      res.json({ user: publicUser(signedIn ?? user), token, expiresAt })
+    }),
+  )
+
+  /**
+   * Signing in with a student number and nothing else — see
+   * shared/student-number.js for why there is no password.
+   *
+   * The number has to be on a teacher's class list, and that is the whole
+   * check: it is what keeps the site from being open to anyone who finds it.
+   * An unknown number and a removed one answer the same way, so this cannot be
+   * used to tell a former student from a typo.
+   */
+  router.post(
+    '/student',
+    route(async (req, res) => {
+      const studentNumber = cleanStudentNumber(req.body?.studentNumber)
+      if (!studentNumber) throw badRequest('"studentNumber" must be a student number')
+
+      const user = await store.users.findByEmail(classListEmail(studentNumber))
+
+      if (!user || user.role !== 'student' || user.studentNumber !== studentNumber || !user.active) {
+        throw new ApiError(401, 'That student number is not on a class list')
+      }
+
+      const { token, expiresAt } = await issueToken(store, user)
+      const signedIn = await store.users.update(user.id, { lastLoginAt: now() })
+
+      await store.events.insertMany([
+        {
+          id: id('evt'),
+          sessionId: null,
+          userId: user.id,
+          type: 'user_signed_in',
+          at: now(),
+          payload: { role: user.role, via: 'student-number' },
         },
       ])
 

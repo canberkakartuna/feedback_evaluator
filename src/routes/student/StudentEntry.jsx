@@ -32,7 +32,7 @@ export default function StudentEntry() {
   const navigate = useNavigate()
   const t = useT()
   const { user, ready } = useAuth()
-  const { nickname, step, totalSteps } = useOutletContext()
+  const { step, totalSteps } = useOutletContext()
 
   const [activities, setActivities] = useState(null)
   const [topic, setTopic] = useState('all')
@@ -64,7 +64,6 @@ export default function StudentEntry() {
       const { session } = await api.startSession({
         activityId,
         device: navigator.userAgent.slice(0, 120),
-        nickname,
         consent: true,
       })
       navigate(`/work/${session.id}`, { replace: true })
@@ -120,6 +119,8 @@ export default function StudentEntry() {
                   <span className="en-topic-meta mono">
                     {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
                     {t('common.questions', { count: activity.questionCount })}
+                    {/* Opening it goes back into their earlier work — routes/sessions.js. */}
+                    {activity.started ? ` · ${t('entry.pick.continue')}` : ''}
                   </span>
                 </button>
               ))}

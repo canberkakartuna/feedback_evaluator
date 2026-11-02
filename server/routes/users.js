@@ -4,10 +4,13 @@ import { requireAuth } from '../lib/auth.js'
 import { hashPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, notFound, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
+import { CLASS_LIST_MAX, cleanStudentNumber } from '../../shared/student-number.js'
 import {
   assertCanManage,
+  classListEmail,
   clearUnusedParents,
   loadInScope,
+  newClassListStudent,
   newUser,
   publicUser,
   requireEmail,
@@ -115,6 +118,97 @@ export function userRoutes(store) {
   )
 
   /**
+   * A teacher's class list: student numbers, pasted in, each becoming an
+   * account that signs in with the number alone — see shared/student-number.js.
+   *
+   * A teacher adds to their own list; a manager or admin names the teacher with
+   * `teacherId`, through the same `resolveParent` every student creation uses.
+   * Pasting the same list twice is harmless, which matters because that is
+   * what a teacher adding three late joiners will do.
+   *
+   * Every number is reported back in one of four buckets rather than the whole
+   * paste failing on one bad line:
+   *
+   *   added    new, or a removed student put back on this list
+   *   already  on this list already
+   *   taken    on another teacher's list — a number is on one list at a time,
+   *            so that teacher (or an admin) has to move them
+   *   invalid  not a student number at all
+   *
+   * Removing someone is `PATCH /api/users/:id { active: false }`, as for any
+   * account: it keeps their work attributable and stops the number working.
+   */
+  router.post(
+    '/class-list',
+    route(async (req, res) => {
+      if (!canManageRole(req.user.role, 'student')) {
+        throw forbidden(`A ${req.user.role} cannot keep a class list`)
+      }
+
+      const raw = req.body?.studentNumbers
+      if (!Array.isArray(raw) || raw.length === 0) {
+        throw badRequest('"studentNumbers" must be a non-empty array')
+      }
+      if (raw.length > CLASS_LIST_MAX) {
+        throw badRequest(`At most ${CLASS_LIST_MAX} student numbers at a time`)
+      }
+
+      const scope = await scopeOf(store, req.user)
+      const parent = await resolveParent(store, req.user, 'student', req.body.teacherId, { scope })
+      if (!parent.value) throw badRequest('"teacherId" is required — name the teacher whose class this is')
+
+      const result = { added: [], already: [], taken: [], invalid: [] }
+      const seen = new Set()
+
+      for (const entry of raw) {
+        const studentNumber = cleanStudentNumber(entry)
+        if (!studentNumber) {
+          result.invalid.push(String(entry).slice(0, 40))
+          continue
+        }
+        if (seen.has(studentNumber)) continue
+        seen.add(studentNumber)
+
+        const existing = await store.users.findByEmail(classListEmail(studentNumber))
+
+        if (!existing) {
+          try {
+            await store.users.create(newClassListStudent({ studentNumber, teacherId: parent.value }))
+            result.added.push(studentNumber)
+          } catch (error) {
+            // Two teachers pasting the same number at once: the loser is told
+            // it is taken, which by then it is.
+            if (!isDuplicateEmail(error)) throw error
+            result.taken.push(studentNumber)
+          }
+        } else if (existing.teacherId !== parent.value || existing.role !== 'student') {
+          result.taken.push(studentNumber)
+        } else if (!existing.active) {
+          await store.users.update(existing.id, { active: true, updatedAt: now() })
+          result.added.push(studentNumber)
+        } else {
+          result.already.push(studentNumber)
+        }
+      }
+
+      if (result.added.length) {
+        await store.events.insertMany([
+          {
+            id: id('evt'),
+            sessionId: null,
+            userId: req.user.id,
+            type: 'class_list_added',
+            at: now(),
+            payload: { teacherId: parent.value, count: result.added.length, by: req.user.id },
+          },
+        ])
+      }
+
+      res.status(result.added.length ? 201 : 200).json(result)
+    }),
+  )
+
+  /**
    * Everyone the caller can see. A student's scope is themselves, so this is
    * their own record and not an error.
    *
@@ -174,7 +268,11 @@ export function userRoutes(store) {
       const patch = {}
 
       if (req.body.name !== undefined) patch.name = requireName(req.body)
-      if (req.body.email !== undefined) patch.email = requireEmail(req.body)
+      if (req.body.email !== undefined) {
+        // Their address is derived from the number and is what signs them in.
+        if (target.studentNumber) throw badRequest('A class-list student has no email to change')
+        patch.email = requireEmail(req.body)
+      }
 
       if (req.body.active !== undefined) {
         if (typeof req.body.active !== 'boolean') throw badRequest('"active" must be a boolean')

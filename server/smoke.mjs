@@ -62,6 +62,15 @@ config.bootstrapToken = 'smoke-token'
 config.openai.apiKey = null
 
 /**
+ * Anonymous sessions on, for everything but the class-list section near the
+ * end. Most of the assertions below were written against sessions started
+ * with no token, and the API still supports them behind
+ * STUDENT_SIGN_IN_REQUIRED=false; the class-list section turns the default
+ * (sign-in required) back on and checks that it holds.
+ */
+config.studentSignInRequired = false
+
+/**
  * Which store to run against, decided here rather than inherited.
  *
  * In-memory is the default: hermetic, no network, and what a bare checkout has.
@@ -1674,6 +1683,106 @@ try {
   const reseeded = await seedFunctions(app.locals.store, { ownerId: teacher.id })
   check('running it again changes nothing', !reseeded.created && reseeded.activity.id === seeded.activity.id)
 
+  console.log('\na class list, and signing in with a student number')
+  const pasted = await call('POST', '/api/users/class-list', {
+    token: teacherToken,
+    body: { studentNumbers: ['2023001', ' 2023-002 ', 'not a number!', '2023001'] },
+  })
+  check('a teacher pastes their class list', pasted.status === 201)
+  check('each number once, cleaned', pasted.body.added.join() === '2023001,2023-002')
+  check('and the bad line is reported, not fatal', pasted.body.invalid.length === 1)
+  const pastedAgain = await call('POST', '/api/users/class-list', {
+    token: teacherToken,
+    body: { studentNumbers: ['2023001', '2023-002'] },
+  })
+  check('pasting the same list twice is harmless', pastedAgain.status === 200 && pastedAgain.body.already.length === 2)
+  const managerPaste = await call('POST', '/api/users/class-list', {
+    token: managerToken,
+    body: { studentNumbers: ['2023003'] },
+  })
+  check('a manager has to name the teacher', managerPaste.status === 400)
+  const taken = await call('POST', '/api/users/class-list', {
+    token: adminToken,
+    body: { studentNumbers: ['2023001'], teacherId: null },
+  })
+  check('an admin with no teacher named is refused too', taken.status === 400)
+
+  const numberLogin = await call('POST', '/api/auth/student', { body: { studentNumber: ' 2023001 ' } })
+  check('a listed number signs in with nothing else', numberLogin.status === 200 && Boolean(numberLogin.body.token))
+  check('as a student on that teacher\'s list', numberLogin.body.user.role === 'student' && numberLogin.body.user.teacherId === teacher.id)
+  check('with no email shown', numberLogin.body.user.email === null)
+  check('and not yet consented — asked once, on first sign-in', numberLogin.body.user.consented === false)
+  const numberToken = numberLogin.body.token
+  const studentPaste = await call('POST', '/api/users/class-list', {
+    token: numberToken,
+    body: { studentNumbers: ['2023009'] },
+  })
+  check('a student cannot keep a class list', studentPaste.status === 403)
+  check(
+    'an unlisted number is refused',
+    (await call('POST', '/api/auth/student', { body: { studentNumber: '9999999' } })).status === 401,
+  )
+  check(
+    'and the password door stays shut for them',
+    (await call('POST', '/api/auth/login', { body: { email: '2023001@class-list.invalid', password: 'anything at all' } })).status === 401,
+  )
+
+  config.studentSignInRequired = true
+  const anonymousNow = await call('POST', '/api/sessions', { body: { consent: true, activityId: seeded.activity.id } })
+  check('with sign-in required, no anonymous session starts', anonymousNow.status === 401)
+
+  const consentOnce = await call('POST', '/api/auth/consent', { token: numberToken })
+  check('their consent is recorded against the number', consentOnce.body.user.consented === true)
+  const firstVisit = await call('POST', '/api/sessions', {
+    token: numberToken,
+    body: { activityId: seeded.activity.id },
+  })
+  check('they start without being asked again', firstVisit.status === 201)
+  check('carrying the date they first agreed', Boolean(firstVisit.body.session.consent.firstGivenAt))
+  await call('PUT', `/api/sessions/${firstVisit.body.session.id}/answers/${seeded.questions[0].id}`, {
+    token: numberToken,
+    body: { mode: 'write', draft: 'f and g agree everywhere' },
+  })
+
+  const relogin = await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })
+  check('signing in again needs no consent', relogin.body.user.consented === true)
+  const secondVisit = await call('POST', '/api/sessions', {
+    token: relogin.body.token,
+    body: { activityId: seeded.activity.id },
+  })
+  check('reopening the activity goes back into the same work', secondVisit.status === 200 && secondVisit.body.resumed === true)
+  check('the same session', secondVisit.body.session.id === firstVisit.body.session.id)
+  const backInWork = await call('GET', `/api/sessions/${secondVisit.body.session.id}`)
+  check(
+    'with the answer where they left it',
+    backInWork.body.answers.some((answer) => answer.draft === 'f and g agree everywhere'),
+  )
+  const listedForThem = await call('GET', '/api/activities/available', { token: relogin.body.token })
+  check(
+    'and the list says they have started it',
+    listedForThem.body.activities.find((entry) => entry.id === seeded.activity.id)?.started === true,
+  )
+
+  const removed = await call('PATCH', `/api/users/${numberLogin.body.user.id}`, {
+    token: teacherToken,
+    body: { active: false },
+  })
+  check('a teacher removes a number by deactivating it', removed.body.user.active === false)
+  check(
+    'and it stops signing in',
+    (await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })).status === 401,
+  )
+  const putBack = await call('POST', '/api/users/class-list', {
+    token: teacherToken,
+    body: { studentNumbers: ['2023001'] },
+  })
+  check('pasting it again puts them back', putBack.body.added.join() === '2023001')
+  check(
+    'a class-list student has no email to edit',
+    (await call('PATCH', `/api/users/${numberLogin.body.user.id}`, { token: teacherToken, body: { email: 'x@example.com' } })).status === 400,
+  )
+  config.studentSignInRequired = false
+
   console.log('\nnot found')
   const nowhere = await call('GET', '/api/nope')
   check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))
@@ -1683,7 +1792,7 @@ try {
   check('unknown activity is 404', badActivity.status === 404)
 
   const finalHealth = await call('GET', '/api/health')
-  check('health counts users', finalHealth.body.users === 8)
+  check('health counts users', finalHealth.body.users === 10)
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })

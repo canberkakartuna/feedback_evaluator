@@ -70,7 +70,7 @@ const en = {
     profile: 'Profile',
     language: 'Language',
     signedInAs: 'Signed in as {name}',
-    working: 'Working anonymously',
+    working: 'Not signed in',
   },
 
   topics: {
@@ -111,6 +111,7 @@ const en = {
     accountHead: 'Account',
     name: 'Name',
     email: 'Email',
+    studentNumber: 'Student number',
     consentHead: 'Research consent',
     consentGiven: 'Submitted {date}.',
     consentNone: 'No consent has been recorded on this account yet.',
@@ -120,22 +121,15 @@ const en = {
     step: 'Step {current} of {total}',
 
     who: {
-      title: 'How are you working today?',
-      lede: 'Either is fine. Anonymous is the normal way in — you only need an account if your teacher set one up for you.',
-      anon: 'Work anonymously',
-      anonMeta: 'No account, no email, no password.',
-      signIn: 'Sign in',
-      signInMeta: 'If your teacher gave you an email and password.',
-    },
-
-    /** The step after choosing to work anonymously. */
-    nickname: {
-      title: 'What should we call you?',
-      lede: 'Make one up. Your teacher sees it next to your work, so they can tell whose is whose — and it is the only thing here that names you at all.',
-      label: 'Nickname',
-      placeholder: 'Blue Fox',
-      hint: 'Not your real name, and not anyone else’s. You can leave it empty and stay unnamed.',
-      go: 'Continue anonymously',
+      title: 'Sign in with your student number',
+      lede: 'Your teacher has put your class list in. Type your number and you are in — no name, email or password. Use the same number next time and your work will be waiting.',
+      numberLabel: 'Student number',
+      numberPlaceholder: '20230145',
+      numberHint: 'Only the number. Nothing here asks for your name.',
+      go: 'Continue',
+      busy: 'Checking…',
+      notListed: 'That number is not on a class list. Check it, or ask your teacher to add it.',
+      signIn: 'I have an email and password',
     },
 
     pick: {
@@ -146,6 +140,7 @@ const en = {
       empty: 'Nothing is open yet. Your teacher has to publish an activity before it appears here.',
       noneInTopic: 'Nothing open on that topic. Try another one, or All.',
       enterCode: 'Enter a class code',
+      continue: 'continue where you left off',
     },
 
     /** A token that could not be checked — neither signed in nor anonymous. */
@@ -339,6 +334,7 @@ const en = {
     sections: 'Teacher sections',
     activities: 'Activities',
     studentWork: 'Student work',
+    classList: 'Class list',
     labelling: 'Labelling',
     accounts: 'Accounts →',
   },
@@ -419,6 +415,36 @@ const en = {
       'Students see the version that matches their EN/TR switch. A language left blank shows the question above instead.',
     langEn: 'English',
     langTr: 'Turkish',
+  },
+
+  classList: {
+    eyebrow: 'Who gets in',
+    title: 'Class list',
+    lede: 'Students sign in with their student number alone — no name, email or password — and only numbers on this list are let in. Paste your class in once; a number used again later opens the same student’s work.',
+    teacher: 'Teacher',
+    pickTeacher: '— choose a teacher —',
+    paste: 'Student numbers',
+    pasteHint: 'One per line, or separated by commas or spaces. Pasting a list again is harmless — numbers already on it are left alone.',
+    add: 'Add to class list',
+    added_one: '{count} number added.',
+    added_other: '{count} numbers added.',
+    already_one: '{count} was already on the list.',
+    already_other: '{count} were already on the list.',
+    taken_one: '{count} is on another teacher’s list: {numbers}.',
+    taken_other: '{count} are on another teacher’s list: {numbers}.',
+    invalid_one: '{count} line is not a student number: {entries}.',
+    invalid_other: '{count} lines are not student numbers: {entries}.',
+    empty: 'No student numbers yet. Paste your class above.',
+    count_one: '{count} student can sign in.',
+    count_other: '{count} students can sign in.',
+    thNumber: 'Student number',
+    thLastIn: 'Last signed in',
+    thConsent: 'Research notice',
+    consentYes: 'Agreed',
+    consentNo: 'Not yet',
+    removed: 'removed',
+    remove: 'Remove',
+    restore: 'Put back',
   },
 
   roster: {
@@ -604,7 +630,7 @@ const tr = {
     profile: 'Profil',
     language: 'Dil',
     signedInAs: '{name} olarak giriş yapıldı',
-    working: 'Anonim çalışıyorsunuz',
+    working: 'Giriş yapılmadı',
   },
 
   topics: {
@@ -644,6 +670,7 @@ const tr = {
     accountHead: 'Hesap',
     name: 'Ad',
     email: 'E-posta',
+    studentNumber: 'Öğrenci numarası',
     consentHead: 'Araştırma onayı',
     consentGiven: '{date} tarihinde gönderildi.',
     consentNone: 'Bu hesapta henüz kayıtlı bir onay yok.',
@@ -653,21 +680,15 @@ const tr = {
     step: 'Adım {current} / {total}',
 
     who: {
-      title: 'Bugün nasıl çalışıyorsunuz?',
-      lede: 'İkisi de olur. Olağan yol anonim çalışmaktır — hesap yalnızca öğretmeniniz size bir hesap açtıysa gerekir.',
-      anon: 'Anonim çalış',
-      anonMeta: 'Hesap yok, e-posta yok, şifre yok.',
-      signIn: 'Giriş yap',
-      signInMeta: 'Öğretmeniniz size e-posta ve şifre verdiyse.',
-    },
-
-    nickname: {
-      title: 'Size ne diyelim?',
-      lede: 'Bir takma ad uydurun. Öğretmeniniz bunu çalışmanızın yanında görür, böylece hangisinin kime ait olduğunu ayırt eder — ve burada sizi adlandıran tek şey budur.',
-      label: 'Takma ad',
-      placeholder: 'Mavi Tilki',
-      hint: 'Gerçek adınız değil, başkasının adı da değil. Boş bırakıp adsız kalabilirsiniz.',
-      go: 'Anonim devam et',
+      title: 'Öğrenci numaranla giriş yap',
+      lede: 'Öğretmenin sınıf listeni sisteme ekledi. Numaranı yaz, içeridesin — ad, e-posta ya da şifre yok. Bir dahaki sefere aynı numarayla girersen çalışman seni bekliyor olacak.',
+      numberLabel: 'Öğrenci numarası',
+      numberPlaceholder: '20230145',
+      numberHint: 'Yalnızca numara. Burada adın sorulmaz.',
+      go: 'Devam et',
+      busy: 'Kontrol ediliyor…',
+      notListed: 'Bu numara bir sınıf listesinde yok. Numarayı kontrol et ya da öğretmeninden eklemesini iste.',
+      signIn: 'E-posta ve şifrem var',
     },
 
     pick: {
@@ -678,6 +699,7 @@ const tr = {
       empty: 'Henüz açık bir etkinlik yok. Burada görünmesi için öğretmeninizin bir etkinlik yayımlaması gerekir.',
       noneInTopic: 'Bu konuda açık etkinlik yok. Başka bir konuyu ya da Tümü’nü deneyin.',
       enterCode: 'Sınıf kodu gir',
+      continue: 'kaldığın yerden devam et',
     },
 
     unknown: {
@@ -857,6 +879,7 @@ const tr = {
     sections: 'Öğretmen bölümleri',
     activities: 'Etkinlikler',
     studentWork: 'Öğrenci çalışmaları',
+    classList: 'Sınıf listesi',
     labelling: 'Etiketleme',
     accounts: 'Hesaplar →',
   },
@@ -937,6 +960,36 @@ const tr = {
       'Öğrenciler EN/TR seçimine uyan hâlini görür. Boş bırakılan dilde yukarıdaki soru gösterilir.',
     langEn: 'İngilizce',
     langTr: 'Türkçe',
+  },
+
+  classList: {
+    eyebrow: 'Kim girebilir',
+    title: 'Sınıf listesi',
+    lede: 'Öğrenciler yalnızca öğrenci numaralarıyla giriş yapar — ad, e-posta ya da şifre yok — ve yalnızca bu listedeki numaralar içeri alınır. Sınıfınızı bir kez yapıştırın; aynı numara sonra tekrar kullanıldığında o öğrencinin çalışması açılır.',
+    teacher: 'Öğretmen',
+    pickTeacher: '— bir öğretmen seçin —',
+    paste: 'Öğrenci numaraları',
+    pasteHint: 'Her satıra bir tane ya da virgül veya boşlukla ayırarak. Listeyi yeniden yapıştırmak sorun değildir — listede olan numaralara dokunulmaz.',
+    add: 'Sınıf listesine ekle',
+    added_one: '{count} numara eklendi.',
+    added_other: '{count} numara eklendi.',
+    already_one: '{count} numara zaten listedeydi.',
+    already_other: '{count} numara zaten listedeydi.',
+    taken_one: '{count} numara başka bir öğretmenin listesinde: {numbers}.',
+    taken_other: '{count} numara başka bir öğretmenin listesinde: {numbers}.',
+    invalid_one: '{count} satır öğrenci numarası değil: {entries}.',
+    invalid_other: '{count} satır öğrenci numarası değil: {entries}.',
+    empty: 'Henüz öğrenci numarası yok. Sınıfınızı yukarıya yapıştırın.',
+    count_one: '{count} öğrenci giriş yapabilir.',
+    count_other: '{count} öğrenci giriş yapabilir.',
+    thNumber: 'Öğrenci numarası',
+    thLastIn: 'Son giriş',
+    thConsent: 'Araştırma bildirimi',
+    consentYes: 'Onayladı',
+    consentNo: 'Henüz değil',
+    removed: 'çıkarıldı',
+    remove: 'Çıkar',
+    restore: 'Geri ekle',
   },
 
   roster: {

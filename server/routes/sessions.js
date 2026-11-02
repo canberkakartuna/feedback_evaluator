@@ -5,7 +5,16 @@ import { cleanNickname } from '../../shared/session.js'
 import { hasCurrentConsent } from '../services/users.js'
 import { removeBytes } from './uploads.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
-import { badRequest, forbidden, id, notFound, now, route, shortCode } from '../lib/http.js'
+import {
+  ApiError,
+  badRequest,
+  forbidden,
+  id,
+  notFound,
+  now,
+  route,
+  shortCode,
+} from '../lib/http.js'
 
 export function sessionRoutes(store) {
   const router = express.Router()
@@ -77,6 +86,15 @@ export function sessionRoutes(store) {
         )
       }
 
+      /**
+       * Signed in, unless the deployment has turned that off — see
+       * `studentSignInRequired` in config.js. 401 rather than 403: what is
+       * missing is who they are, and the answer is the entry screen.
+       */
+      if (config.studentSignInRequired && !req.user) {
+        throw new ApiError(401, 'Sign in with your student number to start')
+      }
+
       const onAccount = hasCurrentConsent(req.user)
       const consented = req.body?.consent === true || onAccount
 
@@ -89,6 +107,31 @@ export function sessionRoutes(store) {
 
       const activity = await resolveActivity(req.body)
       const questions = await activityQuestions(store, activity.id)
+
+      /**
+       * A student with an account who opens an activity they have already
+       * worked on goes back into that work, not into a blank copy of it. Their
+       * answers and the tutor thread are where they left them, and the tutor's
+       * turn limit (shared/turns.js) cannot be reset by starting over.
+       *
+       * The most recent session for this activity wins, so anybody with several
+       * from before this rule existed lands on the latest one.
+       */
+      if (req.user) {
+        const [previous] = await store.sessions.list({
+          userId: req.user.id,
+          activityId: activity.id,
+          limit: 1,
+        })
+        if (previous) {
+          return res.json({
+            session: previous,
+            activity: publicActivity(activity, questions),
+            resumed: true,
+          })
+        }
+      }
+
       const active = await store.prompts.active()
 
       const session = await store.sessions.create({

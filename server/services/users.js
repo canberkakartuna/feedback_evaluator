@@ -58,7 +58,13 @@ export function recordedConsent() {
 export function publicUser(user) {
   if (!user) return null
   const { passwordHash: _passwordHash, ...rest } = user
-  return { ...rest, consented: hasCurrentConsent(user) }
+  return {
+    ...rest,
+    // A class-list student's address is a placeholder (see classListEmail), not
+    // something to show anybody as theirs.
+    email: user.studentNumber ? null : user.email,
+    consented: hasCurrentConsent(user),
+  }
 }
 
 /**
@@ -235,6 +241,44 @@ export async function newUser({ role, name, email, password, parent }) {
     teacherId: null,
     managerId: null,
     ...(parent?.field ? { [parent.field]: parent.value } : {}),
+    active: true,
+    createdAt: at,
+    updatedAt: at,
+    lastLoginAt: null,
+  }
+}
+
+/**
+ * The address a class-list student is stored under.
+ *
+ * They have no email, but `users.email` is the one unique index in the schema
+ * and every user needs a value in it — a missing one would collide on `null`
+ * the second time. Deriving it from the number turns that index into the
+ * guarantee that **a number is on one class list at a time**, with no second
+ * index to create on a live database. `.invalid` is reserved and can never
+ * receive mail, and `publicUser` never shows it.
+ */
+export const classListEmail = (studentNumber) =>
+  `${String(studentNumber).toLowerCase()}@class-list.invalid`
+
+/**
+ * A student who signs in with their number alone — see
+ * shared/student-number.js. No password at all: `passwordHash` is null, which
+ * `verifyPassword` reads as "never matches", so the email-and-password door
+ * stays shut for them rather than open with a blank.
+ */
+export function newClassListStudent({ studentNumber, teacherId }) {
+  const at = now()
+
+  return {
+    id: id('usr'),
+    role: 'student',
+    name: studentNumber,
+    email: classListEmail(studentNumber),
+    studentNumber,
+    passwordHash: null,
+    teacherId,
+    managerId: null,
     active: true,
     createdAt: at,
     updatedAt: at,

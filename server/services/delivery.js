@@ -114,9 +114,18 @@ export async function studentActivities(store, user) {
       : { status: 'published' },
   )
 
+  /**
+   * Which of these a signed-in student already has work in, so the list can say
+   * "continue" — opening one goes back into that session (routes/sessions.js).
+   */
+  const startedIds = user
+    ? new Set((await store.sessions.list({ userId: user.id, limit: 500 })).map((s) => s.activityId))
+    : new Set()
+
   return Promise.all(
     activities.map(async (activity) => ({
       id: activity.id,
+      started: startedIds.has(activity.id),
       title: activity.title,
       blurb: activity.blurb,
       /**

@@ -110,6 +110,12 @@ export const api = {
       setToken(null)
     }
   },
+  /** A student number off their teacher's class list, and nothing else. */
+  studentLogin: async (studentNumber) => {
+    const result = await call('POST', '/api/auth/student', { studentNumber })
+    setToken(result.token)
+    return result
+  },
   me: () => call('GET', '/api/auth/me'),
   /**
    * "I agree to the research notice", recorded against the account so a student
@@ -150,6 +156,8 @@ export const api = {
   resetPassword: (userId, newPassword) =>
     call('POST', `/api/users/${userId}/password`, { newPassword }),
   userSessions: (userId) => call('GET', `/api/users/${userId}/sessions`),
+  addToClassList: (studentNumbers, teacherId) =>
+    call('POST', '/api/users/class-list', { studentNumbers, teacherId }),
 
   /* -------------------------------------------------------------- activities */
 

@@ -7,6 +7,7 @@ import '../console.css'
 const LINKS = [
   { to: '/teacher', end: true, key: 'teacher.activities' },
   { to: '/teacher/students', key: 'teacher.studentWork' },
+  { to: '/teacher/class-list', key: 'teacher.classList' },
   { to: '/teacher/labelling', key: 'teacher.labelling' },
 ]
 

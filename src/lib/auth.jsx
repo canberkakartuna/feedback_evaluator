@@ -71,6 +71,12 @@ export function AuthProvider({ children }) {
         setProblem(null)
         return result.user
       },
+      signInWithNumber: async (studentNumber) => {
+        const result = await api.studentLogin(studentNumber)
+        setUser(result.user)
+        setProblem(null)
+        return result.user
+      },
       signOut: async () => {
         await api.logout()
         setUser(null)

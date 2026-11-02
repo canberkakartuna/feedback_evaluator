@@ -284,7 +284,7 @@ export default function People() {
                         {t(roleStringKey(entry.role))}
                       </span>
                     </td>
-                    <td className="mono">{entry.email}</td>
+                    <td className="mono">{entry.email ?? entry.studentNumber}</td>
                     <td>{nameOf(entry.managerId ?? entry.teacherId)}</td>
                     <td className="mono">
                       {entry.lastLoginAt

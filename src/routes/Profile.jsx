@@ -52,10 +52,18 @@ export default function Profile() {
               <dt>{t('profile.name')}</dt>
               <dd>{user.name}</dd>
             </div>
-            <div className="pf-row">
-              <dt>{t('profile.email')}</dt>
-              <dd>{user.email}</dd>
-            </div>
+            {/* A class-list student has a number instead of an address. */}
+            {user.studentNumber ? (
+              <div className="pf-row">
+                <dt>{t('profile.studentNumber')}</dt>
+                <dd className="mono">{user.studentNumber}</dd>
+              </div>
+            ) : (
+              <div className="pf-row">
+                <dt>{t('profile.email')}</dt>
+                <dd>{user.email}</dd>
+              </div>
+            )}
           </dl>
         </div>
 

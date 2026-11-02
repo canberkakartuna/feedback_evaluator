@@ -200,6 +200,15 @@ export const config = {
 
   consentVersion: process.env.CONSENT_VERSION ?? '2026-07-29.placeholder',
 
+  /**
+   * Whether a session needs a signed-in student — a class-list number, or an
+   * account with a password. On by default: the class list is what keeps the
+   * tutor (and its bill) to the class. `STUDENT_SIGN_IN_REQUIRED=false` puts
+   * back the older anonymous sessions, which nothing in the interface offers
+   * any more but the API and its smoke test still cover.
+   */
+  studentSignInRequired: process.env.STUDENT_SIGN_IN_REQUIRED !== 'false',
+
   /** How long a login lasts. Presenting an older token re-authenticates nobody. */
   authTokenTtlDays: Number(process.env.AUTH_TOKEN_TTL_DAYS ?? 30),
 

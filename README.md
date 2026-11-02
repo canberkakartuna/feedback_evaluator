@@ -31,10 +31,10 @@ present in one language only.
 
 | Route | Who | What they do |
 | --- | --- | --- |
-| `/` | students | Anonymously or signed in, pick an activity |
+| `/` | students | Sign in with a student number, then pick an activity |
 | `/join`, `/join/:code` | students | The same, reached by a class code or its link |
 | `/work/:sessionId` | students | The workspace: question, answer, tutor chat |
-| `/teacher` | teachers, managers | Write activities, read student work, label snippets |
+| `/teacher` | teachers, managers | Write activities, keep the class list, read student work, label snippets |
 | `/admin` | administrators | Accounts |
 
 Every screen carries the same bar of direct buttons — **home, sign in or sign
@@ -45,23 +45,33 @@ the top**, alongside the activity title and the student's nickname: it belongs t
 the screen rather than to one pane, so collapsing the question list no longer
 takes the way out with it.
 
-### Two ways in for a student
+### How a student gets in
 
-- **Anonymously** — no account, no email, no password. Choosing this asks for a
-  **nickname** on the next step: optional, and made up. It gives a teacher
-  something to call the work on their roster, where the only handle used to be a
-  six-character session code. Requiring one would push a child into typing their
-  real name, which is the single thing the notice asks them not to do. This is the
-  normal way in and what the study is designed around. The workspace header shows
-  it back to them — **read-only**, because a student has to be able to answer
-  "which one is mine?" and renaming it halfway through would rename work already
-  filed under the old name. `nickname` is accepted once, when the session is
-  created; no route changes it afterwards.
-- **Signed in**, with an email and password their teacher set for them. The list
-  is narrowed to their own teacher's work, and the session carries their name so
-  it can be followed across visits.
+- **With their student number** — the normal way in. A teacher pastes their
+  class list into **Class list** in the teacher console (`/teacher/class-list`);
+  a student types their number on the first screen and is in, with no name,
+  email or password (`POST /api/auth/student`). Only numbers on a class list are
+  let in, which is what keeps the tutor — and its bill — to the class. A number
+  is on one teacher's list at a time; removing it deactivates the account, and
+  pasting it again puts it back. See `shared/student-number.js`.
+- **With an email and password** their teacher or an admin set for them — the
+  older kind of student account, still supported behind "I have an email and
+  password".
 
-Either way, they get there through a list or through a **class code**: six
+Either way they now have an account, and that is what buys the rest: the
+research notice is asked **once**, on their first sign-in, and readable again
+from their profile; and **opening an activity they have worked on before goes
+back into that same session** (`POST /api/sessions` answers `200` with
+`resumed: true`), answers and tutor thread where they left them. The list marks
+those activities "continue where you left off".
+
+**There is no anonymous way in any more.** `POST /api/sessions` refuses a
+request with no signed-in student (401) while `STUDENT_SIGN_IN_REQUIRED` is on,
+which is the default. Setting it to `false` brings back the older anonymous
+sessions — the nickname, the consent flag in the body — which the API and its
+smoke test still cover but no screen offers.
+
+Either way, they reach an activity through a list or through a **class code**: six
 characters shown to the teacher, typed at `/join`, or followed as a link
 (`/join/ABC234`) put in a lesson plan or a class chat. The editor shows both, with
 a button to copy either.
@@ -86,8 +96,8 @@ both hit the same screen first if they have not agreed yet.
 
 | Who | Sees it |
 | --- | --- |
-| Nobody signed in (anonymous) | Never asked here — see the note below |
-| Student, teacher or manager with an account | **Once, ever, immediately after signing in and before anything else.** Checking the box and pressing Submit calls `POST /api/auth/consent`; `user.consented` is what every later sign-in reads |
+| Nobody signed in | Nobody gets past the entry screen without signing in — see above |
+| Student (student number or password), teacher or manager | **Once, ever, immediately after signing in and before anything else.** Checking the box and pressing Submit calls `POST /api/auth/consent`; `user.consented` is what every later sign-in reads |
 | Admin | Never |
 
 Bumping `CONSENT_VERSION` asks everybody again, which is the point of having a
@@ -97,14 +107,10 @@ The screen itself is `src/components/ConsentScreen.jsx` — a required checkbox 
 a Submit button that stays disabled until it is checked. There is no decline
 button: the only way off the screen without agreeing is signing out.
 
-**Anonymous sessions are a separate, older mechanism.** `POST /api/sessions`
-still refuses to start a session without `consent: true` in the body (see
-`server/routes/sessions.js`), but the screen that used to ask an anonymous
-visitor for that was removed along with the old `ConsentCard`, and
-`StudentEntry.jsx`/`Join.jsx` now send `consent: true` unconditionally. In
-practice that means an anonymous, no-account visitor's consent is recorded as
-given without ever being asked. That gap predates this gate and is not what it
-fixes — it only covers people who sign in.
+**Anonymous sessions are a separate, older mechanism**, off by default (see
+above). With `STUDENT_SIGN_IN_REQUIRED=false`, `POST /api/sessions` accepts a
+session with `consent: true` in the body and no account; nothing in the
+interface asks for that consent any more, which is one reason it is off.
 
 A token that cannot be checked — the API down, a proxy 502 — is **not** treated as
 "anonymous". That fallback would quietly wave a signed-in teacher through as an
@@ -156,10 +162,9 @@ The first administrator comes from `POST /api/auth/bootstrap`, guarded by
 deployment step, not a screen — `GET /api/health` reports `ready: false` and says
 so while no user exists.
 
-**Most students never get an account.** They open the site or type the class code
-their teacher put on the board, agree to the consent notice, and start. The
-session is anonymous, and the teacher still sees it, because it is attached to an
-activity they own.
+**Most students get their account from a class list**, not a form: the teacher
+pastes the numbers, and each one becomes a student who signs in with the number
+alone. Nobody can add themselves.
 
 ## How the pieces fit
 

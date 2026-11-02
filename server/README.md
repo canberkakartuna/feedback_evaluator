@@ -58,6 +58,7 @@ the client and the API never disagree about which value won.
 | `AUTH_TOKEN_TTL_DAYS` | `30` | How long a login lasts. |
 | `BOOTSTRAP_TOKEN` | falls back to `RESEARCH_TOKEN` | Guards `POST /api/auth/bootstrap`. **Set one of the two before deploying** — with neither, whoever calls that route first on an empty database becomes the admin. |
 | `CONSENT_VERSION` | `2026-07-29.placeholder` | Stored on each consent record. Bump it when the consent wording changes. |
+| `STUDENT_SIGN_IN_REQUIRED` | on | `POST /api/sessions` needs a signed-in student (a class-list number or a password account). `false` re-allows the older anonymous sessions. |
 | `OPENAI_API_KEY` | *unset* | **A credential. Kept in `.env.local`, which means the deployment needs it set in the host's settings** — `.env.local` is not deployed, so without that the deployed tutor answers scripted and nothing on screen says so. Unset anywhere means the scripted lines in `shared/tutor-scripts.js` and no model; `/api/health` warns while that is so. [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
 | `OPENAI_MODEL` | `gpt-5-mini` | A reasoning model — markedly better tutoring than the old `gpt-4o-mini` default, and it reads uploaded question images well. `config.js` derives the family-dependent knobs (temperature, reasoning effort) from the name, so switching model alone is safe. The bare name is an alias that moves to the newest snapshot; pin a dated one while a study is running so replies stay comparable. |
 | `OPENAI_MAX_OUTPUT_TOKENS` | `4000` | **Not the reply length** — the prompt caps that at 120 words. On a reasoning model the hidden reasoning is billed to this allowance and spent first, so a tight number truncates the answer rather than saving money. |
@@ -167,6 +168,7 @@ curl -X POST localhost:4000/api/auth/bootstrap \
 | --- | --- | --- |
 | `POST` | `/api/auth/bootstrap` | The first admin. Needs the bootstrap token; refused once any user exists |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token, expiresAt }`. A wrong password and an unknown address answer identically, and take the same time to |
+| `POST` | `/api/auth/student` | `{ studentNumber }` → `{ user, token, expiresAt }`. Signs in a student on a class list with the number alone. Spaces are ignored and letters upper-cased; an unknown and a removed number both answer 401 |
 | `POST` | `/api/auth/consent` | No body. Records the research consent against the caller's own account and returns the updated user. Idempotent: a repeat on a still-current version answers `recorded: false` and keeps the original date. This is what lets a student with a password be asked **once** instead of every visit |
 | `GET` | `/api/auth/me` | The signed-in user |
 | `POST` | `/api/auth/logout` | Revokes the calling token. Other devices stay signed in |
@@ -179,6 +181,7 @@ All require `Authorization: Bearer <login token>`.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `POST` | `/api/users` | `{ role, name, email, password, teacherId?/managerId? }` → 201. 409 on a duplicate email |
+| `POST` | `/api/users/class-list` | `{ studentNumbers: [], teacherId? }` — adds a class list (max 500 per call). Each number becomes a student who signs in with it alone. Answers `{ added, already, taken, invalid }`; `taken` is a number on another teacher's list. A teacher adds to their own; a manager or admin names `teacherId`. Remove one with `PATCH { active: false }` |
 | `GET` | `/api/users` | Everyone in scope. `?role=&teacherId=&managerId=&active=` narrow it |
 | `GET` | `/api/users/:userId` | 404 when out of scope |
 | `PATCH` | `/api/users/:userId` | `{ name?, email?, active?, role?, teacherId?/managerId? }`. `role` is admin-only |
