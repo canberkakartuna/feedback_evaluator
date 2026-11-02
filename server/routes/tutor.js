@@ -92,10 +92,12 @@ export function tutorRoutes(store, { resolveQuestion }) {
         // see imageForModel in services/tutor.js.
         store,
         /**
-         * Which language to answer in, sent per message rather than stored on
-         * the session: the toggle is in the workspace header and a student may
-         * switch mid-question, and the reply that follows should follow them.
-         * Anything unrecognised is English — the same default the interface has.
+         * The interface language, sent per message rather than stored on the
+         * session: the toggle is in the workspace header and a student may
+         * switch mid-question. The model replies in whatever language the
+         * student actually writes in; this is only its fallback for a message
+         * with no language in it, such as a bare number. Anything unrecognised
+         * is English — the same default the interface has.
          */
         lang: req.body.lang === 'tr' ? 'tr' : 'en',
       })

@@ -212,7 +212,9 @@ not the same decision every turn:
   every turn on a question nobody wrote a script for, which includes all of a
   student's own questions. It reads the question, the rubric's criteria (never
   its keywords), the answer as it stands and the thread so far, and replies in
-  the student's chosen language.
+  whatever language the student writes in — any language, not only the two the
+  interface has. The interface language is only the fallback, for a message
+  that is nothing but numbers or a formula.
 - **Scripted lines are the floor.** No `OPENAI_API_KEY`, a timeout, a blocked
   prompt or a rate limit and the student gets a generic line from
   `shared/tutor-scripts.js` rather than an error. The app runs end to end with no
