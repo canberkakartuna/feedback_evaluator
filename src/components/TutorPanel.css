@@ -19,6 +19,17 @@
   color: var(--ink);
 }
 
+.tp-turns {
+  margin: 4px 0 0;
+  font-size: var(--t-11);
+  letter-spacing: 0.04em;
+  color: var(--graphite);
+}
+
+.tp-turns[data-tone='low'] {
+  color: var(--stamp);
+}
+
 .tp-head-actions {
   display: flex;
   align-items: center;
@@ -216,6 +227,18 @@
   border-top: 1px solid var(--edge);
   padding: var(--s-3) var(--s-4);
   padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
+}
+
+.tp-locked {
+  flex: none;
+  margin: 0;
+  border-top: 1px solid var(--edge);
+  background: var(--stamp-soft);
+  padding: var(--s-3) var(--s-4);
+  padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
+  font-size: var(--t-13);
+  line-height: 1.5;
+  color: var(--ink);
 }
 
 .tp-input {

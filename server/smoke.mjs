@@ -19,6 +19,7 @@
  */
 import { createApp } from './app.js'
 import { fallbackReplies } from '../shared/tutor-scripts.js'
+import { TURN_LIMIT, TURN_LOCK_MS, turnState } from '../shared/turns.js'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -1364,6 +1365,55 @@ try {
   check(
     'it is gone',
     (await call('GET', `/api/activities/${spare.id}`, { token: teacherToken })).status === 404,
+  )
+
+  console.log('\nten tutor turns per question, then two hours closed')
+  const turnSession = (
+    await call('POST', '/api/sessions', { body: { consent: true, activityId: activity.id } })
+  ).body.session
+  const turnsUrl = `/api/sessions/${turnSession.id}/questions/${bareQ.id}/messages`
+  let lastTurn = null
+  for (let n = 0; n < TURN_LIMIT; n += 1) {
+    lastTurn = await call('POST', turnsUrl, { body: { text: `Question number ${n + 1}?` } })
+  }
+  check('all ten are answered', lastTurn.status === 201)
+  check('and the reply says none are left', lastTurn.body.turns.remaining === 0)
+  check('with when the chat reopens', typeof lastTurn.body.turns.lockedUntil === 'string')
+
+  const eleventh = await call('POST', turnsUrl, { body: { text: 'One more?' } })
+  check('the eleventh is refused with 429', eleventh.status === 429)
+  check('carrying the lock in its details', eleventh.body.error.details.turns.remaining === 0)
+  const eleventhAction = await call('POST', turnsUrl, { body: { action: 'hint' } })
+  check('a quick action counts too', eleventhAction.status === 429)
+  check(
+    'and nothing was written for either',
+    (await call('GET', turnsUrl)).body.messages.length === TURN_LIMIT * 2,
+  )
+
+  const otherQuestion = await call(
+    'POST',
+    `/api/sessions/${turnSession.id}/questions/${markedQ.id}/messages`,
+    { body: { text: 'A different question still works?' } },
+  )
+  check('the limit is per question', otherQuestion.status === 201)
+  check('and counts from ten again there', otherQuestion.body.turns.remaining === TURN_LIMIT - 1)
+
+  const asks = (count, from) =>
+    Array.from({ length: count }, (_, n) => ({
+      from: 'student',
+      createdAt: new Date(from + n * 1000).toISOString(),
+    }))
+  const start = Date.parse('2026-01-01T10:00:00Z')
+  const tenth = start + (TURN_LIMIT - 1) * 1000
+  check('turnState: locked until two hours after the tenth', turnState(asks(TURN_LIMIT, start), tenth + 1).lockedUntil === new Date(tenth + TURN_LOCK_MS).toISOString())
+  check('turnState: a fresh ten once the lock lifts', turnState(asks(TURN_LIMIT, start), tenth + TURN_LOCK_MS).remaining === TURN_LIMIT)
+  check(
+    'turnState: an ask after the lock opens a new window',
+    turnState([...asks(TURN_LIMIT, start), ...asks(1, tenth + TURN_LOCK_MS + 5)], tenth + TURN_LOCK_MS + 10).remaining === TURN_LIMIT - 1,
+  )
+  check(
+    'turnState: tutor replies do not count',
+    turnState([{ from: 'tutor', createdAt: new Date(start).toISOString() }]).used === 0,
   )
 
   console.log('\nwithdrawal')

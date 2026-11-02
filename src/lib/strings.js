@@ -283,6 +283,10 @@ const en = {
     messageLabel: 'Message the tutor',
     placeholder: 'Ask about this question…',
     send: 'Send',
+    /** Ten per question, then two hours closed — see shared/turns.js. */
+    turnsLeft: '{remaining} of {limit} questions left',
+    locked:
+      'You have used all {limit} questions for this one. Keep working on it yourself, and come back in 2 hours if you still want help — the chat reopens at {time}.',
   },
 
   wb: {
@@ -792,6 +796,9 @@ const tr = {
     messageLabel: 'Öğretmene mesaj yaz',
     placeholder: 'Bu soru hakkında sorun…',
     send: 'Gönder',
+    turnsLeft: '{limit} sorudan {remaining} hakkın kaldı',
+    locked:
+      'Bu soru için {limit} soru hakkının hepsini kullandın. Kendi başına çalışmaya devam et; hâlâ yardım istersen 2 saat sonra tekrar gel — sohbet saat {time} itibarıyla yeniden açılacak.',
   },
 
   wb: {

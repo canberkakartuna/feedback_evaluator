@@ -1,6 +1,7 @@
 import express from 'express'
 import { ACTIONS, reply, studentAsk } from '../services/tutor.js'
-import { badRequest, id, notFound, now, route } from '../lib/http.js'
+import { turnState } from '../../shared/turns.js'
+import { ApiError, badRequest, id, notFound, now, route } from '../lib/http.js'
 
 export function tutorRoutes(store, { resolveQuestion }) {
   const router = express.Router()
@@ -36,17 +37,28 @@ export function tutorRoutes(store, { resolveQuestion }) {
       }
       if (hasText && req.body.text.length > 4000) throw badRequest('"text" is too long')
 
-      const answer = await store.answers.find(session.id, question.id)
-      const hintsUsed = answer?.hintsUsed ?? 0
-
-      const askText = action ? studentAsk(action, hintsUsed) : req.body.text.trim()
-
       /**
        * The thread as it stood before this ask, so the model reads the
        * conversation rather than one isolated line. Fetched here rather than
        * after the insert below, which would hand it its own prompt twice.
        */
       const history = await store.messages.list(session.id, question.id)
+
+      /**
+       * Ten turns per question, then two hours closed — see shared/turns.js.
+       * Refused before anything is written or the model is called, so a
+       * locked question costs nothing. 429 with the state attached, so the
+       * client can say when it reopens without a second request.
+       */
+      const turns = turnState(history)
+      if (turns.remaining === 0) {
+        throw new ApiError(429, 'No tutor turns left on this question for now', { turns })
+      }
+
+      const answer = await store.answers.find(session.id, question.id)
+      const hintsUsed = answer?.hintsUsed ?? 0
+
+      const askText = action ? studentAsk(action, hintsUsed) : req.body.text.trim()
 
       /**
        * The prompt **the session was stamped with**, not whichever is active
@@ -159,7 +171,12 @@ export function tutorRoutes(store, { resolveQuestion }) {
         },
       ])
 
-      res.status(201).json({ student, tutor, hintsUsed: generated.hintsUsed })
+      res.status(201).json({
+        student,
+        tutor,
+        hintsUsed: generated.hintsUsed,
+        turns: turnState([...history, student]),
+      })
     }),
   )
 

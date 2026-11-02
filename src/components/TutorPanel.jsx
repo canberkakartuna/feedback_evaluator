@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { useT } from '../lib/i18n'
+import { turnState } from '../../shared/turns'
+import { useI18n } from '../lib/i18n'
 import './TutorPanel.css'
 
 export default function TutorPanel({
@@ -12,10 +13,28 @@ export default function TutorPanel({
   onClose,
   onCollapse,
 }) {
-  const t = useT()
+  const { lang, t } = useI18n()
   const [draft, setDraft] = useState('')
+  const [clock, setClock] = useState(() => Date.now())
   const thread = useRef(null)
   const closeButton = useRef(null)
+
+  /**
+   * Turns left on this question, read from the thread exactly as the server
+   * reads it — see shared/turns.js. The server is what refuses the eleventh
+   * ask; this only says so before the student types it.
+   */
+  const turns = turnState(state.messages, clock)
+  const locked = turns.remaining === 0
+
+  // Re-read the clock the moment a lock lifts, so the composer comes back on
+  // its own rather than waiting for a reload.
+  useEffect(() => {
+    if (!turns.lockedUntil) return undefined
+    const wait = Date.parse(turns.lockedUntil) - Date.now()
+    const timer = setTimeout(() => setClock(Date.now()), Math.max(0, wait) + 500)
+    return () => clearTimeout(timer)
+  }, [turns.lockedUntil])
 
   useEffect(() => {
     const node = thread.current
@@ -28,6 +47,7 @@ export default function TutorPanel({
 
   const submit = (event) => {
     event.preventDefault()
+    if (locked || pending || !draft.trim()) return
     onSend(draft)
     setDraft('')
   }
@@ -39,6 +59,9 @@ export default function TutorPanel({
           <p className="eyebrow">{t('tp.tutor')}</p>
           <p className="tp-scope">
             {t('tp.workingOn')} <span className="mono">{question.code}</span>
+          </p>
+          <p className="tp-turns mono" data-tone={turns.remaining <= 2 ? 'low' : undefined}>
+            {t('tp.turnsLeft', { remaining: turns.remaining, limit: turns.limit })}
           </p>
         </div>
         <div className="tp-head-actions">
@@ -122,25 +145,37 @@ export default function TutorPanel({
         ) : null}
       </div>
 
-      <form className="tp-composer" onSubmit={submit}>
-        <label className="sr-only" htmlFor="tutor-message">
-          {t('tp.messageLabel')}
-        </label>
-        <textarea
-          id="tutor-message"
-          className="tp-input"
-          rows={1}
-          value={draft}
-          placeholder={t('tp.placeholder')}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) submit(event)
-          }}
-        />
-        <button type="submit" className="tp-send" disabled={!draft.trim()}>
-          {t('tp.send')}
-        </button>
-      </form>
+      {locked ? (
+        <p className="tp-locked" role="status">
+          {t('tp.locked', {
+            limit: turns.limit,
+            time: new Date(turns.lockedUntil).toLocaleTimeString(lang, {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          })}
+        </p>
+      ) : (
+        <form className="tp-composer" onSubmit={submit}>
+          <label className="sr-only" htmlFor="tutor-message">
+            {t('tp.messageLabel')}
+          </label>
+          <textarea
+            id="tutor-message"
+            className="tp-input"
+            rows={1}
+            value={draft}
+            placeholder={t('tp.placeholder')}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey) submit(event)
+            }}
+          />
+          <button type="submit" className="tp-send" disabled={!draft.trim() || pending}>
+            {t('tp.send')}
+          </button>
+        </form>
+      )}
     </>
   )
 }
