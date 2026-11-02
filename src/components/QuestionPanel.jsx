@@ -7,6 +7,7 @@ import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments
 import { promptFor } from '../../shared/activity'
 import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
+import QuestionFile from './QuestionFile'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
 
@@ -136,9 +137,10 @@ export default function QuestionPanel({
           {/* The teacher photographed the question instead of typing it. */}
           {question.image ? (
             <figure className="qp-shot">
-              <img
+              <QuestionFile
+                file={question.image}
                 className="qp-shot-img"
-                src={question.image.url}
+                frameClassName="qp-shot-pdf"
                 alt={prompt ? t('qp.questionAsSet') : t('qp.question')}
               />
             </figure>
@@ -197,6 +199,10 @@ export default function QuestionPanel({
                 </button>
               ))}
             </div>
+            {/* One answer per question: the server keeps a single mode and
+                clears the others on a switch (routes/answers.js), so say so
+                before a student spends time in two of them. */}
+            <p className="qp-modes-note">{t('qp.oneMode')}</p>
 
             {pendingMode ? (
               <div className="qp-mode-warn" role="alert">

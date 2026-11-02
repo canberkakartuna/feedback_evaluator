@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LIMITS } from '../../../shared/activity'
+import QuestionFile from '../../components/QuestionFile'
 import MathText from '../../components/MathText'
 import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/attachments'
 import { hasMath } from '../../lib/latex'
@@ -41,10 +42,11 @@ function PicturePicker({ id, shown, error, onPick, onRemove }) {
     <>
       {shown ? (
         <div className="cs-qimage">
-          <img
-            src={shown.preview ?? shown.url}
+          <QuestionFile
+            file={shown}
             alt={shown.name}
             className="cs-qimage-thumb"
+            frameClassName="cs-qimage-pdf"
           />
           <div className="cs-qimage-meta">
             <p className="cs-qimage-name">{shown.name}</p>

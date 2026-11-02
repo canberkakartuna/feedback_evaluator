@@ -118,6 +118,7 @@ export default function StudentEntry() {
                   <span className="en-topic-name">{activity.title}</span>
                   <span className="en-topic-meta mono">
                     {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
+                    {activity.level ? `${activity.level} · ` : ''}
                     {t('common.questions', { count: activity.questionCount })}
                     {/* Opening it goes back into their earlier work — routes/sessions.js. */}
                     {activity.started ? ` · ${t('entry.pick.continue')}` : ''}

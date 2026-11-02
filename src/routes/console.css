@@ -681,6 +681,15 @@
   border-radius: var(--r-2);
 }
 
+.cs-qimage-pdf {
+  width: 220px;
+  height: 280px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-1);
+}
+
 .cs-qimage-thumb {
   width: 72px;
   height: 72px;

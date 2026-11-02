@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { TOPICS, promptFor } from '../../../shared/activity'
+import { LIMITS, TOPICS, promptFor } from '../../../shared/activity'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
@@ -137,7 +137,8 @@ export default function ActivityEditor() {
 
         {/* The topic, saved on change rather than behind a Save button: it is one
             field, and the list a class reads is filtered by it. */}
-        <div className="cs-field" style={{ marginTop: 'var(--s-4)', maxWidth: '320px' }}>
+        <div className="cs-row" style={{ marginTop: 'var(--s-4)' }}>
+        <div className="cs-field" style={{ maxWidth: '320px' }}>
           <label className="cs-label" htmlFor="activity-topic">
             {t('editor.topicLabel')}
           </label>
@@ -160,6 +161,31 @@ export default function ActivityEditor() {
             ))}
           </select>
           <p className="cs-hint">{busy ? t('editor.topicSaving') : t('editor.topicHint')}</p>
+        </div>
+
+        {/* Saved when the field loses focus, so a teacher typing "9. sınıf" is
+            not sending a request per keystroke. Keyed by the stored value so a
+            reload after saving shows what the server kept. */}
+        <div className="cs-field" style={{ maxWidth: '320px' }}>
+          <label className="cs-label" htmlFor="activity-level">
+            {t('activities.levelLabel')}
+          </label>
+          <input
+            key={activity.level ?? ''}
+            id="activity-level"
+            className="cs-input"
+            disabled={busy}
+            maxLength={LIMITS.level}
+            placeholder={t('activities.levelPlaceholder')}
+            defaultValue={activity.level ?? ''}
+            onBlur={(event) => {
+              const next = event.target.value.trim()
+              if (next === (activity.level ?? '')) return
+              act(() => api.updateActivity(activity.id, { level: next })).catch(() => {})
+            }}
+          />
+          <p className="cs-hint">{t('activities.levelHint')}</p>
+        </div>
         </div>
       </section>
 

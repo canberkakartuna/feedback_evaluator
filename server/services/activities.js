@@ -320,6 +320,17 @@ export function parseActivityInput(body, { forCreate } = {}) {
   const blurb = optionalString(body, 'blurb', LIMITS.blurb)
   if (blurb !== undefined) patch.blurb = blurb
 
+  /**
+   * The grade or level the activity is for, next to its topic. Free text rather
+   * than a list like TOPICS: grades are named differently in every school
+   * system this runs in, and nothing filters on it. `''` or `null` clears it.
+   */
+  if (body?.level === null) patch.level = ''
+  else {
+    const level = optionalString(body, 'level', LIMITS.level)
+    if (level !== undefined) patch.level = level
+  }
+
   if (body?.status !== undefined) {
     if (!isActivityStatus(body.status)) throw badRequest('"status" must be "draft" or "published"')
     patch.status = body.status
@@ -391,7 +402,7 @@ export async function ensureClassCode(store, activity) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, blurb = '', topic = null, code, ownerId, status = 'draft' }) {
+export function newActivity({ title, blurb = '', topic = null, level = '', code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
@@ -399,6 +410,7 @@ export function newActivity({ title, blurb = '', topic = null, code, ownerId, st
     title,
     blurb,
     topic,
+    level,
     ownerId,
     status,
     createdAt: at,

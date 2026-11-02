@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useT } from '../../lib/i18n'
 
 /**
@@ -80,9 +81,11 @@ export default function ShareActivity({ activity, published }) {
             <button type="button" className="cs-btn cs-btn-sm" onClick={() => copy('link', link)}>
               {copied === 'link' ? t('editor.copied') : t('editor.copyLink')}
             </button>
-            <a className="cs-btn cs-btn-sm" href={link} target="_blank" rel="noreferrer">
+            {/* The student view, not the link itself: a signed-in teacher who
+                follows /join is sent back to their console — see PreviewActivity. */}
+            <Link className="cs-btn cs-btn-sm" to={`/teacher/activities/${activity.id}/preview`}>
               {t('editor.openLink')}
-            </a>
+            </Link>
           </div>
         </div>
       </div>

@@ -6,7 +6,7 @@
  * live in shared/course.js — nothing here is content, only the shape content
  * has to take.
  *
- *   activity  { id, code, title, blurb, topic, ownerId, status,
+ *   activity  { id, code, title, blurb, topic, level, ownerId, status,
  *               createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
  *               stimulus, answer, answerImage, workingExpected, rubric[],
@@ -97,6 +97,7 @@ export const isTopic = (value) => TOPIC_IDS.includes(value)
 export const LIMITS = {
   title: 200,
   blurb: 500,
+  level: 60, // "9. sınıf", "Grade 10", "University, year 1" — free text, see services/activities.js
   prompt: 5000,
   answer: 5000,
   code: 24, // a question's own label, e.g. "BIO-101". An activity's class code

@@ -396,3 +396,14 @@
   line-height: 1;
   color: var(--margin);
 }
+
+/* The teacher's preview of the student view (routes/teacher/PreviewActivity). */
+.pv-frame {
+  display: flex;
+  flex-direction: column;
+  height: min(78vh, 900px);
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  background: var(--paper);
+}

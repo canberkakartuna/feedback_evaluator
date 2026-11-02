@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { DEFAULT_MODE } from '../../lib/answer'
+import { turnState } from '../../../shared/turns'
 import { readAsDataUrl } from '../../lib/attachments'
 import { useI18n } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
@@ -287,8 +288,21 @@ export default function Session() {
     [activeId, activeState, applyAnswer, fail, sessionId],
   )
 
+  /**
+   * Work handed in through Draw or Upload goes straight to the tutor: once a
+   * board is saved or files are uploaded, the tutor is asked to check it and
+   * its feedback appears in the chat without the student having to type.
+   * The server sends the whiteboard PNG and the uploads to the model with
+   * that ask (services/tutor.js, workForModel). It is a turn like any other,
+   * so it counts against the ten and is skipped once they are used up.
+   *
+   * A ref because `converse` is declared further down than these handlers.
+   */
+  const reviewWork = useRef(null)
+
   const attach = useCallback(
     async (files) => {
+      let uploadedAny = false
       for (const file of files) {
         try {
           const dataUrl = await readAsDataUrl(file)
@@ -298,10 +312,12 @@ export default function Session() {
             source: 'file',
           })
           applyAnswer(activeId, answer)
+          uploadedAny = true
         } catch (error) {
           fail(error)
         }
       }
+      if (uploadedAny) reviewWork.current?.()
     },
     [activeId, applyAnswer, fail, sessionId],
   )
@@ -320,6 +336,7 @@ export default function Session() {
             source: 'whiteboard',
           })
           applyAnswer(activeId, uploaded.answer)
+          reviewWork.current?.()
         }
       } catch (error) {
         fail(error)
@@ -402,6 +419,12 @@ export default function Session() {
     },
     [activeId, append, fail, patch, progress],
   )
+
+  reviewWork.current = () => {
+    if (turnState(progress[activeId]?.messages).remaining === 0) return
+    revealTutor()
+    converse(() => api.runAction(sessionId, activeId, 'review', lang))
+  }
 
   const send = useCallback(
     (text) => {

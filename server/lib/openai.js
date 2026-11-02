@@ -98,11 +98,12 @@ function readReply(payload) {
  * @param {object} options
  * @param {string} [options.system] System instruction — the active prompt plus
  *   whatever context the caller has assembled.
- * @param {Array<{ role: 'user' | 'model', text: string, images?: string[] }>} options.turns The
+ * @param {Array<{ role: 'user' | 'model', text: string, images?: string[], files?: Array<{ name: string, dataUrl: string }> }>} options.turns The
  *   conversation, oldest first, ending with what the student just said. A turn
  *   may carry `images` — https or data URLs the model can view (JPG, PNG,
- *   WebP) — which become image parts alongside the text. User turns only: the
- *   API takes images from the user, not the assistant.
+ *   WebP) — which become image parts alongside the text, and `files` — PDFs as
+ *   base64 data URLs, which become file parts the model reads page by page.
+ *   User turns only: the API takes both from the user, not the assistant.
  * @returns {Promise<{ text: string, model: string, finishReason: string|null, usage: object, ms: number }>}
  */
 export async function generate({
@@ -127,12 +128,17 @@ export async function generate({
       // with images becomes content parts; a plain one stays a plain string.
       ...turns.map((turn) => ({
         role: turn.role === 'model' ? 'assistant' : 'user',
-        content: turn.images?.length
-          ? [
-              { type: 'text', text: turn.text },
-              ...turn.images.map((url) => ({ type: 'image_url', image_url: { url } })),
-            ]
-          : turn.text,
+        content:
+          turn.images?.length || turn.files?.length
+            ? [
+                { type: 'text', text: turn.text },
+                ...(turn.images ?? []).map((url) => ({ type: 'image_url', image_url: { url } })),
+                ...(turn.files ?? []).map((file) => ({
+                  type: 'file',
+                  file: { filename: file.name, file_data: file.dataUrl },
+                })),
+              ]
+            : turn.text,
       })),
     ],
     max_completion_tokens: maxOutputTokens,

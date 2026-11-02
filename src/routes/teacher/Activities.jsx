@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TOPICS } from '../../../shared/activity'
+import { LIMITS, TOPICS } from '../../../shared/activity'
 import { api } from '../../lib/api'
 import { useT } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
@@ -25,6 +25,7 @@ export default function Activities() {
   const [title, setTitle] = useState('')
   const [blurb, setBlurb] = useState('')
   const [topic, setTopic] = useState('')
+  const [level, setLevel] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState(null)
   const [filter, setFilter] = useState('all')
@@ -37,9 +38,10 @@ export default function Activities() {
     setProblem(null)
     try {
       // '' is the "not set" option in the select; the API wants null for that.
-      await api.createActivity({ title, blurb, topic: topic || null })
+      await api.createActivity({ title, blurb, topic: topic || null, level })
       setTitle('')
       setBlurb('')
+      setLevel('')
       await reload()
     } catch (failure) {
       setProblem(failure.message)
@@ -97,6 +99,20 @@ export default function Activities() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div className="cs-field">
+              <label className="cs-label" htmlFor="new-level">
+                {t('activities.levelLabel')}
+              </label>
+              <input
+                id="new-level"
+                className="cs-input"
+                maxLength={LIMITS.level}
+                placeholder={t('activities.levelPlaceholder')}
+                value={level}
+                onChange={(event) => setLevel(event.target.value)}
+              />
             </div>
           </div>
 
@@ -180,6 +196,7 @@ export default function Activities() {
 
                     <p className="cs-tile-meta mono">
                       {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
+                      {activity.level ? `${activity.level} · ` : ''}
                       {activity.code}
                     </p>
                   </Link>

@@ -41,7 +41,7 @@ import { storage } from '../lib/storage.js'
  * model deflected. Now the uploaded question (JPG, PNG or WebP) is attached to
  * the conversation as an image the model reads; HEIC and PDF are formats the
  * API refuses, so for those the instruction says honestly that the question is
- * a file it cannot view. See imageForModel below.
+ * a file it cannot view. PDFs travel too, as file parts. See fileForModel below.
  *
  * **So does the teacher's answer, when it was uploaded as a picture.** It rides
  * in a synthetic turn explicitly labelled as the teacher's answer key, the
@@ -56,16 +56,30 @@ import { storage } from '../lib/storage.js'
 
 export const ACTIONS = ['hint', 'concept', 'example', 'review']
 
+/**
+ * What a button press says in the thread, in the interface language. The model
+ * replies in the language of the student's latest message, and these are that
+ * message when a button sent it — an English line here would answer a Turkish
+ * student in English.
+ */
 const ASKS = {
-  hint: (used) => (used === 0 ? 'Give me a hint.' : 'Another hint, please.'),
-  concept: () => 'Explain the concept behind this.',
-  example: () => 'Show me a worked example.',
-  review: () => 'Check my reasoning.',
+  en: {
+    hint: (used) => (used === 0 ? 'Give me a hint.' : 'Another hint, please.'),
+    concept: () => 'Explain the concept behind this.',
+    example: () => 'Show me a worked example.',
+    review: () => 'Check my reasoning.',
+  },
+  tr: {
+    hint: (used) => (used === 0 ? 'Bir ipucu ver.' : 'Bir ipucu daha, lütfen.'),
+    concept: () => 'Bunun arkasındaki kavramı açıkla.',
+    example: () => 'Çözümlü bir örnek göster.',
+    review: () => 'Çözümümü kontrol et.',
+  },
 }
 
-export function studentAsk(action, hintsUsed) {
+export function studentAsk(action, hintsUsed, lang = 'en') {
   if (!ACTIONS.includes(action)) throw badRequest(`Unknown action "${action}"`)
-  return ASKS[action](hintsUsed)
+  return (ASKS[lang] ?? ASKS.en)[action](hintsUsed)
 }
 
 /** What the interface calls the language, in words a model understands. */
@@ -125,14 +139,15 @@ export async function reply({
   if (!modelAnswers({ question, answer, action })) return scripted
 
   try {
-    const [image, answerImage] = await Promise.all([
-      imageForModel(store, question.image),
-      imageForModel(store, question.answerImage),
+    const [image, answerImage, work] = await Promise.all([
+      fileForModel(store, question.image),
+      fileForModel(store, question.answerImage),
+      workForModel(store, answer),
     ])
 
     const result = await generate({
-      system: systemInstruction({ question, answer, action, lang, systemPrompt, image, answerImage }),
-      turns: turnsFor({ thread, text, image, answerImage }),
+      system: systemInstruction({ question, answer, action, lang, systemPrompt, image, answerImage, work }),
+      turns: turnsFor({ thread, text, image, answerImage, work }),
     })
 
     return {
@@ -189,43 +204,98 @@ function modelAnswers({ question, answer, action }) {
   if (action === 'concept') return !authored.concept
   if (action === 'example') return !authored.example
 
-  // Review, which is always about what this student wrote — so the authored
-  // misconception is context for the model here rather than the reply itself.
-  // Only when there is something written to read: a drawing or a photo is not
-  // sent to the model, and the scripted line that says so stays true.
-  return state.mode === 'write' && wordCount(state.draft) > 0
+  // Review, which is always about what this student wrote or drew — so the
+  // authored misconception is context for the model here rather than the reply
+  // itself. Only when there is something to read: words in the answer box, or a
+  // whiteboard or upload, which now travel to the model (see workForModel).
+  return state.mode === 'write' ? wordCount(state.draft) > 0 : hasContent(state)
 }
 
-/** The image formats OpenAI's vision input accepts. HEIC and PDF are refused. */
+/** The image formats OpenAI's vision input accepts. HEIC is refused. */
 const MODEL_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
+/** PDFs go as a file part the model reads page by page — see lib/openai.js. */
+const PDF_TYPE = 'application/pdf'
+
+/** How many of a student's own files ride along with one turn. */
+const MAX_WORK_FILES = 4
+
 /**
- * An uploaded picture — the question, or the teacher's answer — in a form the
- * model can fetch.
+ * An uploaded file — the question, the teacher's answer, or a student's own
+ * working — in a form the model can read.
  *
- * Spaces hands out a short-lived signed URL and the model fetches the bytes
- * itself; local disk has no URL to sign, so the bytes are read and inlined as
- * a data URL instead. `null` when there is no image, no store to read it with,
- * the format is one the API refuses, or the fetch failed — and a failure is a
- * warning, not an error, because a reply that has not seen the picture is
- * still better than no reply.
+ * Two shapes come back:
+ *
+ *   { url }              a picture. Spaces hands out a short-lived signed URL
+ *                        and the model fetches it; local disk has no URL to
+ *                        sign, so the bytes are inlined as a data URL instead.
+ *   { pdf: { name, dataUrl } }
+ *                        a PDF, always inlined: the API takes a PDF only as
+ *                        base64, never as a link, so the bytes are read here.
+ *
+ * `null` when there is no file, no store to read it with, the format is one the
+ * API refuses (HEIC), or the fetch failed — and a failure is a warning, not an
+ * error, because a reply that has not seen the file is still better than none.
+ * The instruction then says honestly that the file could not be viewed.
  */
-async function imageForModel(store, image) {
-  if (!store || !image?.id || !MODEL_IMAGE_TYPES.has(image.type)) return null
+async function fileForModel(store, file) {
+  if (!store || !file?.id) return null
+  const isPdf = file.type === PDF_TYPE
+  if (!isPdf && !MODEL_IMAGE_TYPES.has(file.type)) return null
 
   try {
-    const upload = await store.uploads.findById(image.id)
+    const upload = await store.uploads.findById(file.id)
     if (!upload) return null
 
     const files = storage()
     const signed = await files.signedUrl(upload.key)
-    if (signed) return { url: signed }
 
-    const bytes = await fs.readFile(upload.path)
-    return { url: `data:${upload.type};base64,${bytes.toString('base64')}` }
+    if (!isPdf && signed) return { url: signed }
+
+    let bytes
+    if (signed) {
+      const response = await fetch(signed)
+      if (!response.ok) throw new Error(`storage answered ${response.status}`)
+      bytes = Buffer.from(await response.arrayBuffer())
+    } else {
+      bytes = await fs.readFile(upload.path)
+    }
+
+    const dataUrl = `data:${upload.type};base64,${bytes.toString('base64')}`
+    return isPdf ? { pdf: { name: upload.name || 'document.pdf', dataUrl } } : { url: dataUrl }
   } catch (error) {
-    console.warn(`[tutor] could not fetch an uploaded picture (${image.id}): ${error.message}`)
+    console.warn(`[tutor] could not fetch an uploaded file (${file.id}): ${error.message}`)
     return null
+  }
+}
+
+/**
+ * What the student has handed in through Draw or Upload, ready for the model.
+ *
+ * Draw means the whiteboard's PNG export, which is saved as an attachment when
+ * the student presses "Save to answer"; Upload means their photos and PDFs. A
+ * typed answer is not here — it is quoted in the instruction as text. Capped,
+ * because each file is billed and a dozen photos of one page say nothing more.
+ */
+async function workForModel(store, answer) {
+  const state = answerShape(answer)
+  if (state.mode === 'write') return []
+
+  const chosen =
+    state.mode === 'draw'
+      ? state.attachments.filter((item) => item.source === 'whiteboard')
+      : uploadedFiles(state)
+
+  const loaded = await Promise.all(chosen.slice(0, MAX_WORK_FILES).map((item) => fileForModel(store, item)))
+  return loaded.filter(Boolean)
+}
+
+/** A list of fileForModel results as the turn fields lib/openai.js takes. */
+function attachmentsOf(list) {
+  const present = list.filter(Boolean)
+  return {
+    images: present.filter((entry) => entry.url).map((entry) => entry.url),
+    files: present.filter((entry) => entry.pdf).map((entry) => entry.pdf),
   }
 }
 
@@ -247,7 +317,7 @@ function questionBlock(question, image, lang) {
 
   if (prompt) {
     const alsoImage = image
-      ? '\n\nThe question also includes the picture attached to the first message of the conversation.'
+      ? '\n\nThe question also includes the file (a picture or a PDF) attached to the first message of the conversation.'
       : question.image
         ? `\n\nThe question also includes an uploaded file (${question.image.name}) you cannot view; the student can see it.`
         : ''
@@ -255,7 +325,7 @@ function questionBlock(question, image, lang) {
   }
 
   if (image) {
-    return `${heading} was uploaded as a picture: it is attached to the first message of the conversation. Read the question from that picture — the student is looking at the same one.`
+    return `${heading} was uploaded as a file (a picture or a PDF): it is attached to the first message of the conversation. Read the question from it — the student is looking at the same one.`
   }
 
   return `${heading} was uploaded as a file (${question.image?.name ?? 'unnamed'}) in a format you cannot view. The student can see it. Do not guess what it says — ask the student to read out the part they are working on.`
@@ -277,7 +347,7 @@ recite it before they get there — but the moment their answer matches it, tell
 plainly that they are right.`
 
   const picture = answerImage
-    ? '\n\nThe answer also comes as a picture, attached to the conversation in the message labelled as the teacher\'s answer key. The student cannot see that message — it is for you alone.'
+    ? '\n\nThe answer also comes as a file (a picture or a PDF), attached to the conversation in the message labelled as the teacher\'s answer key. The student cannot see that message — it is for you alone.'
     : question.answerImage
       ? `\n\nThe teacher also uploaded their answer as a file (${question.answerImage.name}) you cannot view.`
       : ''
@@ -285,7 +355,7 @@ plainly that they are right.`
   if (text) return `${heading}:\n${text}${picture}\n${rules}`
 
   if (answerImage) {
-    return `${heading} was uploaded as a picture: it is attached to the conversation in the message labelled as the teacher's answer key. The student cannot see that message — it is for you alone. Read the answer from that picture.\n${rules}`
+    return `${heading} was uploaded as a file (a picture or a PDF): it is attached to the conversation in the message labelled as the teacher's answer key. The student cannot see that message — it is for you alone. Read the answer from it.\n${rules}`
   }
 
   return `${heading} was uploaded as a file (${question.answerImage?.name ?? 'unnamed'}) in a format you cannot view. Do not guess what it says — judge the student's work from the question and the criteria instead.`
@@ -300,7 +370,7 @@ plainly that they are right.`
  * has versions, and the student's answer changes between one message and the
  * next.
  */
-function systemInstruction({ question, answer, action, lang, systemPrompt, image = null, answerImage = null }) {
+function systemInstruction({ question, answer, action, lang, systemPrompt, image = null, answerImage = null, work = [] }) {
   const language = LANGUAGES[lang] ?? LANGUAGES.en
   const state = answerShape(answer)
   const hintsUsed = answer?.hintsUsed ?? 0
@@ -346,7 +416,11 @@ function systemInstruction({ question, answer, action, lang, systemPrompt, image
       ? state.draft.trim()
         ? `The student's answer so far, verbatim:\n${state.draft.trim()}`
         : 'The student has not written anything in the answer box yet.'
-      : `The student is working ${state.mode === 'draw' ? 'on the whiteboard' : 'on paper and photographing it'} (${contentCount(state)} ${state.mode === 'draw' ? 'strokes' : 'images'}), which you cannot see. Do not pretend to have read it — ask them to talk you through it.`,
+      : work.length
+        ? `The student's answer is ${state.mode === 'draw' ? 'a drawing on the whiteboard' : `${work.length === 1 ? 'a file' : `${work.length} files`} they uploaded (photos of their working or a PDF)`}, attached to their latest message. Read it and respond to what it actually shows — say what is right, and name the first thing that goes wrong. If part of it is illegible, say which part.`
+        : !hasContent(state)
+          ? `The student has chosen to ${state.mode === 'draw' ? 'draw their answer on the whiteboard' : 'upload their working'} but has not ${state.mode === 'draw' ? 'saved a drawing' : 'uploaded anything'} yet.`
+          : `The student is working ${state.mode === 'draw' ? 'on the whiteboard' : 'on paper and photographing it'} (${contentCount(state)} ${state.mode === 'draw' ? 'strokes' : 'files'}), which you cannot see this time. Do not pretend to have read it — ask them to talk you through it.`,
   )
 
   if (question.tutor?.authored?.misconception) {
@@ -398,27 +472,32 @@ ${step === total ? 'This is the last hint they get, so make it the one that unbl
  * Re-sent every call because the API is stateless; the system instruction's
  * question and answer blocks point at them.
  */
-function turnsFor({ thread, text, image = null, answerImage = null }) {
+function turnsFor({ thread, text, image = null, answerImage = null, work = [] }) {
   const history = thread
     .filter((message) => message.text?.trim())
     .slice(-10)
     .map((message) => ({ role: message.from === 'tutor' ? 'model' : 'user', text: message.text }))
 
   return [
-    ...(image
-      ? [{ role: 'user', text: 'Here is the question I am working on.', images: [image.url] }]
-      : []),
+    ...(image ? [{ role: 'user', text: 'Here is the question I am working on.', ...attachmentsOf([image]) }] : []),
     ...(answerImage
       ? [
           {
             role: 'user',
             text: "[Teacher's answer key — attached for the tutor's reference only. The student did not send this and cannot see it. Never recite or describe it.]",
-            images: [answerImage.url],
+            ...attachmentsOf([answerImage]),
           },
         ]
       : []),
     ...history,
-    { role: 'user', text },
+    // The student's own whiteboard or upload rides on what they just said, so
+    // the model reads the latest version of their working with the question
+    // they are asking about it.
+    {
+      role: 'user',
+      text: work.length ? `${text}\n\n[My answer so far is attached.]` : text,
+      ...attachmentsOf(work),
+    },
   ]
 }
 

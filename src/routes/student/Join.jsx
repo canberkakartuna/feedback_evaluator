@@ -96,6 +96,7 @@ export default function Join() {
           {activity.blurb ? <p style={{ margin: 0 }}>{activity.blurb}</p> : null}
           <p className="cs-hint mono" style={{ marginBottom: 0 }}>
             {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
+            {activity.level ? `${activity.level} · ` : ''}
             {t('common.questions', { count: activity.questionCount })}
           </p>
         </div>

@@ -13,6 +13,7 @@ import Activities from './routes/teacher/Activities'
 import ActivityEditor from './routes/teacher/ActivityEditor'
 import Roster from './routes/teacher/Roster'
 import ClassList from './routes/teacher/ClassList'
+import PreviewActivity from './routes/teacher/PreviewActivity'
 import StudentWork from './routes/teacher/StudentWork'
 import Labelling from './routes/teacher/Labelling'
 import AdminLayout from './routes/admin/AdminLayout'
@@ -123,6 +124,7 @@ export default function App() {
             >
               <Route index element={<Activities />} />
               <Route path="activities/:activityId" element={<ActivityEditor />} />
+              <Route path="activities/:activityId/preview" element={<PreviewActivity />} />
               <Route path="students" element={<Roster />} />
               <Route path="class-list" element={<ClassList />} />
               <Route path="students/:sessionId" element={<StudentWork />} />

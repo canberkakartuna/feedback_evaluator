@@ -222,6 +222,8 @@ const en = {
     questionAsSet: 'The question, as set',
     question: 'The question',
     yourAnswer: 'Your answer',
+    openPdf: 'Open {name} full size ↗',
+    oneMode: 'Answer in one of the three ways: write it, draw it on the whiteboard, or upload a photo or PDF. Only one is kept — switching clears the other.',
     howToAnswer: 'How to answer',
     modeWarn: 'Switching to {mode} discards {what}.',
     discardSwitch: 'Discard and switch',
@@ -347,6 +349,9 @@ const en = {
     titleLabel: 'Title',
     titlePlaceholder: 'Sharing a bill three ways',
     blurbLabel: 'Blurb',
+    levelLabel: 'Grade or level',
+    levelPlaceholder: '9th grade',
+    levelHint: 'Who this is for, next to the topic. Students see it in their list.',
     blurbPlaceholder: 'Splitting quantities in a given ratio, and checking the total.',
     create: 'Create activity',
     creating: 'Creating…',
@@ -380,7 +385,7 @@ const en = {
     copyCode: 'Copy code',
     copyLink: 'Copy link',
     copied: 'Copied',
-    openLink: 'Open it',
+    openLink: 'Open as a student sees it',
     questions: 'Questions',
     addQuestion: '+ Add question',
     newQuestion: 'New question',
@@ -415,6 +420,11 @@ const en = {
       'Students see the version that matches their EN/TR switch. A language left blank shows the question above instead.',
     langEn: 'English',
     langTr: 'Turkish',
+  },
+
+  preview: {
+    eyebrow: 'Student view',
+    lede: 'Exactly what a student sees, questions in the language the EN/TR switch is set to. Try the answer area freely — nothing here is saved.',
   },
 
   classList: {
@@ -775,6 +785,8 @@ const tr = {
     questionAsSet: 'Sorunun kendisi',
     question: 'Soru',
     yourAnswer: 'Cevabınız',
+    openPdf: '{name} dosyasını tam boyut aç ↗',
+    oneMode: 'Üç yoldan yalnızca biriyle cevap verebilirsin: yaz, tahtaya çiz ya da fotoğraf veya PDF yükle. Yalnızca biri saklanır — değiştirirsen diğeri silinir.',
     howToAnswer: 'Nasıl cevaplanacak',
     modeWarn: '{mode} seçeneğine geçmek {what} siler.',
     discardSwitch: 'Sil ve geç',
@@ -892,6 +904,9 @@ const tr = {
     titleLabel: 'Başlık',
     titlePlaceholder: 'Bir hesabı üç kişiye bölmek',
     blurbLabel: 'Kısa açıklama',
+    levelLabel: 'Sınıf ya da seviye',
+    levelPlaceholder: '9. sınıf',
+    levelHint: 'Etkinliğin kimin için olduğu, konunun yanında. Öğrenciler listelerinde görür.',
     blurbPlaceholder: 'Bir niceliği verilen oranda paylaştırma ve toplamı kontrol etme.',
     create: 'Etkinlik oluştur',
     creating: 'Oluşturuluyor…',
@@ -925,7 +940,7 @@ const tr = {
     copyCode: 'Kodu kopyala',
     copyLink: 'Bağlantıyı kopyala',
     copied: 'Kopyalandı',
-    openLink: 'Aç',
+    openLink: 'Öğrenci gözüyle aç',
     questions: 'Sorular',
     addQuestion: '+ Soru ekle',
     newQuestion: 'Yeni soru',
@@ -960,6 +975,11 @@ const tr = {
       'Öğrenciler EN/TR seçimine uyan hâlini görür. Boş bırakılan dilde yukarıdaki soru gösterilir.',
     langEn: 'İngilizce',
     langTr: 'Türkçe',
+  },
+
+  preview: {
+    eyebrow: 'Öğrenci görünümü',
+    lede: 'Bir öğrencinin gördüğünün aynısı; sorular EN/TR seçimindeki dilde. Cevap alanını dilediğiniz gibi deneyin — burada hiçbir şey kaydedilmez.',
   },
 
   classList: {

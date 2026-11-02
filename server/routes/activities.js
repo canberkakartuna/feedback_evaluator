@@ -194,6 +194,7 @@ export function activityRoutes(store) {
           title: activity.title,
           blurb: activity.blurb,
           topic: activity.topic ?? null,
+          level: activity.level ?? '',
           questionCount: await store.questions.count({ activityId: activity.id }),
         },
       })

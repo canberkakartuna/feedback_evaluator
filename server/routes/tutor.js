@@ -58,7 +58,8 @@ export function tutorRoutes(store, { resolveQuestion }) {
       const answer = await store.answers.find(session.id, question.id)
       const hintsUsed = answer?.hintsUsed ?? 0
 
-      const askText = action ? studentAsk(action, hintsUsed) : req.body.text.trim()
+      const lang = req.body.lang === 'tr' ? 'tr' : 'en'
+      const askText = action ? studentAsk(action, hintsUsed, lang) : req.body.text.trim()
 
       /**
        * The prompt **the session was stamped with**, not whichever is active
@@ -111,7 +112,7 @@ export function tutorRoutes(store, { resolveQuestion }) {
          * with no language in it, such as a bare number. Anything unrecognised
          * is English — the same default the interface has.
          */
-        lang: req.body.lang === 'tr' ? 'tr' : 'en',
+        lang,
       })
 
       const tutor = await store.messages.insert({

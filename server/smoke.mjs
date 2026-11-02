@@ -1658,10 +1658,33 @@ try {
   })
   check('the email is free again', emailFreed.status === 201)
 
+  console.log('\na grade or level next to the topic')
+  const leveled = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Levelled', topic: 'functions', level: '  9. sınıf  ' },
+  })
+  check('an activity carries a level', leveled.body.activity.level === '9. sınıf')
+  const releveled = await call('PATCH', `/api/activities/${leveled.body.activity.id}`, {
+    token: teacherToken,
+    body: { level: 'x'.repeat(200) },
+  })
+  check('capped, not refused', releveled.body.activity.level.length === 60)
+  const unleveled = await call('PATCH', `/api/activities/${leveled.body.activity.id}`, {
+    token: teacherToken,
+    body: { level: null },
+  })
+  check('and null clears it', unleveled.body.activity.level === '')
+  await call('DELETE', `/api/activities/${leveled.body.activity.id}`, { token: teacherToken })
+
   console.log('\nthe Functions seed')
   const { seedFunctions } = await import('./seed-functions.mjs')
   const seeded = await seedFunctions(app.locals.store, { ownerId: teacher.id })
   check('it creates five questions', seeded.created && seeded.questions.length === 5)
+  check(
+    'students see the level in their list',
+    (await call('PATCH', `/api/activities/${seeded.activity.id}`, { token: teacherToken, body: { level: 'Grade 11' } })).status === 200 &&
+      (await call('GET', '/api/activities/available')).body.activities.some((entry) => entry.level === 'Grade 11'),
+  )
   check('published, under the functions topic', seeded.activity.status === 'published' && seeded.activity.topic === 'functions')
   check(
     'every question is written in both languages',

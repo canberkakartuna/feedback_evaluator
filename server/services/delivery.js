@@ -135,6 +135,7 @@ export async function studentActivities(store, user) {
        * publishing failure.
        */
       topic: activity.topic ?? null,
+      level: activity.level ?? '',
       questionCount: await store.questions.count({ activityId: activity.id }),
     })),
   )
