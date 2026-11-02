@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.github
+.vscode
+.claude
+.vercel
+*.log
+.DS_Store
+
+# Secrets come from the host's environment, never from the image.
+.env
+.env.*
+*.env
+!.env.example
