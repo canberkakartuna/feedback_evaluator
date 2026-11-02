@@ -16,8 +16,11 @@ import { splitMath } from '../lib/latex'
  * `throwOnError: false` because this renders other people's typing: a typo in
  * a formula shows the formula's source in red rather than taking the whole
  * question down with it.
+ *
+ * `inline` sets even display math (`$$…$$`) in the line, for a one- or
+ * two-line preview such as the student's question list.
  */
-export default function MathText({ text }) {
+export default function MathText({ text, inline = false }) {
   const segments = useMemo(() => splitMath(text ?? ''), [text])
 
   return segments.map((segment, index) =>
@@ -28,7 +31,7 @@ export default function MathText({ text }) {
         dangerouslySetInnerHTML={{
           __html: katex.renderToString(segment.value, {
             throwOnError: false,
-            displayMode: segment.display,
+            displayMode: segment.display && !inline,
           }),
         }}
       />

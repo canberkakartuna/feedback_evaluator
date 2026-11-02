@@ -98,6 +98,10 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
   const t = useT()
   const [prompt, setPrompt] = useState(question?.prompt ?? '')
   const [answer, setAnswer] = useState(question?.answer ?? '')
+  const [byLang, setByLang] = useState({
+    en: question?.promptByLang?.en ?? '',
+    tr: question?.promptByLang?.tr ?? '',
+  })
 
   // `undefined` means "leave whatever is stored alone", which is what the API
   // wants too — so the three states line up and nothing has to be translated.
@@ -109,7 +113,9 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
   const shown = (field) =>
     images[field] === undefined ? (question?.[field] ?? null) : images[field]
 
-  const asksSomething = Boolean(prompt.trim() || shown('image'))
+  const asksSomething = Boolean(
+    prompt.trim() || byLang.en.trim() || byLang.tr.trim() || shown('image'),
+  )
 
   const pick = (field) => async (fileList) => {
     const { accepted, rejected } = partitionFiles(Array.from(fileList ?? []))
@@ -163,6 +169,7 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
     try {
       await onSave({
         prompt,
+        promptByLang: byLang,
         answer,
         ...imagePatch('image'),
         ...imagePatch('answerImage'),
@@ -196,6 +203,32 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           onRemove={remove('image')}
         />
         <p className="cs-hint">{t('qform.promptHint')}</p>
+      </div>
+
+      <div className="cs-field">
+        <p className="cs-label">{t('qform.byLang')}</p>
+        {[
+          ['en', t('qform.langEn')],
+          ['tr', t('qform.langTr')],
+        ].map(([lang, label]) => (
+          <div key={lang}>
+            <label className="cs-hint" htmlFor={`q-prompt-${lang}`}>
+              {label}
+            </label>
+            <textarea
+              id={`q-prompt-${lang}`}
+              className="cs-textarea"
+              rows={2}
+              maxLength={LIMITS.prompt}
+              value={byLang[lang]}
+              onChange={(event) =>
+                setByLang((prior) => ({ ...prior, [lang]: event.target.value }))
+              }
+            />
+            <MathPreview text={byLang[lang]} />
+          </div>
+        ))}
+        <p className="cs-hint">{t('qform.byLangHint')}</p>
       </div>
 
       <div className="cs-field">

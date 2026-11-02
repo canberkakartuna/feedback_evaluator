@@ -4,7 +4,8 @@ import { MARKS, SELF_MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
-import { useT } from '../lib/i18n'
+import { promptFor } from '../../shared/activity'
+import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
@@ -31,7 +32,8 @@ export default function QuestionPanel({
   onStep,
   onOpenTutor,
 }) {
-  const t = useT()
+  const { lang, t } = useI18n()
+  const prompt = promptFor(question, lang)
   const sheet = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
@@ -125,9 +127,9 @@ export default function QuestionPanel({
 
       <div className="qp-scroll" ref={sheet}>
         <article className="qp-sheet">
-          {question.prompt ? (
+          {prompt ? (
             <p className="qp-prompt">
-              <MathText text={question.prompt} />
+              <MathText text={prompt} />
             </p>
           ) : null}
 
@@ -137,7 +139,7 @@ export default function QuestionPanel({
               <img
                 className="qp-shot-img"
                 src={question.image.url}
-                alt={question.prompt ? t('qp.questionAsSet') : t('qp.question')}
+                alt={prompt ? t('qp.questionAsSet') : t('qp.question')}
               />
             </figure>
           ) : null}

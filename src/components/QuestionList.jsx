@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import StatusMark from './StatusMark'
 import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
-import { useT } from '../lib/i18n'
+import { promptFor } from '../../shared/activity'
+import { useI18n } from '../lib/i18n'
+import MathText from './MathText'
 import './QuestionList.css'
 
 /**
@@ -23,7 +25,7 @@ export default function QuestionList({
   onCollapse,
   onWithdraw,
 }) {
-  const t = useT()
+  const { lang, t } = useI18n()
   const [ownDraft, setOwnDraft] = useState('')
 
   const askOwn = (event) => {
@@ -135,8 +137,13 @@ export default function QuestionList({
                           ) : null}
                         </span>
                         <span className="ql-row-prompt">
-                          {question.prompt ||
-                            (question.image ? t('ql.pictureQuestion') : '')}
+                          {promptFor(question, lang) ? (
+                            <MathText text={promptFor(question, lang)} inline />
+                          ) : question.image ? (
+                            t('ql.pictureQuestion')
+                          ) : (
+                            ''
+                          )}
                         </span>
                         <span className="ql-row-state" style={{ color: mark.tone }}>
                           {rowNote(state)}

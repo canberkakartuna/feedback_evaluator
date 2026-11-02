@@ -1,5 +1,6 @@
 import {
   LIMITS,
+  PROMPT_LANGS,
   QUESTION_KINDS,
   TOPIC_IDS,
   blankTutor,
@@ -230,6 +231,34 @@ export function parseQuestionInput(body, { forCreate } = {}) {
   }
 
   /**
+   * The prompt written out per interface language, so the question follows
+   * the EN/TR switch — see promptFor in shared/activity.js. Sent whole: an
+   * object replaces what is stored, a blank language is dropped, and `null`
+   * clears every translation.
+   */
+  const byLang = body?.promptByLang
+  if (byLang !== undefined) {
+    if (byLang === null) {
+      patch.promptByLang = {}
+    } else if (typeof byLang !== 'object' || Array.isArray(byLang)) {
+      throw badRequest('"promptByLang" must be an object or null')
+    } else {
+      patch.promptByLang = {}
+      for (const [lang, text] of Object.entries(byLang)) {
+        if (!PROMPT_LANGS.includes(lang)) {
+          throw badRequest(`"promptByLang" keys must be one of: ${PROMPT_LANGS.join(', ')}`)
+        }
+        if (text === null || text === undefined) continue
+        if (typeof text !== 'string') throw badRequest(`"promptByLang.${lang}" must be a string`)
+        if (text.length > LIMITS.prompt) {
+          throw badRequest(`"promptByLang.${lang}" must be at most ${LIMITS.prompt} characters`)
+        }
+        if (text.trim()) patch.promptByLang[lang] = text.trim()
+      }
+    }
+  }
+
+  /**
    * The teacher's own answer. Optional everywhere: `null` and `''` both mean
    * "no answer written", stored as `''` so no reader meets three shapes of
    * absence. It goes to the tutor as context and never into a student payload —
@@ -392,6 +421,7 @@ export function newQuestion({ activityId, position, code, ...rest }) {
     code: code || null,
     kind: 'Explain',
     prompt: '',
+    promptByLang: {},
     image: null,
     stimulus: null,
     answer: '',

@@ -13,6 +13,7 @@
     "check:strings": "node server/strings.mjs",
     "check:openai": "node server/openai.mjs",
     "setup:spaces": "node server/spaces.mjs",
+    "seed:functions": "node server/seed-functions.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

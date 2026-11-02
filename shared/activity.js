@@ -8,8 +8,9 @@
  *
  *   activity  { id, code, title, blurb, topic, ownerId, status,
  *               createdAt, updatedAt }
- *   question  { id, activityId, code, kind, prompt, image, stimulus, answer,
- *               answerImage, workingExpected, rubric[], tutor{}, position, ... }
+ *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
+ *               stimulus, answer, answerImage, workingExpected, rubric[],
+ *               tutor{}, position, ... }
  *
  * **An activity carries a class code.** Six characters, generated once, shown to
  * the teacher so a class can be pointed straight at one activity — typed into
@@ -87,7 +88,7 @@ export const isQuestionKind = (value) => QUESTION_KINDS.includes(value)
  * reason shared/marks.js holds no words: this file is imported by the API, which
  * has no language to say them in.
  */
-export const TOPICS = [{ id: 'ratio' }, { id: 'whole-numbers' }]
+export const TOPICS = [{ id: 'ratio' }, { id: 'whole-numbers' }, { id: 'functions' }]
 
 export const TOPIC_IDS = TOPICS.map((topic) => topic.id)
 
@@ -143,6 +144,24 @@ export const hasAnswer = (question) =>
   Boolean(question?.answer?.trim() || question?.answerImage)
 
 /**
+ * The interface languages a question's wording can be given in. The same two
+ * the EN/TR switch offers; anything else in `promptByLang` is refused.
+ */
+export const PROMPT_LANGS = ['en', 'tr']
+
+/**
+ * The wording a student reading in `lang` should see.
+ *
+ * `promptByLang` is optional: a teacher who writes one prompt in one language
+ * has a question that reads the same whatever the switch says, as it always
+ * did. One who also writes it out per language gets the version matching the
+ * switch, and `prompt` is the fallback for a language they left blank.
+ */
+export function promptFor(question, lang) {
+  return question?.promptByLang?.[lang]?.trim() || question?.prompt || ''
+}
+
+/**
  * Whether this question puts a question to the student at all.
  *
  * Either half is enough. Requiring the prompt when there is a legible photo of
@@ -150,7 +169,11 @@ export const hasAnswer = (question) =>
  * read, and requiring neither would let an empty card reach a student.
  */
 export const hasQuestion = (question) =>
-  Boolean(question?.prompt?.trim() || question?.image)
+  Boolean(
+    question?.prompt?.trim() ||
+      PROMPT_LANGS.some((lang) => question?.promptByLang?.[lang]?.trim()) ||
+      question?.image,
+  )
 
 /**
  * What a student is allowed to receive.
@@ -168,6 +191,8 @@ export function publicQuestion(question, activity) {
     kind: question.kind,
     points: totalPoints(question),
     prompt: question.prompt,
+    /** The same question per interface language, when written — see promptFor. */
+    promptByLang: question.promptByLang ?? {},
     /**
      * The uploaded question, when there is one. Only the fields needed to
      * render it — the storage key and path stay on the server, the same way

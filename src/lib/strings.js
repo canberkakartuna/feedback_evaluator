@@ -80,6 +80,7 @@ const en = {
     unset: '— no topic —',
     ratio: 'Ratio',
     'whole-numbers': 'Whole numbers',
+    functions: 'Functions',
   },
 
   signin: {
@@ -413,6 +414,11 @@ const en = {
     needSomething: 'Write the question above, or attach a picture of it.',
     saveChanges: 'Save changes',
     add: 'Add question',
+    byLang: 'The question in each language (optional)',
+    byLangHint:
+      'Students see the version that matches their EN/TR switch. A language left blank shows the question above instead.',
+    langEn: 'English',
+    langTr: 'Turkish',
   },
 
   roster: {
@@ -608,6 +614,7 @@ const tr = {
     unset: '— konu yok —',
     ratio: 'Oran',
     'whole-numbers': 'Tam sayılar',
+    functions: 'Fonksiyonlar',
   },
 
   signin: {
@@ -925,6 +932,11 @@ const tr = {
     needSomething: 'Yukarıya soruyu yazın ya da bir görselini ekleyin.',
     saveChanges: 'Değişiklikleri kaydet',
     add: 'Soru ekle',
+    byLang: 'Sorunun her dildeki hâli (isteğe bağlı)',
+    byLangHint:
+      'Öğrenciler EN/TR seçimine uyan hâlini görür. Boş bırakılan dilde yukarıdaki soru gösterilir.',
+    langEn: 'İngilizce',
+    langTr: 'Türkçe',
   },
 
   roster: {

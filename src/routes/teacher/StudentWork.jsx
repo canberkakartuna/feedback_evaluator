@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
+import { promptFor } from '../../../shared/activity'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 
@@ -91,9 +92,9 @@ export default function StudentWork() {
               ) : null}
             </div>
 
-            {question.prompt ? (
+            {promptFor(question, lang) ? (
               <p style={{ marginTop: 0 }}>
-                <MathText text={question.prompt} />
+                <MathText text={promptFor(question, lang)} />
               </p>
             ) : (
               <p className="cs-hint">{t('transcript.removedQuestion')}</p>

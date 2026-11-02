@@ -20,6 +20,7 @@
 import { createApp } from './app.js'
 import { fallbackReplies } from '../shared/tutor-scripts.js'
 import { TURN_LIMIT, TURN_LOCK_MS, turnState } from '../shared/turns.js'
+import { promptFor } from '../shared/activity.js'
 import { once } from 'node:events'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -669,6 +670,28 @@ try {
     token: teacherToken,
   })
 
+  const translated = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${bareQ.id}`,
+    { token: teacherToken, body: { promptByLang: { en: '  Label the cell.  ', tr: 'Hücreyi etiketleyin.' } } },
+  )
+  check('a prompt can be written per language', translated.body.question.promptByLang.tr === 'Hücreyi etiketleyin.')
+  check('and is trimmed like the prompt', translated.body.question.promptByLang.en === 'Label the cell.')
+  const unknownLang = await call(
+    'PATCH',
+    `/api/activities/${activity.id}/questions/${bareQ.id}`,
+    { token: teacherToken, body: { promptByLang: { de: 'Beschrifte die Zelle.' } } },
+  )
+  check('a language the interface does not have is refused', unknownLang.status === 400)
+  const translationOnly = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: { promptByLang: { tr: 'Sadece Türkçe yazılmış bir soru.' } },
+  })
+  check('a prompt in one language alone is a question', translationOnly.status === 201)
+  await call('DELETE', `/api/activities/${activity.id}/questions/${translationOnly.body.question.id}`, {
+    token: teacherToken,
+  })
+
   console.log('\nauthoring scope')
   const peek = await call('GET', `/api/activities/${activity.id}`, { token: otherTeacherToken })
   check("another teacher cannot read it, and gets 404 not 403", peek.status === 404)
@@ -748,6 +771,10 @@ try {
   check('and the count is honest', preview.body.activity.questions[0].points === 3)
   check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
   check('a marked one says so too', preview.body.activity.questions[0].markable === true)
+  check(
+    'the per-language prompts do travel',
+    preview.body.activity.questions.some((question) => question.promptByLang?.tr === 'Hücreyi etiketleyin.'),
+  )
 
   console.log('\npublishing is the whole access decision')
   const draftList = await call('GET', '/api/activities/available')
@@ -1621,6 +1648,31 @@ try {
     body: { role: 'student', name: 'Reuse', email: 'temp@example.com', password: 'correct horse battery' },
   })
   check('the email is free again', emailFreed.status === 201)
+
+  console.log('\nthe Functions seed')
+  const { seedFunctions } = await import('./seed-functions.mjs')
+  const seeded = await seedFunctions(app.locals.store, { ownerId: teacher.id })
+  check('it creates five questions', seeded.created && seeded.questions.length === 5)
+  check('published, under the functions topic', seeded.activity.status === 'published' && seeded.activity.topic === 'functions')
+  check(
+    'every question is written in both languages',
+    seeded.questions.every((question) => question.promptByLang.en && question.promptByLang.tr),
+  )
+  check(
+    'and the switch picks between them',
+    promptFor(seeded.questions[3], 'tr').includes('değerini bulun') &&
+      promptFor(seeded.questions[3], 'en').startsWith('If $f(x)'),
+  )
+  const seededForStudent = await call('POST', '/api/sessions', {
+    body: { consent: true, activityId: seeded.activity.id },
+  })
+  check('a student can open it', seededForStudent.status === 201)
+  check(
+    'with no teacher answer in what they receive',
+    !JSON.stringify(seededForStudent.body).includes('Answer: 72'),
+  )
+  const reseeded = await seedFunctions(app.locals.store, { ownerId: teacher.id })
+  check('running it again changes nothing', !reseeded.created && reseeded.activity.id === seeded.activity.id)
 
   console.log('\nnot found')
   const nowhere = await call('GET', '/api/nope')

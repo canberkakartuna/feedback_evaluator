@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import { fallbackReplyFor, ownTutorFor } from '../../shared/tutor-scripts.js'
-import { hasAnswer, totalPoints } from '../../shared/activity.js'
+import { hasAnswer, promptFor, totalPoints } from '../../shared/activity.js'
 import { contentCount, hasContent, uploadedFiles } from '../../shared/answer.js'
 import { wordCount } from '../../shared/marking.js'
 import { badRequest } from '../lib/http.js'
@@ -239,10 +239,11 @@ async function imageForModel(store, image) {
  *   old version of this block printed an empty string here, and the tutor
  *   spent whole conversations deflecting about a question it had never seen.
  */
-function questionBlock(question, image) {
+function questionBlock(question, image, lang) {
   const marks = totalPoints(question)
   const heading = `The question (${question.code}${marks ? `, ${marks} marks` : ''})`
-  const prompt = question.prompt?.trim()
+  // The wording the student is looking at, when the teacher wrote one per language.
+  const prompt = promptFor(question, lang).trim()
 
   if (prompt) {
     const alsoImage = image
@@ -307,7 +308,7 @@ function systemInstruction({ question, answer, action, lang, systemPrompt, image
   const blocks = [
     (systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT),
     HOUSE_RULES.replaceAll('{{language}}', language),
-    questionBlock(question, image),
+    questionBlock(question, image, lang),
   ]
 
   if (question.stimulus?.trim()) blocks.push(`Material the question refers to:\n${question.stimulus}`)

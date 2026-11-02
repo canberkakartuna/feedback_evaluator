@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { TOPICS } from '../../../shared/activity'
+import { TOPICS, promptFor } from '../../../shared/activity'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
-import { useT } from '../../lib/i18n'
+import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import QuestionForm from './QuestionForm'
 import ShareActivity from './ShareActivity'
@@ -21,7 +21,7 @@ import ShareActivity from './ShareActivity'
 export default function ActivityEditor() {
   const { activityId } = useParams()
   const navigate = useNavigate()
-  const t = useT()
+  const { lang, t } = useI18n()
 
   const { data, error, loading, reload } = useAsync(
     () => api.activity(activityId),
@@ -207,8 +207,8 @@ export default function ActivityEditor() {
                 <div className="cs-q-head">
                   <span className="cs-q-code">{question.code}</span>
                   <p className="cs-q-prompt">
-                    {question.prompt ? (
-                      <MathText text={question.prompt} />
+                    {promptFor(question, lang) ? (
+                      <MathText text={promptFor(question, lang)} />
                     ) : (
                       <em>{t('editor.uploadedNoText')}</em>
                     )}

@@ -16,13 +16,15 @@ npm run dev                   # client on :5173, proxying /api
 npm run test:api              # 316 end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
 npm run check:openai          # one real call to the tutor's model
+npm run seed:functions -- <teacher email>   # the 5-question Functions activity, EN + TR
 ```
 
 The interface is in **English or Turkish**, switched by the EN/TR control that
 sits on every screen. What a teacher writes — titles, questions, the AI prompt —
-is content and is never translated; the chrome around it is, and
+is content and is never machine-translated; the chrome around it is, and
 `src/lib/strings.js` holds both languages side by side so a gap in one is
-visible. `npm run check:strings` fails on a key that is used and missing, or
+visible. A teacher *can* write a question out in both languages
+(`promptByLang`), and then the student sees the version matching the switch. `npm run check:strings` fails on a key that is used and missing, or
 present in one language only.
 
 ## Three audiences, one deployment
@@ -70,7 +72,7 @@ published activity is startable by whoever is looking. Closing an activity again
 is how a teacher shuts it down. What the code buys is the first two minutes of a
 lesson: six characters instead of twenty titles to read.
 
-Activities also carry a **topic** — ratio, whole numbers, or none — and both the
+Activities also carry a **topic** — ratio, whole numbers, functions, or none — and both the
 students' list and the teacher's are filtered by it. The list is `TOPICS` in
 `shared/activity.js`, and adding one is a line there plus a translation in
 `src/lib/strings.js`.
@@ -181,7 +183,10 @@ A **question** has to ask something — a typed prompt, an uploaded photo of the
 question, or both. Nobody should have to retype a question out of a textbook.
 Typed prompts take LaTeX anywhere in the prose (`$…$`, `$$…$$`, `\(…\)`,
 `\[…\]`), rendered with KaTeX wherever the question is shown and previewed live
-in the form. The teacher's own **answer** works the same two ways — typed (LaTeX
+in the form. A prompt may also be written once per interface language
+(`promptByLang: { en, tr }`); `promptFor` in `shared/activity.js` picks the one
+matching the student's EN/TR switch, falls back to `prompt` for a language left
+blank, and the tutor is handed the same wording the student is reading. The teacher's own **answer** works the same two ways — typed (LaTeX
 included) or photographed — and either way it stays off the student's screen:
 it goes to the AI tutor so its guidance steers toward the answer the teacher
 actually wants. Two further extras are optional and change what the question

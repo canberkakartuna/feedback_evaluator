@@ -174,6 +174,7 @@ export function researchRoutes(store) {
         authored.map((question, index) => [question.id, displayCode(question, index)]),
       )
       const promptOf = new Map(authored.map((question) => [question.id, question.prompt]))
+      const byLangOf = new Map(authored.map((question) => [question.id, question.promptByLang]))
 
       const questions = [...byQuestion.entries()].map(([questionId, thread]) => {
         const ownQuestion = own.find((entry) => entry.id === questionId)
@@ -182,6 +183,7 @@ export function researchRoutes(store) {
           questionId,
           code: codeOf.get(questionId) ?? ownQuestion?.code ?? questionId,
           prompt: promptOf.get(questionId) ?? ownQuestion?.prompt ?? null,
+          promptByLang: byLangOf.get(questionId) ?? {},
           isOwnQuestion: Boolean(ownQuestion),
           answer: answers.find((entry) => entry.questionId === questionId) ?? null,
           messages: thread,
