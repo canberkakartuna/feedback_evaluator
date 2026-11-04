@@ -162,7 +162,7 @@ export function authRoutes(store) {
     '/me',
     requireAuth,
     route(async (req, res) => {
-      res.json({ user: publicUser(req.user, { authKey: req.authToken.key }) })
+      res.json({ user: publicUser(req.user, { authToken: req.authToken }) })
     }),
   )
 
@@ -188,7 +188,7 @@ export function authRoutes(store) {
     route(async (req, res) => {
       if (hasCurrentConsent(req.user)) {
         return res.json({
-          user: publicUser(req.user, { authKey: req.authToken.key }),
+          user: publicUser(req.user, { authToken: req.authToken }),
           recorded: false,
         })
       }
@@ -209,7 +209,7 @@ export function authRoutes(store) {
         },
       ])
 
-      res.json({ user: publicUser(updated, { authKey: req.authToken.key }), recorded: true })
+      res.json({ user: publicUser(updated, { authToken: req.authToken }), recorded: true })
     }),
   )
 
@@ -227,7 +227,7 @@ export function authRoutes(store) {
     requireAuth,
     route(async (req, res) => {
       if (!hasCurrentConsent(req.user)) throw badRequest('There is no consent on this account to withdraw')
-      if (!canWithdrawConsent(req.user, req.authToken.key)) {
+      if (!canWithdrawConsent(req.user, req.authToken)) {
         throw forbidden('Consent can only be withdrawn during the sign-in it was given in')
       }
 
@@ -257,7 +257,7 @@ export function authRoutes(store) {
       ])
 
       res.json({
-        user: publicUser(updated, { authKey: req.authToken.key }),
+        user: publicUser(updated, { authToken: req.authToken }),
         withdrawn: true,
         sessions: sessions.length,
         files,

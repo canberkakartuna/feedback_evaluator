@@ -1840,6 +1840,21 @@ try {
   const againConsent = await call('POST', '/api/auth/consent', { token: numberToken })
   check('agreeing again records a fresh consent', againConsent.body.recorded === true && againConsent.body.user.consented === true)
 
+  // A consent recorded before sign-in keys existed has no `signInKey`: the
+  // sign-in issued before it may still withdraw, a later one may not.
+  await app.locals.store.users.update(numberLogin.body.user.id, {
+    consent: { given: true, at: new Date().toISOString(), version: config.consentVersion },
+  })
+  check(
+    'a pre-key consent can be withdrawn from the sign-in it was given in',
+    (await call('GET', '/api/auth/me', { token: numberToken })).body.user.canWithdrawConsent === true,
+  )
+  const laterSignIn = await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })
+  check(
+    'but not from a sign-in after it',
+    (await call('POST', '/api/auth/consent/withdraw', { token: laterSignIn.body.token })).status === 403,
+  )
+
   const removed = await call('PATCH', `/api/users/${numberLogin.body.user.id}`, {
     token: teacherToken,
     body: { active: false },

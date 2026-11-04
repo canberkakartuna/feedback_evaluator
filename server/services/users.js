@@ -54,11 +54,21 @@ export function recordedConsent(signInKey = null) {
   return { given: true, at: now(), version: config.consentVersion, signInKey }
 }
 
-/** May the request holding this token key still withdraw this user's consent? */
-export const canWithdrawConsent = (user, authKey) =>
-  Boolean(
-    authKey && user?.consent?.signInKey && user.consent.signInKey === authKey && hasCurrentConsent(user),
-  )
+/**
+ * May the request holding this login token still withdraw this user's consent?
+ *
+ * A consent recorded with `signInKey` must match that token exactly. One
+ * recorded before the key existed has none, and falls back to time: a token
+ * issued before the agreement was given is the sign-in it was given in, and a
+ * token issued after it is a later sign-in, which may not withdraw.
+ */
+export function canWithdrawConsent(user, authToken) {
+  if (!authToken?.key || !hasCurrentConsent(user)) return false
+  if (user.consent.signInKey) return user.consent.signInKey === authToken.key
+  const issued = Date.parse(authToken.createdAt ?? '')
+  const agreed = Date.parse(user.consent.at ?? '')
+  return Number.isFinite(issued) && Number.isFinite(agreed) && issued <= agreed
+}
 
 /**
  * The hash never leaves the server, on any path.
@@ -67,7 +77,7 @@ export const canWithdrawConsent = (user, authKey) =>
  * decide whether to show the notice, and deciding it here keeps the version
  * comparison on the side that owns the version.
  */
-export function publicUser(user, { authKey = null } = {}) {
+export function publicUser(user, { authToken = null } = {}) {
   if (!user) return null
   const { passwordHash: _passwordHash, ...rest } = user
   let consent = user.consent
@@ -80,7 +90,7 @@ export function publicUser(user, { authKey = null } = {}) {
     consent,
     // Only true for the sign-in the agreement was given under; callers that do
     // not pass the request's token key get false, which is the safe answer.
-    canWithdrawConsent: canWithdrawConsent(user, authKey),
+    canWithdrawConsent: canWithdrawConsent(user, authToken),
     // A class-list student's address is a placeholder (see classListEmail), not
     // something to show anybody as theirs.
     email: user.studentNumber ? null : user.email,
