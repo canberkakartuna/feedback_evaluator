@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/auth'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { turnState } from '../../../shared/turns'
 import { readAsDataUrl } from '../../lib/attachments'
+import { numberQuestions, questionName } from '../../lib/questionName'
 import { useI18n } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
 import QuestionList from '../../components/QuestionList'
@@ -102,10 +103,10 @@ export default function Session() {
       .then((data) => {
         if (!alive) return
 
-        const questions = [
+        const questions = numberQuestions([
           ...(data.activity?.questions ?? []),
           ...data.ownQuestions.map((question) => ({ ...question, isOwnQuestion: true })),
-        ]
+        ])
 
         const byQuestion = new Map()
         for (const message of data.messages) {
@@ -380,7 +381,7 @@ export default function Session() {
       const line = feedback.markable
         ? [
             t('ws.markedLine', {
-              code: active.code,
+              code: questionName(active, t),
               earned: feedback.earned,
               total: feedback.total,
             }),
@@ -388,7 +389,7 @@ export default function Session() {
           ]
             .filter(Boolean)
             .join(' ')
-        : t('ws.handMarked', { code: active.code })
+        : t('ws.handMarked', { code: questionName(active, t) })
 
       append(activeId, {
         id: `mark-${Date.now()}`,
@@ -451,7 +452,12 @@ export default function Session() {
       if (!prompt.trim()) return
       try {
         const { question } = await api.addOwnQuestion(sessionId, prompt)
-        const entry = { ...question, isOwnQuestion: true, markable: false }
+        const entry = {
+          ...question,
+          isOwnQuestion: true,
+          markable: false,
+          number: questions.filter((existing) => existing.isOwnQuestion).length + 1,
+        }
 
         setLoaded((prev) => ({ ...prev, questions: [...prev.questions, entry] }))
         setProgress((prev) => ({ ...prev, [entry.id]: toState(entry, null, []) }))
@@ -461,7 +467,7 @@ export default function Session() {
         fail(error)
       }
     },
-    [fail, sessionId],
+    [fail, questions, sessionId],
   )
 
   /** The withdrawal half of consent, offered where the student actually is. */
@@ -552,7 +558,7 @@ export default function Session() {
 
   const tabs = [
     { id: 'list', label: t('ws.tabQuestions'), meta: `${tally.done}/${tally.total}` },
-    { id: 'problem', label: t('ws.tabProblem'), meta: active.code },
+    { id: 'problem', label: t('ws.tabProblem'), meta: questionName(active, t) },
     { id: 'tutor', label: t('ws.tabTutor'), dot: unreadCount > 0 },
   ]
 

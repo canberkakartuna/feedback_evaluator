@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { turnState } from '../../shared/turns'
 import { useI18n } from '../lib/i18n'
+import { questionName } from '../lib/questionName'
 import './TutorPanel.css'
 
 export default function TutorPanel({
@@ -58,7 +59,7 @@ export default function TutorPanel({
         <div>
           <p className="eyebrow">{t('tp.tutor')}</p>
           <p className="tp-scope">
-            {t('tp.workingOn')} <span className="mono">{question.code}</span>
+            {t('tp.workingOn')} <span className="mono">{questionName(question, t)}</span>
           </p>
           <p className="tp-turns mono" data-tone={turns.remaining <= 2 ? 'low' : undefined}>
             {t('tp.turnsLeft', { remaining: turns.remaining, limit: turns.limit })}

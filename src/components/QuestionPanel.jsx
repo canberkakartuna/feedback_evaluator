@@ -5,6 +5,7 @@ import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
 import { promptFor } from '../../shared/activity'
+import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
 import QuestionFile from './QuestionFile'
@@ -100,7 +101,7 @@ export default function QuestionPanel({
           <div className="qp-bar-meta">
             <span className="eyebrow">{question.activityTitle}</span>
             <p className="qp-bar-line">
-              <span className="qp-code mono">{question.code}</span>
+              <span className="qp-code mono">{questionName(question, t)}</span>
               <span className="qp-sep" aria-hidden="true" />
               <span className="qp-kind">{question.kind}</span>
               {question.points ? (
@@ -460,7 +461,7 @@ export default function QuestionPanel({
             <span aria-hidden="true">←</span>
             <span className="qp-step-text">
               <span className="qp-step-label">{t('qp.previous')}</span>
-              <span className="mono">{previous ? previous.code : '—'}</span>
+              <span className="mono">{previous ? questionName(previous, t) : '—'}</span>
             </span>
           </button>
 
@@ -472,7 +473,7 @@ export default function QuestionPanel({
           >
             <span className="qp-step-text">
               <span className="qp-step-label">{t('qp.next')}</span>
-              <span className="mono">{next ? next.code : '—'}</span>
+              <span className="mono">{next ? questionName(next, t) : '—'}</span>
             </span>
             <span aria-hidden="true">→</span>
           </button>

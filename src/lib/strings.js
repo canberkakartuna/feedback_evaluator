@@ -200,6 +200,11 @@ const en = {
     whoCode: 'Session {code}',
   },
 
+  qname: {
+    authored: 'Q{n}',
+    own: 'My Q{n}',
+  },
+
   ql: {
     hide: 'Hide questions',
     tally: '{done} of {total}',
@@ -761,6 +766,11 @@ const tr = {
     whoNicknameFixed:
       'Çalışmanız bu adla kaydediliyor. Öğretmeniniz bu adı listesinde görür ve bu oturum boyunca değişmez.',
     whoCode: 'Oturum {code}',
+  },
+
+  qname: {
+    authored: 'Soru {n}',
+    own: 'Kendi sorum {n}',
   },
 
   ql: {

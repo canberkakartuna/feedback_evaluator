@@ -10,6 +10,7 @@ import {
   pointFrom,
 } from '../lib/board'
 import { useT } from '../lib/i18n'
+import { questionName } from '../lib/questionName'
 import './Whiteboard.css'
 
 const UNDO_LIMIT = 40
@@ -137,14 +138,14 @@ export default function Whiteboard({ question, initialStrokes, onSave, onClose }
     <dialog
       className="wb"
       ref={dialog}
-      aria-label={t('wb.forQuestion', { code: question.code })}
+      aria-label={t('wb.forQuestion', { code: questionName(question, t) })}
       onCancel={onClose}
     >
       <header className="wb-head">
         <div>
           <p className="eyebrow">{t('wb.title')}</p>
           <p className="wb-scope">
-            {t('wb.workingOn')} <span className="mono">{question.code}</span>
+            {t('wb.workingOn')} <span className="mono">{questionName(question, t)}</span>
           </p>
         </div>
 

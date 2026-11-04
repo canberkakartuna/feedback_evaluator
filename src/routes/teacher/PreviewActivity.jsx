@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { useT } from '../../lib/i18n'
+import { numberQuestions } from '../../lib/questionName'
 import { useAsync } from '../../lib/useAsync'
 import QuestionPanel from '../../components/QuestionPanel'
 import '../../components/Workspace.css'
@@ -52,7 +53,8 @@ export default function PreviewActivity() {
   }
 
   const { activity } = data
-  const questions = activity.questions
+  // Numbered as the student workspace numbers them, so the panel says "Q1".
+  const questions = numberQuestions(activity.questions)
   const question = questions[index]
   const state = (question && states[question.id]) ?? blank()
   const patch = (changes) =>

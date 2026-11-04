@@ -2,6 +2,7 @@ import { useState } from 'react'
 import StatusMark from './StatusMark'
 import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { promptFor } from '../../shared/activity'
+import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
 import './QuestionList.css'
@@ -129,7 +130,7 @@ export default function QuestionList({
 
                       <span className="ql-row-body">
                         <span className="ql-row-top">
-                          <span className="ql-code mono">{question.code}</span>
+                          <span className="ql-code mono">{questionName(question, t)}</span>
                           {question.points ? (
                             <span className="ql-points mono">
                               {t('ql.points', { count: question.points })}
