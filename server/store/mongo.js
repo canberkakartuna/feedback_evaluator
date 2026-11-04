@@ -92,6 +92,7 @@ const INDEXES = {
   // `versionId` is looked up on every tutor message: a reply runs on the prompt
   // version its session was stamped with, not on whatever is active now.
   prompts: [{ active: 1, _id: -1 }, { versionId: 1 }],
+  support: [{ userId: 1, createdAt: -1 }, { teacherId: 1, createdAt: -1 }, { category: 1, createdAt: -1 }],
 }
 
 /** Every read strips `_id`, so documents match the memory store's exactly. */
@@ -547,6 +548,36 @@ export function createMongoStore({ uri, dbName } = {}) {
       },
       async list() {
         return (await col('prompts')).find({}, { ...BARE, sort: { _id: 1 } }).toArray()
+      },
+    },
+
+    support: {
+      async insert(doc) {
+        await (await col('support')).insertOne({ _id: doc.id, ...doc })
+        return doc
+      },
+      async findById(id) {
+        return (await col('support')).findOne({ _id: id }, BARE)
+      },
+      async update(id, patch) {
+        return (await col('support')).findOneAndUpdate(
+          { _id: id },
+          { $set: patch },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async list({ userId, teacherId, category, limit = 500 } = {}) {
+        const filter = {}
+        const where = (field, value) => {
+          if (value === undefined) return
+          filter[field] = Array.isArray(value) ? { $in: value } : value
+        }
+        where('userId', userId)
+        where('teacherId', teacherId)
+        where('category', category)
+        return (await col('support'))
+          .find(filter, { ...BARE, sort: { createdAt: -1 }, limit })
+          .toArray()
       },
     },
 

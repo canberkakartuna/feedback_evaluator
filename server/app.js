@@ -12,6 +12,7 @@ import { eventRoutes, ownQuestionRoutes, promptRoutes } from './routes/misc.js'
 import { researchRoutes } from './routes/research.js'
 import { authRoutes } from './routes/auth.js'
 import { userRoutes } from './routes/users.js'
+import { supportRoutes } from './routes/support.js'
 import { optionalAuth } from './lib/auth.js'
 import { ApiError, notFound, route } from './lib/http.js'
 
@@ -187,6 +188,7 @@ export function createApp({ store = createStore() } = {}) {
   app.use('/api/uploads', uploadFileRoutes(store))
   app.use('/api/prompts', promptRoutes(store))
   app.use('/api/research', researchRoutes(store))
+  app.use('/api/support', supportRoutes(store))
 
   app.use((req, res) => {
     res.status(404).json({ error: { message: `No route for ${req.method} ${req.path}` } })

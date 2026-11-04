@@ -125,6 +125,15 @@ export const api = {
   recordConsent: () => call('POST', '/api/auth/consent'),
   /** Only allowed from the sign-in the consent was given in; deletes their work. */
   withdrawConsent: () => call('POST', '/api/auth/consent/withdraw'),
+
+  /* The support / suggestion channel — server/routes/support.js. */
+  sendSupport: ({ category, subject, body }) => call('POST', '/api/support', { category, subject, body }),
+  mySupport: () => call('GET', '/api/support/mine'),
+  markSupportSeen: () => call('POST', '/api/support/mine/seen'),
+  supportUnread: () => call('GET', '/api/support/unread'),
+  supportInbox: (category) =>
+    call('GET', `/api/support${category ? `?category=${encodeURIComponent(category)}` : ''}`),
+  replySupport: (messageId, text) => call('POST', `/api/support/${messageId}/reply`, { text }),
   changePassword: async (currentPassword, newPassword) => {
     const result = await call('POST', '/api/auth/password', { currentPassword, newPassword })
     setToken(result.token)

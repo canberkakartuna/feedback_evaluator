@@ -4,6 +4,7 @@ import { useT } from './lib/i18n'
 import ConsentScreen from './components/ConsentScreen'
 import Profile from './routes/Profile'
 import SignIn from './routes/SignIn'
+import Support from './routes/Support'
 import StudentLayout from './routes/student/StudentLayout'
 import StudentEntry from './routes/student/StudentEntry'
 import Join from './routes/student/Join'
@@ -16,6 +17,7 @@ import ClassList from './routes/teacher/ClassList'
 import PreviewActivity from './routes/teacher/PreviewActivity'
 import StudentWork from './routes/teacher/StudentWork'
 import Labelling from './routes/teacher/Labelling'
+import SupportInbox from './routes/teacher/SupportInbox'
 import AdminLayout from './routes/admin/AdminLayout'
 import People from './routes/admin/People'
 
@@ -113,6 +115,7 @@ export default function App() {
             <Route path="/work/:sessionId" element={<Session />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/profil" element={<Profile />} />
+            <Route path="/support" element={<Support />} />
 
             <Route
               path="/teacher"
@@ -129,6 +132,7 @@ export default function App() {
               <Route path="class-list" element={<ClassList />} />
               <Route path="students/:sessionId" element={<StudentWork />} />
               <Route path="labelling" element={<Labelling />} />
+              <Route path="support" element={<SupportInbox />} />
             </Route>
 
             <Route

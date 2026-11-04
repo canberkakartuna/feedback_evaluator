@@ -47,6 +47,7 @@ export function createMemoryStore() {
   const uploads = collection() // id -> upload metadata
   const prompts = []
   const snippetLabels = collection() // snippetId -> label
+  const support = collection() // id -> support / suggestion message
   const seqs = collection() // sessionId -> last seq handed out
 
   const answerKey = (sessionId, questionId) => `${sessionId}:${questionId}`
@@ -428,6 +429,35 @@ export function createMemoryStore() {
       },
       async list() {
         return prompts.map(clone)
+      },
+    },
+
+    support: {
+      async insert(doc) {
+        support.set(doc.id, doc)
+        return clone(doc)
+      },
+      async findById(id) {
+        return clone(support.get(id) ?? null)
+      },
+      async update(id, patch) {
+        const current = support.get(id)
+        if (!current) return null
+        const next = { ...current, ...patch }
+        support.set(id, next)
+        return clone(next)
+      },
+      async list({ userId, teacherId, category, limit = 500 } = {}) {
+        return [...support.values()]
+          .filter(
+            (message) =>
+              matches(userId, message.userId) &&
+              matches(teacherId, message.teacherId ?? null) &&
+              matches(category, message.category),
+          )
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .slice(0, limit)
+          .map(clone)
       },
     },
 

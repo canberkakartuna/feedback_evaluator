@@ -1859,6 +1859,49 @@ try {
   )
   config.studentSignInRequired = false
 
+  console.log('\nsupport and suggestions')
+  const writer = (await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })).body.token
+  check('anonymous cannot write in', (await call('POST', '/api/support', { body: {} })).status === 401)
+  check(
+    'a category is required',
+    (await call('POST', '/api/support', { token: writer, body: { category: 'rant', subject: 'x', body: 'y' } })).status === 400,
+  )
+  check(
+    'a title and a message are required',
+    (await call('POST', '/api/support', { token: writer, body: { category: 'support', subject: ' ', body: 'y' } })).status === 400,
+  )
+  const ticket = await call('POST', '/api/support', {
+    token: writer,
+    body: { category: 'support', subject: 'Upload fails', body: 'My photo does not upload.' },
+  })
+  check('a student writes in', ticket.status === 201 && ticket.body.message.reply === null)
+  check('filed with their teacher', ticket.body.message.teacherId === teacher.id)
+  await call('POST', '/api/support', {
+    token: writer,
+    body: { category: 'suggestion', subject: 'Dark mode', body: 'Please add one.' },
+  })
+  const teacherInbox = await call('GET', '/api/support', { token: teacherToken })
+  check('their teacher sees both', teacherInbox.status === 200 && teacherInbox.body.messages.length === 2)
+  const onlySuggestions = await call('GET', '/api/support?category=suggestion', { token: teacherToken })
+  check('filtered by category', onlySuggestions.body.messages.length === 1 && onlySuggestions.body.messages[0].category === 'suggestion')
+  check('another teacher sees none', (await call('GET', '/api/support', { token: otherTeacherToken })).body.messages.length === 0)
+  check('an admin sees them all', (await call('GET', '/api/support', { token: adminToken })).body.messages.length >= 2)
+  check('a student has no inbox', (await call('GET', '/api/support', { token: writer })).status === 403)
+  check(
+    'another teacher cannot reply',
+    (await call('POST', `/api/support/${ticket.body.message.id}/reply`, { token: otherTeacherToken, body: { text: 'hi' } })).status === 403,
+  )
+  const replied = await call('POST', `/api/support/${ticket.body.message.id}/reply`, {
+    token: teacherToken,
+    body: { text: 'Try a JPG under 10 MB.' },
+  })
+  check('their teacher replies', replied.status === 200 && replied.body.message.reply.text === 'Try a JPG under 10 MB.')
+  check('which is unread for the student', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 1)
+  const mine = await call('GET', '/api/support/mine', { token: writer })
+  check('they see the reply when they come back', mine.body.messages.some((message) => message.reply?.text === 'Try a JPG under 10 MB.' && message.unread))
+  await call('POST', '/api/support/mine/seen', { token: writer })
+  check('and once read it is no longer unread', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 0)
+
   console.log('\nnot found')
   const nowhere = await call('GET', '/api/nope')
   check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))

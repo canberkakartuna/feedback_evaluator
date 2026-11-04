@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
 import { isStaff } from '../../shared/roles'
 import { homeFor, useAuth } from '../lib/auth'
@@ -41,6 +42,20 @@ export default function TopBar({
   const { user, ready, signOut } = useAuth()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
+  // Replies waiting on the support channel, for the dot on its button.
+  const [supportUnread, setSupportUnread] = useState(0)
+
+  useEffect(() => {
+    if (!ready || !user) return undefined
+    let alive = true
+    api
+      .supportUnread()
+      .then((result) => alive && setSupportUnread(result.unread))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [ready, user])
 
   const consoleHref = user ? homeFor(user) : '/'
   const hasConsole = showConsole && consoleHref !== '/'
@@ -101,6 +116,16 @@ export default function TopBar({
       {profile && ready && user ? (
         <Link className="ch-btn" to="/profil">
           {t('nav.profile')}
+        </Link>
+      ) : null}
+
+      {/* The support / suggestion channel, for anyone signed in (3 Nov 2026 doc). */}
+      {ready && user ? (
+        <Link className="ch-btn" to="/support">
+          {t('nav.support')}
+          {supportUnread > 0 ? (
+            <span className="ch-dot" aria-label={t('nav.supportUnread')} />
+          ) : null}
         </Link>
       ) : null}
 
