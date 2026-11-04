@@ -941,7 +941,7 @@ try {
   // Taken back out again: everything below counts rows, and a session left
   // lying in the store would make the roster assertions about a student's work
   // be about this one instead.
-  await call('DELETE', `/api/sessions/${returning.body.session.id}`)
+  await call('DELETE', `/api/sessions/${returning.body.session.id}`, { token: studentToken })
 
   /**
    * The anonymous door: no token, no code, no password. Everything that follows
@@ -980,7 +980,7 @@ try {
 
   // Removed again: everything below this point counts sessions.
   for (const spare of [nicknamed, longNickname, blankNickname, namedAccount]) {
-    await call('DELETE', `/api/sessions/${spare.body.session.id}`)
+    await call('DELETE', `/api/sessions/${spare.body.session.id}`, { token: studentToken })
   }
 
   const started = await call('POST', '/api/sessions', {
@@ -1849,6 +1849,8 @@ try {
     'a pre-key consent can be withdrawn from the sign-in it was given in',
     (await call('GET', '/api/auth/me', { token: numberToken })).body.user.canWithdrawConsent === true,
   )
+  // A clock tick apart, so the new token is unambiguously issued after the agreement.
+  await new Promise((resolve) => setTimeout(resolve, 5))
   const laterSignIn = await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })
   check(
     'but not from a sign-in after it',
@@ -1877,6 +1879,22 @@ try {
 
   console.log('\nsupport and suggestions')
   const writer = (await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })).body.token
+  // Deleting an account's session follows the withdrawal rule too.
+  const writerStart = await call('POST', '/api/sessions', { token: writer, body: { activityId: seeded.activity.id } })
+  const writerSession = writerStart.body.session
+  check(
+    "an account's session cannot be deleted without its token",
+    (await call('DELETE', `/api/sessions/${writerSession.id}`)).status === 401,
+  )
+  check(
+    'nor by someone else',
+    (await call('DELETE', `/api/sessions/${writerSession.id}`, { token: teacherToken })).status === 403,
+  )
+  check(
+    'nor by its owner from a later sign-in',
+    (await call('DELETE', `/api/sessions/${writerSession.id}`, { token: writer })).status === 403,
+  )
+
   check('anonymous cannot write in', (await call('POST', '/api/support', { body: {} })).status === 401)
   check(
     'a category is required',

@@ -2,7 +2,7 @@ import express from 'express'
 import { config } from '../config.js'
 import { isStaff } from '../../shared/roles.js'
 import { cleanNickname } from '../../shared/session.js'
-import { hasCurrentConsent } from '../services/users.js'
+import { canWithdrawConsent, hasCurrentConsent } from '../services/users.js'
 import { removeSessionData } from '../services/withdrawal.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import {
@@ -264,12 +264,27 @@ export function sessionRoutes(store) {
     }),
   )
 
-  /** "Delete my session" — the withdrawal half of consent. */
+  /**
+   * "Delete my session" — the withdrawal half of consent.
+   *
+   * A session that belongs to an account follows the same rule as withdrawing
+   * from the profile: only its owner, and only during the sign-in the consent
+   * was given in (services/users.js canWithdrawConsent). An anonymous session
+   * has no account to check against, so whoever holds its id may delete it.
+   */
   router.delete(
     '/:sessionId',
     route(async (req, res) => {
       const session = await store.sessions.findById(req.params.sessionId)
       if (!session) throw notFound('No such session')
+
+      if (session.userId) {
+        if (!req.user) throw new ApiError(401, req.authError ?? 'Sign in to delete this session')
+        if (req.user.id !== session.userId) throw forbidden('This session is not yours')
+        if (!canWithdrawConsent(req.user, req.authToken)) {
+          throw forbidden('Consent can only be withdrawn during the sign-in it was given in')
+        }
+      }
 
       const { files } = await removeSessionData(store, session)
       res.json({ deleted: true, sessionId: session.id, files })

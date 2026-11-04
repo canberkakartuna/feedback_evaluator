@@ -220,7 +220,6 @@ export const api = {
     call('POST', '/api/sessions', { consent, activityId, code, device, nickname }),
   resumeSession: (sessionId) => call('GET', `/api/sessions/${sessionId}`),
   endSession: (sessionId) => call('POST', `/api/sessions/${sessionId}/end`),
-  deleteSession: (sessionId) => call('DELETE', `/api/sessions/${sessionId}`),
 
   saveAnswer: (sessionId, questionId, patch) =>
     call('PUT', `/api/sessions/${sessionId}/answers/${questionId}`, patch),
