@@ -1190,6 +1190,15 @@ try {
     ownPhoto.status === 201 && ownPhoto.body.question.prompt === '' && ownPhoto.body.question.image?.type === 'image/png',
   )
   check('its storage path is not leaked', ownPhoto.body.question.image?.path === undefined)
+  const [twinA, twinB] = await Promise.all(
+    ['twin a', 'twin b'].map((prompt) =>
+      call('POST', `/api/sessions/${session.id}/own-questions`, { body: { prompt } }),
+    ),
+  )
+  check(
+    'two own questions sent at once both land, under different ids',
+    twinA.status === 201 && twinB.status === 201 && twinA.body.question.id !== twinB.body.question.id,
+  )
   check('and its bytes are served', (await fetch(`${base}${ownPhoto.body.question.image.url}`)).status === 200)
 
   const events = await call('POST', `/api/sessions/${session.id}/events`, {

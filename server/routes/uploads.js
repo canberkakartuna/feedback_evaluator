@@ -4,6 +4,49 @@ import { objectKey, storage } from '../lib/storage.js'
 import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
 import { badRequest, id, notFound, now, route, unavailable } from '../lib/http.js'
 
+/**
+ * A student's photo, decoded, written to storage and recorded under their
+ * session — the one place this happens, for answer uploads and for a
+ * photographed own question alike (routes/misc.js), so both keep the same
+ * record shape and the same photos-only rule.
+ *
+ * Students hand in photos only (3 Nov 2026 doc); PDFs stay a teacher's format
+ * for questions, which go through routes/activities.js.
+ */
+export async function storeStudentPhoto(store, { sessionId, questionId, name, dataUrl, source }) {
+  const { type, bytes } = decodeDataUrl(dataUrl)
+  if (!type.startsWith('image/')) {
+    throw badRequest('Upload a photo: JPG, PNG, WebP or HEIC.')
+  }
+  const cleanName = safeName(name, type)
+
+  const uploadId = id('upl')
+  const files = storage()
+  const key = objectKey(sessionId, uploadId, EXTENSIONS[type])
+  const written = await files.put(key, bytes, type)
+
+  return store.uploads.insert({
+    id: uploadId,
+    sessionId,
+    questionId,
+    name: cleanName,
+    type,
+    size: bytes.length,
+    source,
+    /**
+     * Both recorded, and both may be null depending on the backend: `key`
+     * on Spaces, `path` on disk. Storing which one it went to is what lets
+     * a deployment that switches backends still read what came before,
+     * rather than losing every file written under the old one.
+     */
+    storage: files.kind,
+    key,
+    path: written.path,
+    url: `/api/uploads/${uploadId}`,
+    createdAt: now(),
+  })
+}
+
 export function uploadRoutes(store, { resolveQuestion }) {
   const router = express.Router()
 
@@ -13,39 +56,14 @@ export function uploadRoutes(store, { resolveQuestion }) {
       const { session, question } = await resolveQuestion(req)
 
       const source = req.body.source === 'whiteboard' ? 'whiteboard' : 'file'
-      const { type, bytes } = decodeDataUrl(req.body.dataUrl)
-      // Students hand in photos of their working only (3 Nov 2026 doc). PDFs
-      // stay a teacher's format for questions, which go through another route.
-      if (!type.startsWith('image/')) {
-        throw badRequest('Upload a photo of your working: JPG, PNG, WebP or HEIC.')
-      }
-      const name = safeName(req.body.name, type)
-
-      const uploadId = id('upl')
-      const files = storage()
-      const key = objectKey(session.id, uploadId, EXTENSIONS[type])
-      const written = await files.put(key, bytes, type)
-
-      const upload = await store.uploads.insert({
-        id: uploadId,
+      const upload = await storeStudentPhoto(store, {
         sessionId: session.id,
         questionId: question.id,
-        name,
-        type,
-        size: bytes.length,
+        name: req.body.name,
+        dataUrl: req.body.dataUrl,
         source,
-        /**
-         * Both recorded, and both may be null depending on the backend: `key`
-         * on Spaces, `path` on disk. Storing which one it went to is what lets
-         * a deployment that switches backends still read what came before,
-         * rather than losing every file written under the old one.
-         */
-        storage: files.kind,
-        key,
-        path: written.path,
-        url: `/api/uploads/${uploadId}`,
-        createdAt: now(),
       })
+      const { name, type } = upload
 
       /** A board replaces its previous export rather than stacking copies. */
       const stored = await store.answers.find(session.id, question.id)
@@ -67,7 +85,7 @@ export function uploadRoutes(store, { resolveQuestion }) {
           questionId: question.id,
           type: 'student_uploaded_image',
           at: now(),
-          payload: { uploadId: upload.id, source, type, size: upload.size, storage: files.kind },
+          payload: { uploadId: upload.id, source, type, size: upload.size, storage: upload.storage },
         },
       ])
 

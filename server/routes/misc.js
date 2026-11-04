@@ -1,8 +1,7 @@
 import express from 'express'
 import { ownTutor } from '../../shared/tutor-scripts.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
-import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
-import { objectKey, storage } from '../lib/storage.js'
+import { removeBytes, storeStudentPhoto } from './uploads.js'
 import { badRequest, id, notFound, now, requireString, route } from '../lib/http.js'
 
 /** Doc item 8: questions the student brings themselves. */
@@ -30,52 +29,46 @@ export function ownQuestionRoutes(store) {
       }
 
       const existing = await store.ownQuestions.listBySession(session.id)
+      // `number` is only the display code; the id is random, so two requests
+      // arriving together (a double tap, two tabs) cannot collide on it.
       const number = existing.length + 1
-      const questionId = `own_${session.id}_${number}`
+      const questionId = id('own')
 
-      let image = null
-      if (photo) {
-        const { type, bytes } = decodeDataUrl(photo.dataUrl)
-        if (!type.startsWith('image/')) {
-          throw badRequest('Add a photo of the question: JPG, PNG, WebP or HEIC.')
-        }
-        const name = safeName(photo.name, type)
-        const uploadId = id('upl')
-        const files = storage()
-        const key = objectKey(session.id, uploadId, EXTENSIONS[type])
-        const written = await files.put(key, bytes, type)
-        const upload = await store.uploads.insert({
-          id: uploadId,
+      const upload = photo
+        ? await storeStudentPhoto(store, {
+            sessionId: session.id,
+            questionId,
+            name: photo.name,
+            dataUrl: photo.dataUrl,
+            source: 'own-question',
+          })
+        : null
+      const image = upload
+        ? { id: upload.id, name: upload.name, type: upload.type, size: upload.size, url: upload.url }
+        : null
+
+      let question
+      try {
+        question = await store.ownQuestions.insert({
+          id: questionId,
           sessionId: session.id,
-          questionId,
-          name,
-          type,
-          size: bytes.length,
-          source: 'own-question',
-          storage: files.kind,
-          key,
-          path: written.path,
-          url: `/api/uploads/${uploadId}`,
+          code: `OWN-${String(number).padStart(2, '0')}`,
+          kind: 'Your question',
+          points: 0,
+          prompt,
+          image,
+          markable: false,
+          criteriaCount: 0,
+          hintCount: ownTutor.hints.length,
+          activityId: null,
+          activityTitle: 'Your own questions',
           createdAt: now(),
         })
-        image = { id: upload.id, name, type, size: upload.size, url: upload.url }
+      } catch (error) {
+        // The photo was stored for a question that never came to be.
+        if (upload) await removeBytes(upload)
+        throw error
       }
-
-      const question = await store.ownQuestions.insert({
-        id: questionId,
-        sessionId: session.id,
-        code: `OWN-${String(number).padStart(2, '0')}`,
-        kind: 'Your question',
-        points: 0,
-        prompt,
-        image,
-        markable: false,
-        criteriaCount: 0,
-        hintCount: ownTutor.hints.length,
-        activityId: null,
-        activityTitle: 'Your own questions',
-        createdAt: now(),
-      })
 
       await store.events.insertMany([
         {
