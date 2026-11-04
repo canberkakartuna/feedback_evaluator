@@ -4,13 +4,12 @@ import { requireAuth } from '../lib/auth.js'
 import { hashPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, notFound, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
-import { CLASS_LIST_MAX, cleanStudentNumber, isUsername } from '../../shared/student-number.js'
+import { CLASS_LIST_MAX } from '../../shared/student-number.js'
 import {
+  addToClassList,
   assertCanManage,
-  classListEmail,
   clearUnusedParents,
   loadInScope,
-  newClassListStudent,
   newUser,
   publicUser,
   requireEmail,
@@ -157,52 +156,11 @@ export function userRoutes(store) {
       const parent = await resolveParent(store, req.user, 'student', req.body.teacherId, { scope })
       if (!parent.value) throw badRequest('"teacherId" is required — name the teacher whose class this is')
 
-      const result = { added: [], already: [], taken: [], invalid: [] }
-      const seen = new Set()
-
-      for (const entry of raw) {
-        const studentNumber = cleanStudentNumber(entry)
-        if (!studentNumber || !isUsername(studentNumber)) {
-          result.invalid.push(String(entry).slice(0, 40))
-          continue
-        }
-        if (seen.has(studentNumber)) continue
-        seen.add(studentNumber)
-
-        const existing = await store.users.findByEmail(classListEmail(studentNumber))
-
-        if (!existing) {
-          try {
-            await store.users.create(newClassListStudent({ studentNumber, teacherId: parent.value }))
-            result.added.push(studentNumber)
-          } catch (error) {
-            // Two teachers pasting the same number at once: the loser is told
-            // it is taken, which by then it is.
-            if (!isDuplicateEmail(error)) throw error
-            result.taken.push(studentNumber)
-          }
-        } else if (existing.teacherId !== parent.value || existing.role !== 'student') {
-          result.taken.push(studentNumber)
-        } else if (!existing.active) {
-          await store.users.update(existing.id, { active: true, updatedAt: now() })
-          result.added.push(studentNumber)
-        } else {
-          result.already.push(studentNumber)
-        }
-      }
-
-      if (result.added.length) {
-        await store.events.insertMany([
-          {
-            id: id('evt'),
-            sessionId: null,
-            userId: req.user.id,
-            type: 'class_list_added',
-            at: now(),
-            payload: { teacherId: parent.value, count: result.added.length, by: req.user.id },
-          },
-        ])
-      }
+      const result = await addToClassList(store, {
+        studentNumbers: raw,
+        teacherId: parent.value,
+        byUserId: req.user.id,
+      })
 
       res.status(result.added.length ? 201 : 200).json(result)
     }),

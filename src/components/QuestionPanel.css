@@ -118,6 +118,21 @@
   padding: var(--s-4) var(--s-5);
 }
 
+/*
+ * A question that is only a photo: the card steps aside and the photo, in its
+ * own colours (see .qp-shot--picture), is the card. A padded box of the
+ * theme's colour around it was what made it hard to read.
+ */
+.qp-question--picture {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.qp-question--picture .qp-shot {
+  margin: 0;
+}
+
 .qp-question > :first-child {
   margin-top: 0;
 }
@@ -834,6 +849,55 @@
    without dominating the panel — a worksheet crop is usually wider than tall. */
 .qp-shot {
   margin: var(--s-3) 0 0;
+}
+
+/*
+ * A photographed question carries its own background out to the edges of the
+ * frame. Each side of the frame shows the image's outermost strip on that side,
+ * stretched across, so the frame continues the image's edge colours and the
+ * question no longer sits on a white box with a border. A slight blur hides
+ * any grain in the stretched strip.
+ *
+ * It is done in CSS rather than by sampling pixels, because the image comes
+ * from signed Spaces URLs that a canvas cannot read across origins.
+ */
+.qp-shot--picture {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: var(--r-2);
+}
+
+.qp-shot--picture::before,
+.qp-shot--picture::after {
+  content: '';
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  width: calc(50% + 12px);
+  z-index: -1;
+  /* 5000% of a half-frame shows about the outer 2% of the image. */
+  background-image: var(--shot-url);
+  background-size: 5000% 100%;
+  background-repeat: no-repeat;
+  filter: blur(6px);
+}
+
+.qp-shot--picture::before {
+  left: -12px;
+  background-position: left center;
+}
+
+.qp-shot--picture::after {
+  right: -12px;
+  background-position: right center;
+}
+
+.qp-shot--picture .qp-shot-img {
+  margin: 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .qp-shot-pdf {

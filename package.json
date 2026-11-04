@@ -14,6 +14,7 @@
     "check:openai": "node server/openai.mjs",
     "setup:spaces": "node server/spaces.mjs",
     "seed:functions": "node server/seed-functions.mjs",
+    "seed:class-list": "node server/seed-class-list.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

@@ -8,6 +8,8 @@ import {
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, hashPassword } from '../lib/password.js'
 import { config } from '../config.js'
 import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
+import { isDuplicateEmail } from '../store/errors.js'
+import { cleanStudentNumber, isUsername } from '../../shared/student-number.js'
 
 /**
  * Who can see and touch whom.
@@ -315,6 +317,67 @@ export function newClassListStudent({ studentNumber, teacherId }) {
     updatedAt: at,
     lastLoginAt: null,
   }
+}
+
+/**
+ * Puts student numbers on a teacher's class list. `POST /api/users/class-list`
+ * and `npm run seed:class-list` both come through here, so a number gets the same
+ * treatment whichever way it was added. Who may call it, and for which teacher,
+ * is the caller's job; this only does the writing.
+ *
+ * Answers `{ added, already, taken, invalid }` (see the route for what each one
+ * means). A removed number on this teacher's list is put back and counted as
+ * added.
+ */
+export async function addToClassList(store, { studentNumbers, teacherId, byUserId }) {
+  const result = { added: [], already: [], taken: [], invalid: [] }
+  const seen = new Set()
+
+  for (const entry of studentNumbers) {
+    const studentNumber = cleanStudentNumber(entry)
+    if (!studentNumber || !isUsername(studentNumber)) {
+      result.invalid.push(String(entry).slice(0, 40))
+      continue
+    }
+    if (seen.has(studentNumber)) continue
+    seen.add(studentNumber)
+
+    const existing = await store.users.findByEmail(classListEmail(studentNumber))
+
+    if (!existing) {
+      try {
+        await store.users.create(newClassListStudent({ studentNumber, teacherId }))
+        result.added.push(studentNumber)
+      } catch (error) {
+        // Two teachers pasting the same number at once: the loser is told
+        // it is taken, which by then it is.
+        if (!isDuplicateEmail(error)) throw error
+        result.taken.push(studentNumber)
+      }
+    } else if (existing.teacherId !== teacherId || existing.role !== 'student') {
+      result.taken.push(studentNumber)
+    } else if (!existing.active) {
+      await store.users.update(existing.id, { active: true, updatedAt: now() })
+      result.added.push(studentNumber)
+    } else {
+      result.already.push(studentNumber)
+    }
+  }
+
+  if (result.added.length) {
+    await store.events.insertMany([
+      {
+        id: id('evt'),
+        sessionId: null,
+        userId: byUserId,
+        type: 'class_list_added',
+        at: now(),
+        payload: { teacherId, count: result.added.length, by: byUserId },
+      },
+    ])
+  }
+
+  return result
 }
 
 /** Clears the pointer fields a role does not use, so no stale edge survives a role change. */

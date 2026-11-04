@@ -17,6 +17,7 @@ npm run test:api              # 316 end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
 npm run check:openai          # one real call to the tutor's model
 npm run seed:functions -- <teacher email>   # the 5-question Functions activity, EN + TR
+npm run seed:class-list -- <teacher email> <numbers file> [--test]   # a class list; --test adds 11111111…55555555
 ```
 
 The interface is in **English or Turkish**, switched by the EN/TR control that

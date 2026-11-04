@@ -58,6 +58,13 @@ export default function QuestionPanel({
 }) {
   const { lang, t } = useI18n()
   const prompt = promptFor(question, lang)
+  // A photographed question (not a PDF): its address, for the frame around it.
+  const picture =
+    question.image && question.image.type !== 'application/pdf'
+      ? (question.image.preview ?? question.image.url)
+      : null
+  // The photo is the whole question, so the card becomes the photo.
+  const pictureOnly = Boolean(picture) && !prompt && !question.stimulus
   const sheet = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
@@ -161,7 +168,7 @@ export default function QuestionPanel({
 
       <div className="qp-scroll" ref={sheet}>
         <article className="qp-sheet">
-          <div className="qp-question">
+          <div className={pictureOnly ? 'qp-question qp-question--picture' : 'qp-question'}>
             {prompt ? (
               <p className="qp-prompt">
                 <MathText text={prompt} />
@@ -170,7 +177,12 @@ export default function QuestionPanel({
 
             {/* The teacher photographed the question instead of typing it. */}
             {question.image ? (
-              <figure className="qp-shot">
+              <figure
+                className={picture ? 'qp-shot qp-shot--picture' : 'qp-shot'}
+                // The picture's own edge colours fill the frame around it, so
+                // the question does not sit on a box of another colour. See the CSS.
+                style={picture ? { '--shot-url': `url(${JSON.stringify(picture)})` } : undefined}
+              >
                 <QuestionFile
                   file={question.image}
                   className="qp-shot-img"
