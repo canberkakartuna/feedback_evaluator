@@ -79,9 +79,8 @@ export default function StudentEntry() {
     <div className="en-card">
       <p className="eyebrow">{t('entry.step', { current: step, total: totalSteps })}</p>
       <h1 className="en-title">{t('entry.pick.title')}</h1>
-      <p className="en-lede">
-        {signedIn ? t('entry.pick.ledeSignedIn') : t('entry.pick.ledeAnon')}
-      </p>
+      {/* Nothing under the title for a signed-in student (3 Nov 2026 doc). */}
+      {signedIn ? null : <p className="en-lede">{t('entry.pick.ledeAnon')}</p>}
 
       {error ? (
         <p className="cs-note" data-tone="bad" role="alert">

@@ -139,7 +139,6 @@ const en = {
 
     pick: {
       title: 'What are you working on?',
-      ledeSignedIn: 'Set by your teacher, and saved to your account.',
       ledeAnon: 'Pick the one your teacher told you to open. You are working anonymously.',
       signedInAs: 'Signed in as {name}. Everything you do is saved to your account.',
       empty: 'Nothing is open yet. Your teacher has to publish an activity before it appears here.',
@@ -728,7 +727,6 @@ const tr = {
 
     pick: {
       title: 'Ne üzerinde çalışıyorsunuz?',
-      ledeSignedIn: 'Öğretmeniniz belirledi ve hesabınıza kaydedilir.',
       ledeAnon: 'Öğretmeninizin açmanızı söylediği etkinliği seçin. Anonim çalışıyorsunuz.',
       signedInAs: '{name} olarak giriş yaptınız. Yaptığınız her şey hesabınıza kaydedilir.',
       empty: 'Henüz açık bir etkinlik yok. Burada görünmesi için öğretmeninizin bir etkinlik yayımlaması gerekir.',
