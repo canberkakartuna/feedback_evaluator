@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import Navbar from '../components/Navbar'
+import SignInDoors from '../components/SignInDoors'
 import './console.css'
 import '../components/Entry.css'
 
@@ -53,6 +54,7 @@ export default function SignIn() {
           same reason. Home and the language switch are the useful pair. */}
       <Navbar who={false} />
       <div className="en-card">
+        <SignInDoors current="teacher" />
         <p className="eyebrow">{t('signin.eyebrow')}</p>
         <h1 className="en-title">{t('signin.title')}</h1>
 

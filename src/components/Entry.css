@@ -205,3 +205,39 @@
     font-size: var(--t-22);
   }
 }
+
+/* ── student / teacher sign-in doors ─────────────────────────── */
+
+.en-doors {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--s-5);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  overflow: hidden;
+}
+
+.en-door {
+  flex: 1;
+  padding: 9px var(--s-3);
+  text-align: center;
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--graphite);
+  text-decoration: none;
+  background: var(--paper-raise);
+}
+
+.en-door + .en-door {
+  border-left: 1px solid var(--edge);
+}
+
+.en-door:hover {
+  color: var(--pen);
+}
+
+.en-door[aria-current='page'] {
+  background: var(--pen-soft);
+  color: var(--pen-deep);
+}

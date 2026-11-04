@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Link, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { STUDENT_NUMBER_MAX } from '../../../shared/student-number'
+import { Navigate, Outlet } from 'react-router-dom'
 import { isStaff } from '../../../shared/roles'
 import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
 import Navbar from '../../components/Navbar'
+import SignInDoors from '../../components/SignInDoors'
 import '../../components/Entry.css'
 import '../console.css'
 
@@ -12,8 +12,8 @@ import '../console.css'
  * Everything before a session starts, in the order the questions actually have
  * to be asked:
  *
- *   1  who are you    a student number off the class list, or an email and
- *                     password for the few students with a full account
+ *   1  who are you    a username (their 8-digit student number) off the class
+ *                     list; teachers use the other door, /signin
  *   —  the notice     once, ever, the first time they sign in — that is the
  *                     ConsentGate in App.jsx, not a step here
  *   2  the work       pick from the list, or the activity a class code named
@@ -35,7 +35,6 @@ import '../console.css'
  */
 export default function StudentLayout() {
   const t = useT()
-  const { pathname } = useLocation()
   const { user, ready, problem, refresh, signInWithNumber } = useAuth()
 
   const [studentNumber, setStudentNumber] = useState('')
@@ -49,11 +48,14 @@ export default function StudentLayout() {
    * constant that would be wrong for someone already signed in.
    */
   const steps = [...(needsWho ? ['who'] : []), 'work']
+
+  /** A username is exactly eight digits (3 Nov 2026 doc). */
+  const usernameReady = /^\d{8}$/.test(studentNumber)
   const stepOf = (name) => steps.indexOf(name) + 1
 
   const signIn = async (event) => {
     event.preventDefault()
-    if (!studentNumber.trim()) return
+    if (!usernameReady) return
 
     setBusy(true)
     setError(null)
@@ -131,6 +133,7 @@ export default function StudentLayout() {
       <main className="en-page">
         <Navbar />
         <div className="en-card">
+          <SignInDoors current="student" />
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('who'), total: steps.length })}
           </p>
@@ -147,12 +150,14 @@ export default function StudentLayout() {
                 className="cs-input mono"
                 autoFocus
                 autoComplete="username"
-                inputMode="text"
+                inputMode="numeric"
+                pattern="[0-9]{8}"
                 spellCheck="false"
-                maxLength={STUDENT_NUMBER_MAX + 8}
+                maxLength={8}
                 placeholder={t('entry.who.numberPlaceholder')}
                 value={studentNumber}
-                onChange={(event) => setStudentNumber(event.target.value)}
+                // Digits only, so anything else cannot be typed in the first place.
+                onChange={(event) => setStudentNumber(event.target.value.replace(/\D/g, '').slice(0, 8))}
               />
               <p className="cs-hint">{t('entry.who.numberHint')}</p>
             </div>
@@ -167,14 +172,10 @@ export default function StudentLayout() {
               <button
                 type="submit"
                 className="en-btn en-btn-primary"
-                disabled={busy || !studentNumber.trim()}
+                disabled={busy || !usernameReady}
               >
                 {busy ? t('entry.who.busy') : t('entry.who.go')}
               </button>
-              {/* The way in for staff, and for the few students with a password. */}
-              <Link className="en-btn" to="/signin" state={{ from: pathname }}>
-                {t('entry.who.signIn')}
-              </Link>
             </div>
           </form>
         </div>

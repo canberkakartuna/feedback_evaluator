@@ -84,13 +84,13 @@ const en = {
   },
 
   signin: {
-    eyebrow: 'Staff and students with an account',
-    title: 'Sign in',
+    eyebrow: 'Teachers and staff',
+    title: 'Teacher sign-in',
     email: 'Email',
     password: 'Password',
     submit: 'Sign in',
     busy: 'Signing in…',
-    noAccount: 'No account? Students join with a code from their teacher, or pick from the list.',
+    noAccount: 'Students sign in on the Student sign-in tab with their username.',
     staffAccounts: 'Teacher accounts are created by an administrator.',
   },
 
@@ -121,15 +121,20 @@ const en = {
     step: 'Step {current} of {total}',
 
     who: {
-      title: 'Sign in with your student number',
-      lede: 'Your teacher has put your class list in. Type your number and you are in — no name, email or password. Use the same number next time and your work will be waiting.',
-      numberLabel: 'Student number',
+      title: 'Student sign-in',
+      lede: 'Sign in with the same username next time and your work will be waiting for you.',
+      numberLabel: 'Username',
       numberPlaceholder: '20230145',
-      numberHint: 'Only the number. Nothing here asks for your name.',
+      numberHint: 'Only an 8-digit number can be entered.',
       go: 'Continue',
       busy: 'Checking…',
-      notListed: 'That number is not on a class list. Check it, or ask your teacher to add it.',
-      signIn: 'I have an email and password',
+      notListed: 'That username is not on a class list. Check it, or ask your teacher to add it.',
+    },
+
+    doors: {
+      label: 'Who is signing in',
+      student: 'Student sign-in',
+      teacher: 'Teacher sign-in',
     },
 
     pick: {
@@ -670,14 +675,13 @@ const tr = {
   },
 
   signin: {
-    eyebrow: 'Hesabı olan öğretmenler ve öğrenciler',
-    title: 'Giriş yap',
+    eyebrow: 'Öğretmenler ve yöneticiler',
+    title: 'Öğretmen girişi',
     email: 'E-posta',
     password: 'Şifre',
     submit: 'Giriş yap',
     busy: 'Giriş yapılıyor…',
-    noAccount:
-      'Hesabınız yok mu? Öğrenciler öğretmenlerinden aldıkları sınıf koduyla ya da listeden seçerek katılır.',
+    noAccount: 'Öğrenciler Öğrenci girişi sekmesinden kullanıcı adlarıyla giriş yapar.',
     staffAccounts: 'Öğretmen hesaplarını yönetici oluşturur.',
   },
 
@@ -706,15 +710,20 @@ const tr = {
     step: 'Adım {current} / {total}',
 
     who: {
-      title: 'Öğrenci numaranla giriş yap',
-      lede: 'Öğretmenin sınıf listeni sisteme ekledi. Numaranı yaz, içeridesin — ad, e-posta ya da şifre yok. Bir dahaki sefere aynı numarayla girersen çalışman seni bekliyor olacak.',
-      numberLabel: 'Öğrenci numarası',
+      title: 'Öğrenci girişi',
+      lede: 'Bir dahaki sefere yine aynı kullanıcı adı ile giriş yaparsan çalışman seni bekliyor olacak.',
+      numberLabel: 'Kullanıcı Adı',
       numberPlaceholder: '20230145',
-      numberHint: 'Yalnızca numara. Burada adın sorulmaz.',
+      numberHint: 'Sadece 8 haneli sayısal değer girilebilir',
       go: 'Devam et',
       busy: 'Kontrol ediliyor…',
-      notListed: 'Bu numara bir sınıf listesinde yok. Numarayı kontrol et ya da öğretmeninden eklemesini iste.',
-      signIn: 'E-posta ve şifrem var',
+      notListed: 'Bu kullanıcı adı bir sınıf listesinde yok. Kontrol et ya da öğretmeninden eklemesini iste.',
+    },
+
+    doors: {
+      label: 'Kim giriş yapıyor',
+      student: 'Öğrenci girişi',
+      teacher: 'Öğretmen girişi',
     },
 
     pick: {
