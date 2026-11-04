@@ -1,6 +1,8 @@
 /** What the answer box accepts as uploaded working. */
 export const MAX_BYTES = 10 * 1024 * 1024
 export const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
+/** Students hand in photos of their working only; PDFs are for teachers' questions. */
+export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/heic,image/webp'
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/webp', 'image/svg+xml']
 
@@ -13,12 +15,14 @@ export function isImage(type) {
  * written to complete the sentence "<name> <reason>." so the panel can name
  * the file and the fix in one line.
  */
-export function partitionFiles(files) {
+export function partitionFiles(files, { photosOnly = false } = {}) {
   const accepted = []
   const rejected = []
 
   for (const file of files) {
-    if (!isImage(file.type) && file.type !== 'application/pdf') {
+    if (photosOnly && !isImage(file.type)) {
+      rejected.push({ name: file.name, reason: 'is not a photo (JPG or PNG)' })
+    } else if (!isImage(file.type) && file.type !== 'application/pdf') {
       rejected.push({ name: file.name, reason: 'is not a JPG, PNG or PDF' })
     } else if (file.size > MAX_BYTES) {
       rejected.push({ name: file.name, reason: 'is larger than 10 MB' })

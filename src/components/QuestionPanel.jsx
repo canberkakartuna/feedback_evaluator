@@ -3,7 +3,7 @@ import StatusMark from './StatusMark'
 import { MARKS, SELF_MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
-import { ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
+import { PHOTO_ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
 import { promptFor } from '../../shared/activity'
 import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
@@ -62,7 +62,7 @@ export default function QuestionPanel({
   }, [question.id])
 
   const takeFiles = (fileList) => {
-    const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []))
+    const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []), { photosOnly: true })
     setRejected(refused)
     if (accepted.length) onAttach(accepted)
   }
@@ -306,7 +306,7 @@ export default function QuestionPanel({
                     type="file"
                     className="sr-only"
                     multiple
-                    accept={ACCEPT}
+                    accept={PHOTO_ACCEPT}
                     onChange={(event) => {
                       takeFiles(event.target.files)
                       event.target.value = ''

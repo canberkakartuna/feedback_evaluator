@@ -1148,6 +1148,12 @@ try {
   })
   check('unsupported type rejected', badFile.status === 400)
 
+  // Students hand in photos only; a PDF is a teacher's question format.
+  const studentPdf = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'working.pdf', dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK' },
+  })
+  check('a student PDF is refused', studentPdf.status === 400)
+
   console.log('\nown questions + events')
   const own = await call('POST', `/api/sessions/${session.id}/own-questions`, {
     body: { prompt: 'How do I solve 3(x - 2) = 4x + 1?' },

@@ -2,7 +2,7 @@ import express from 'express'
 import { config } from '../config.js'
 import { objectKey, storage } from '../lib/storage.js'
 import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
-import { id, notFound, now, route, unavailable } from '../lib/http.js'
+import { badRequest, id, notFound, now, route, unavailable } from '../lib/http.js'
 
 export function uploadRoutes(store, { resolveQuestion }) {
   const router = express.Router()
@@ -14,6 +14,11 @@ export function uploadRoutes(store, { resolveQuestion }) {
 
       const source = req.body.source === 'whiteboard' ? 'whiteboard' : 'file'
       const { type, bytes } = decodeDataUrl(req.body.dataUrl)
+      // Students hand in photos of their working only (3 Nov 2026 doc). PDFs
+      // stay a teacher's format for questions, which go through another route.
+      if (!type.startsWith('image/')) {
+        throw badRequest('Upload a photo of your working: JPG, PNG, WebP or HEIC.')
+      }
       const name = safeName(req.body.name, type)
 
       const uploadId = id('upl')

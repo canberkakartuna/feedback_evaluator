@@ -243,8 +243,8 @@ const en = {
     boardMeta: '{strokes} · saved as {size}',
     boardHint: 'Squared paper · pen, eraser, undo',
     aPng: 'a PNG',
-    addFile: 'Add a photo or a file',
-    addFileMeta: 'Drop one here or paste it · JPG, PNG or PDF · 10 MB',
+    addFile: 'Add a photo',
+    addFileMeta: 'Drop a photo here or paste it · JPG or PNG · 10 MB',
     rejected: 'Not added: {list}. Fix the file and attach it again.',
     openInTab: 'Open {name} in a new tab',
     check: 'Check my answer',
@@ -333,7 +333,7 @@ const en = {
     drawLabel: 'Draw',
     drawHint: 'Whiteboard',
     uploadLabel: 'Upload',
-    uploadHint: 'Photo or PDF',
+    uploadHint: 'Photo',
   },
 
   teacher: {
@@ -811,8 +811,8 @@ const tr = {
     boardMeta: '{strokes} · {size} olarak kaydedildi',
     boardHint: 'Kareli kâğıt · kalem, silgi, geri al',
     aPng: 'PNG',
-    addFile: 'Fotoğraf ya da dosya ekle',
-    addFileMeta: 'Buraya bırakın ya da yapıştırın · JPG, PNG veya PDF · 10 MB',
+    addFile: 'Fotoğraf ekle',
+    addFileMeta: 'Fotoğrafı buraya bırakın ya da yapıştırın · JPG veya PNG · 10 MB',
     rejected: 'Eklenmedi: {list}. Dosyayı düzeltip yeniden ekleyin.',
     openInTab: '{name} dosyasını yeni sekmede aç',
     check: 'Cevabımı kontrol et',
@@ -893,7 +893,7 @@ const tr = {
     drawLabel: 'Çiz',
     drawHint: 'Tahta',
     uploadLabel: 'Yükle',
-    uploadHint: 'Fotoğraf ya da PDF',
+    uploadHint: 'Fotoğraf',
   },
 
   teacher: {
