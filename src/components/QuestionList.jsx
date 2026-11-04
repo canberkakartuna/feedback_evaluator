@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PHOTO_ACCEPT, isImage, partitionFiles } from '../lib/attachments'
+import { PHOTO_ACCEPT, partitionFiles } from '../lib/attachments'
 import StatusMark from './StatusMark'
 import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { promptFor } from '../../shared/activity'
@@ -38,7 +38,7 @@ export default function QuestionList({
       photosOnly: true,
     })
     setOwnPhotoError(rejected.length ? `${rejected[0].name} ${rejected[0].reason}` : null)
-    if (accepted[0] && isImage(accepted[0].type)) setOwnPhoto(accepted[0])
+    if (accepted[0]) setOwnPhoto(accepted[0])
   }
 
   const askOwn = (event) => {

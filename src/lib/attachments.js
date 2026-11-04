@@ -2,7 +2,24 @@
 export const MAX_BYTES = 10 * 1024 * 1024
 export const ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,application/pdf'
 /** Students hand in photos of their working only; PDFs are for teachers' questions. */
-export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/heic,image/webp'
+export const PHOTO_ACCEPT = 'image/jpeg,image/png,image/heic,image/webp,.heic,.heif'
+
+/**
+ * The photo formats the API stores (server/lib/attachments.js EXTENSIONS) —
+ * narrower than `isImage`, which also lets SVG through for display.
+ */
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+
+/**
+ * A file's photo type, or null. Browsers outside Safari often leave an
+ * iPhone's HEIC untyped (`file.type === ''`), so the extension decides then.
+ */
+export function photoType(file) {
+  if (PHOTO_TYPES.includes(file.type)) return file.type
+  if (file.type === 'image/heif') return 'image/heic'
+  if (!file.type && /\.(heic|heif)$/i.test(file.name ?? '')) return 'image/heic'
+  return null
+}
 
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/heic', 'image/webp', 'image/svg+xml']
 
@@ -20,9 +37,9 @@ export function partitionFiles(files, { photosOnly = false } = {}) {
   const rejected = []
 
   for (const file of files) {
-    if (photosOnly && !isImage(file.type)) {
-      rejected.push({ name: file.name, reason: 'is not a photo (JPG or PNG)' })
-    } else if (!isImage(file.type) && file.type !== 'application/pdf') {
+    if (photosOnly && !photoType(file)) {
+      rejected.push({ name: file.name, reason: 'is not a photo (JPG, PNG, WebP or HEIC)' })
+    } else if (!photosOnly && !isImage(file.type) && file.type !== 'application/pdf') {
       rejected.push({ name: file.name, reason: 'is not a JPG, PNG or PDF' })
     } else if (file.size > MAX_BYTES) {
       rejected.push({ name: file.name, reason: 'is larger than 10 MB' })
@@ -50,7 +67,13 @@ export function formatBytes(bytes) {
 export function readAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
+    reader.onload = () => {
+      // An untyped HEIC reads as `data:application/octet-stream;` (or `data:;`),
+      // which the API would refuse; name it for what it is.
+      const type = photoType(file)
+      const result = String(reader.result)
+      resolve(type && type !== file.type ? result.replace(/^data:[^;,]*;/, `data:${type};`) : result)
+    }
     reader.onerror = () => reject(new Error(`Could not read ${file.name}`))
     reader.readAsDataURL(file)
   })
