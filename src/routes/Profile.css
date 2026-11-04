@@ -29,6 +29,10 @@
   text-align: right;
 }
 
+.pf-withdraw {
+  margin-top: var(--s-4);
+}
+
 .pf-consent-note {
   margin: var(--s-3) 0 0;
   border-left: 2px solid var(--pen);

@@ -3,7 +3,7 @@ import { config } from '../config.js'
 import { isStaff } from '../../shared/roles.js'
 import { cleanNickname } from '../../shared/session.js'
 import { hasCurrentConsent } from '../services/users.js'
-import { removeBytes } from './uploads.js'
+import { removeSessionData } from '../services/withdrawal.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import {
   ApiError,
@@ -271,20 +271,8 @@ export function sessionRoutes(store) {
       const session = await store.sessions.findById(req.params.sessionId)
       if (!session) throw notFound('No such session')
 
-      const removedUploads = await store.uploads.removeBySession(session.id)
-      await Promise.all([
-        store.answers.removeBySession(session.id),
-        store.messages.removeBySession(session.id),
-        store.events.removeBySession(session.id),
-        store.ownQuestions.removeBySession(session.id),
-        store.sessions.remove(session.id),
-      ])
-
-      // Files too, or "delete" is a lie. Goes through the storage backend so it
-      // reaches Spaces as well as disk — see removeBytes in routes/uploads.js.
-      await Promise.all(removedUploads.map(removeBytes))
-
-      res.json({ deleted: true, sessionId: session.id, files: removedUploads.length })
+      const { files } = await removeSessionData(store, session)
+      res.json({ deleted: true, sessionId: session.id, files })
     }),
   )
 

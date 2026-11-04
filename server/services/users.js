@@ -44,9 +44,21 @@ import { badRequest, forbidden, id, notFound, now } from '../lib/http.js'
 export const hasCurrentConsent = (user) =>
   Boolean(user?.consent?.given && user.consent.version === config.consentVersion)
 
-export function recordedConsent() {
-  return { given: true, at: now(), version: config.consentVersion }
+/**
+ * `signInKey` is the key of the login token the agreement was given under. It
+ * is what limits withdrawal to that same sign-in (3 Nov 2026 doc): once the
+ * student signs out and back in, the key no longer matches and their consent
+ * stands. It never leaves the server — see publicUser.
+ */
+export function recordedConsent(signInKey = null) {
+  return { given: true, at: now(), version: config.consentVersion, signInKey }
 }
+
+/** May the request holding this token key still withdraw this user's consent? */
+export const canWithdrawConsent = (user, authKey) =>
+  Boolean(
+    authKey && user?.consent?.signInKey && user.consent.signInKey === authKey && hasCurrentConsent(user),
+  )
 
 /**
  * The hash never leaves the server, on any path.
@@ -55,11 +67,20 @@ export function recordedConsent() {
  * decide whether to show the notice, and deciding it here keeps the version
  * comparison on the side that owns the version.
  */
-export function publicUser(user) {
+export function publicUser(user, { authKey = null } = {}) {
   if (!user) return null
   const { passwordHash: _passwordHash, ...rest } = user
+  let consent = user.consent
+  if (consent && typeof consent === 'object') {
+    const { signInKey: _signInKey, ...shown } = consent
+    consent = shown
+  }
   return {
     ...rest,
+    consent,
+    // Only true for the sign-in the agreement was given under; callers that do
+    // not pass the request's token key get false, which is the safe answer.
+    canWithdrawConsent: canWithdrawConsent(user, authKey),
     // A class-list student's address is a placeholder (see classListEmail), not
     // something to show anybody as theirs.
     email: user.studentNumber ? null : user.email,

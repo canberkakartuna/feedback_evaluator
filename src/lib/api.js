@@ -123,6 +123,8 @@ export const api = {
    * the wording version are the server's to know. Returns the updated user.
    */
   recordConsent: () => call('POST', '/api/auth/consent'),
+  /** Only allowed from the sign-in the consent was given in; deletes their work. */
+  withdrawConsent: () => call('POST', '/api/auth/consent/withdraw'),
   changePassword: async (currentPassword, newPassword) => {
     const result = await call('POST', '/api/auth/password', { currentPassword, newPassword })
     setToken(result.token)

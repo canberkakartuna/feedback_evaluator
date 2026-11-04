@@ -1812,6 +1812,33 @@ try {
     listedForThem.body.activities.find((entry) => entry.id === seeded.activity.id)?.started === true,
   )
 
+  // Withdrawing consent from the profile, only during the sign-in it was given in.
+  check('the sign-in that agreed may withdraw', consentOnce.body.user.canWithdrawConsent === true)
+  check('which sign-in that was is never sent', consentOnce.body.user.consent.signInKey === undefined)
+  check(
+    'and still may after a reload',
+    (await call('GET', '/api/auth/me', { token: numberToken })).body.user.canWithdrawConsent === true,
+  )
+  check(
+    'a later sign-in may not',
+    (await call('GET', '/api/auth/me', { token: relogin.body.token })).body.user.canWithdrawConsent === false,
+  )
+  check(
+    'and is refused if it tries',
+    (await call('POST', '/api/auth/consent/withdraw', { token: relogin.body.token })).status === 403,
+  )
+  const withdrawn = await call('POST', '/api/auth/consent/withdraw', { token: numberToken })
+  check('withdrawing works from the sign-in that agreed', withdrawn.status === 200 && withdrawn.body.withdrawn === true)
+  check('it removes their work', withdrawn.body.sessions === 1)
+  check('the session is gone', (await call('GET', `/api/sessions/${firstVisit.body.session.id}`)).status === 404)
+  check('and the notice is asked again', withdrawn.body.user.consented === false && withdrawn.body.user.canWithdrawConsent === false)
+  check(
+    'withdrawing twice is refused',
+    (await call('POST', '/api/auth/consent/withdraw', { token: numberToken })).status === 400,
+  )
+  const againConsent = await call('POST', '/api/auth/consent', { token: numberToken })
+  check('agreeing again records a fresh consent', againConsent.body.recorded === true && againConsent.body.user.consented === true)
+
   const removed = await call('PATCH', `/api/users/${numberLogin.body.user.id}`, {
     token: teacherToken,
     body: { active: false },

@@ -5,12 +5,14 @@ import { burnPassword, hashPassword, verifyPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
 import { cleanStudentNumber } from '../../shared/student-number.js'
+import { removeSessionData } from '../services/withdrawal.js'
 import {
   classListEmail,
   hasCurrentConsent,
   newUser,
   publicUser,
   recordedConsent,
+  canWithdrawConsent,
   requireEmail,
   requireName,
   requirePassword,
@@ -160,7 +162,7 @@ export function authRoutes(store) {
     '/me',
     requireAuth,
     route(async (req, res) => {
-      res.json({ user: publicUser(req.user) })
+      res.json({ user: publicUser(req.user, { authKey: req.authToken.key }) })
     }),
   )
 
@@ -177,20 +179,22 @@ export function authRoutes(store) {
    * `CONSENT_VERSION` moves, the same call records the new version, which is how
    * re-consenting to changed wording works.
    *
-   * There is no matching route to *withdraw* here, and that is deliberate:
-   * withdrawal deletes the work rather than editing a flag, and it lives at
-   * `DELETE /api/sessions/:id` where the student actually is.
+   * Withdrawing is `POST /consent/withdraw`, below, and only from the sign-in
+   * this agreement is given under — which is why the token key is recorded.
    */
   router.post(
     '/consent',
     requireAuth,
     route(async (req, res) => {
       if (hasCurrentConsent(req.user)) {
-        return res.json({ user: publicUser(req.user), recorded: false })
+        return res.json({
+          user: publicUser(req.user, { authKey: req.authToken.key }),
+          recorded: false,
+        })
       }
 
       const updated = await store.users.update(req.user.id, {
-        consent: recordedConsent(),
+        consent: recordedConsent(req.authToken.key),
         updatedAt: now(),
       })
 
@@ -205,7 +209,59 @@ export function authRoutes(store) {
         },
       ])
 
-      res.json({ user: publicUser(updated), recorded: true })
+      res.json({ user: publicUser(updated, { authKey: req.authToken.key }), recorded: true })
+    }),
+  )
+
+  /**
+   * Withdrawing from the study, from the profile (3 Nov 2026 doc).
+   *
+   * Only while still signed in under the agreement: a student who agreed, then
+   * signed out and back in, can no longer withdraw, and gets a 403 saying so.
+   * Withdrawal deletes their work — every session with its answers, tutor
+   * thread, events, own questions and files — and clears the agreement, so the
+   * notice is asked again before they can carry on.
+   */
+  router.post(
+    '/consent/withdraw',
+    requireAuth,
+    route(async (req, res) => {
+      if (!hasCurrentConsent(req.user)) throw badRequest('There is no consent on this account to withdraw')
+      if (!canWithdrawConsent(req.user, req.authToken.key)) {
+        throw forbidden('Consent can only be withdrawn during the sign-in it was given in')
+      }
+
+      const sessions = await store.sessions.list({ userId: req.user.id, limit: 10000 })
+      let files = 0
+      for (const session of sessions) files += (await removeSessionData(store, session)).files
+
+      const updated = await store.users.update(req.user.id, {
+        consent: {
+          given: false,
+          version: req.user.consent.version,
+          at: req.user.consent.at,
+          withdrawnAt: now(),
+        },
+        updatedAt: now(),
+      })
+
+      await store.events.insertMany([
+        {
+          id: id('evt'),
+          sessionId: null,
+          userId: req.user.id,
+          type: 'consent_withdrawn',
+          at: now(),
+          payload: { version: req.user.consent.version, sessions: sessions.length, files },
+        },
+      ])
+
+      res.json({
+        user: publicUser(updated, { authKey: req.authToken.key }),
+        withdrawn: true,
+        sessions: sessions.length,
+        files,
+      })
     }),
   )
 
