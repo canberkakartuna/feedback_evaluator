@@ -14,6 +14,13 @@ import './QuestionPanel.css'
 /** `write` → `qp.discardWrite`, the phrase naming what a switch would lose. */
 const discardKey = (mode) => `qp.discard${mode.charAt(0).toUpperCase()}${mode.slice(1)}`
 
+/**
+ * Draw is no longer offered (3 Nov 2026 doc). The server still accepts it, so
+ * an answer already drawn stays readable: its button only shows while that
+ * question is still in Draw mode, and disappears once the student switches.
+ */
+const offeredModes = (current) => MODES.filter((option) => option.id !== 'draw' || current === 'draw')
+
 /** How much is in the answer, in the unit that mode is measured in. */
 const countKey = { write: 'common.words', draw: 'common.strokes', upload: 'common.files' }
 
@@ -186,7 +193,7 @@ export default function QuestionPanel({
 
             {/* One answer per question: choosing a method replaces the others. */}
             <div className="qp-modes" role="group" aria-label={t('qp.howToAnswer')}>
-              {MODES.map((option) => (
+              {offeredModes(state.mode).map((option) => (
                 <button
                   key={option.id}
                   type="button"
