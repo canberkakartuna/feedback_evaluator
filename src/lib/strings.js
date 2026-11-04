@@ -287,7 +287,7 @@ const en = {
      * theirs shown instead, in whatever language they wrote it.
      */
     opening:
-      'Ask me anything you are stuck on. Paste the question in, or just describe where you got lost, and we will work through it together.',
+      'Ask me anything you are stuck on. Tell me where in the question you got lost, and we will work through it together.',
     helpful: 'Marked helpful',
     notHelpful: 'Marked not helpful',
     didThisHelp: 'Did this help?',
@@ -859,7 +859,7 @@ const tr = {
     hide: 'Öğretmeni gizle',
     close: 'Kapat',
     opening:
-      'Takıldığın her şeyi bana sorabilirsin. Soruyu buraya yapıştır ya da nerede kaybolduğunu anlat, birlikte üzerinden geçelim.',
+      'Takıldığın her şeyi bana sorabilirsin. Soruda nerede kaybolduğunu anlat, birlikte üzerinden geçelim.',
     helpful: 'Yararlı olarak işaretlendi',
     notHelpful: 'Yararsız olarak işaretlendi',
     didThisHelp: 'Bu yardımcı oldu mu?',
