@@ -199,6 +199,18 @@ const en = {
     whoCode: 'Session {code}',
   },
 
+  kinds: {
+    explain: 'Explain',
+    calculate: 'Calculate',
+    readData: 'Read the data',
+    compare: 'Compare',
+    evaluate: 'Evaluate',
+    define: 'Define',
+    diagram: 'Diagram',
+    other: 'Other',
+    own: 'Your question',
+  },
+
   qname: {
     authored: 'Q{n}',
     own: 'My Q{n}',
@@ -215,6 +227,7 @@ const en = {
     ownLabel: 'Your own question',
     ownPlaceholder: 'Stuck on something else? Type that question here and work on it with the tutor.',
     ownAdd: 'Add to my list',
+    ownPhoto: 'Or add a photo of it',
     points: '{count} pts',
   },
 
@@ -765,6 +778,18 @@ const tr = {
     whoCode: 'Oturum {code}',
   },
 
+  kinds: {
+    explain: 'Açıkla',
+    calculate: 'Hesapla',
+    readData: 'Veriyi oku',
+    compare: 'Karşılaştır',
+    evaluate: 'Değerlendir',
+    define: 'Tanımla',
+    diagram: 'Diyagram',
+    other: 'Diğer',
+    own: 'Senin sorun',
+  },
+
   qname: {
     authored: 'Soru {n}',
     own: 'Kendi sorum {n}',
@@ -781,6 +806,7 @@ const tr = {
     ownLabel: 'Kendi sorunuz',
     ownPlaceholder: 'Başka bir yerde mi takıldınız? O soruyu buraya yazın ve öğretmenle üzerinde çalışın.',
     ownAdd: 'Listeme ekle',
+    ownPhoto: 'Ya da fotoğrafını ekle',
     points: '{count} puan',
   },
 

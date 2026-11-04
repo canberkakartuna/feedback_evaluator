@@ -1,6 +1,8 @@
 import express from 'express'
 import { ownTutor } from '../../shared/tutor-scripts.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
+import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
+import { objectKey, storage } from '../lib/storage.js'
 import { badRequest, id, notFound, now, requireString, route } from '../lib/http.js'
 
 /** Doc item 8: questions the student brings themselves. */
@@ -13,17 +15,60 @@ export function ownQuestionRoutes(store) {
       const session = await store.sessions.findById(req.params.sessionId)
       if (!session) throw notFound('No such session')
 
-      const prompt = requireString(req.body, 'prompt', { max: 2000 })
+      /**
+       * Typed, photographed, or both (3 Nov 2026 doc): a student stuck on a
+       * worksheet question can photograph it rather than retype it. The photo
+       * is stored like any other upload under the session, so withdrawing the
+       * session removes it too, and the tutor reads it as `question.image`.
+       */
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : ''
+      if (prompt.length > 2000) throw badRequest('"prompt" must be at most 2000 characters')
+      const photo = req.body?.image ?? null
+      if (!prompt && !photo) throw badRequest('Type the question or add a photo of it')
+      if (photo !== null && (typeof photo !== 'object' || Array.isArray(photo))) {
+        throw badRequest('"image" must be an object')
+      }
+
       const existing = await store.ownQuestions.listBySession(session.id)
       const number = existing.length + 1
+      const questionId = `own_${session.id}_${number}`
+
+      let image = null
+      if (photo) {
+        const { type, bytes } = decodeDataUrl(photo.dataUrl)
+        if (!type.startsWith('image/')) {
+          throw badRequest('Add a photo of the question: JPG, PNG, WebP or HEIC.')
+        }
+        const name = safeName(photo.name, type)
+        const uploadId = id('upl')
+        const files = storage()
+        const key = objectKey(session.id, uploadId, EXTENSIONS[type])
+        const written = await files.put(key, bytes, type)
+        const upload = await store.uploads.insert({
+          id: uploadId,
+          sessionId: session.id,
+          questionId,
+          name,
+          type,
+          size: bytes.length,
+          source: 'own-question',
+          storage: files.kind,
+          key,
+          path: written.path,
+          url: `/api/uploads/${uploadId}`,
+          createdAt: now(),
+        })
+        image = { id: upload.id, name, type, size: upload.size, url: upload.url }
+      }
 
       const question = await store.ownQuestions.insert({
-        id: `own_${session.id}_${number}`,
+        id: questionId,
         sessionId: session.id,
         code: `OWN-${String(number).padStart(2, '0')}`,
         kind: 'Your question',
         points: 0,
-        prompt: prompt.trim(),
+        prompt,
+        image,
         markable: false,
         criteriaCount: 0,
         hintCount: ownTutor.hints.length,
@@ -39,7 +84,7 @@ export function ownQuestionRoutes(store) {
           questionId: question.id,
           type: 'student_added_own_question',
           at: now(),
-          payload: { chars: prompt.length },
+          payload: { chars: prompt.length, photo: Boolean(image) },
         },
       ])
 

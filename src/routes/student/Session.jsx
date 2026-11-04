@@ -448,10 +448,11 @@ export default function Session() {
   )
 
   const addOwnQuestion = useCallback(
-    async (prompt) => {
-      if (!prompt.trim()) return
+    async (prompt, photo = null) => {
+      if (!prompt.trim() && !photo) return
       try {
-        const { question } = await api.addOwnQuestion(sessionId, prompt)
+        const image = photo ? { name: photo.name, dataUrl: await readAsDataUrl(photo) } : null
+        const { question } = await api.addOwnQuestion(sessionId, prompt, image)
         const entry = {
           ...question,
           isOwnQuestion: true,

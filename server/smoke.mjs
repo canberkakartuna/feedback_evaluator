@@ -1173,6 +1173,25 @@ try {
   )
   check('own question cannot be marked', ownCheck.status === 400)
 
+  // Photographed rather than typed (3 Nov 2026 doc).
+  const ownEmpty = await call('POST', `/api/sessions/${session.id}/own-questions`, {
+    body: { prompt: '   ' },
+  })
+  check('an own question with neither text nor photo is refused', ownEmpty.status === 400)
+  const ownPdf = await call('POST', `/api/sessions/${session.id}/own-questions`, {
+    body: { image: { name: 'q.pdf', dataUrl: 'data:application/pdf;base64,JVBERi0xLjQK' } },
+  })
+  check('an own question photo must be a photo', ownPdf.status === 400)
+  const ownPhoto = await call('POST', `/api/sessions/${session.id}/own-questions`, {
+    body: { image: { name: 'worksheet.png', dataUrl: PNG } },
+  })
+  check(
+    'an own question can be a photo alone',
+    ownPhoto.status === 201 && ownPhoto.body.question.prompt === '' && ownPhoto.body.question.image?.type === 'image/png',
+  )
+  check('its storage path is not leaked', ownPhoto.body.question.image?.path === undefined)
+  check('and its bytes are served', (await fetch(`${base}${ownPhoto.body.question.image.url}`)).status === 200)
+
   const events = await call('POST', `/api/sessions/${session.id}/events`, {
     body: { events: [{ type: 'question_shown', questionId: markedQ.id }, { type: 'idle' }] },
   })
@@ -1461,7 +1480,8 @@ try {
   console.log('\nwithdrawal')
   const deleted = await call('DELETE', `/api/sessions/${session.id}`)
   check('session deleted', deleted.body.deleted === true)
-  check('its files were removed', deleted.body.files === 2)
+  // Two answer uploads plus the photographed own question.
+  check('its files were removed', deleted.body.files === 3)
   const gone = await call('GET', `/api/sessions/${session.id}`)
   check('session no longer readable', gone.status === 404)
   const afterDelete = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {

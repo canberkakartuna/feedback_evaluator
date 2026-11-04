@@ -22,6 +22,21 @@ const discardKey = (mode) => `qp.discard${mode.charAt(0).toUpperCase()}${mode.sl
  */
 const offeredModes = (current) => MODES.filter((option) => option.id !== 'draw' || current === 'draw')
 
+/**
+ * The fixed kind list (shared/activity.js QUESTION_KINDS) is stored in English;
+ * these say it in the student's language. Unknown kinds show as stored.
+ */
+const kindKey = {
+  Explain: 'kinds.explain',
+  Calculate: 'kinds.calculate',
+  'Read the data': 'kinds.readData',
+  Compare: 'kinds.compare',
+  Evaluate: 'kinds.evaluate',
+  Define: 'kinds.define',
+  Diagram: 'kinds.diagram',
+  Other: 'kinds.other',
+}
+
 /** How much is in the answer, in the unit that mode is measured in. */
 const countKey = { write: 'common.words', draw: 'common.strokes', upload: 'common.files' }
 
@@ -99,11 +114,21 @@ export default function QuestionPanel({
       <header className="qp-bar">
         <div className="qp-measure qp-bar-inner">
           <div className="qp-bar-meta">
-            <span className="eyebrow">{question.activityTitle}</span>
+            {/* An own question's title and kind are set by the server in
+                English, so they are said here instead (3 Nov 2026 doc). */}
+            <span className="eyebrow">
+              {question.isOwnQuestion ? t('ws.ownQuestions') : question.activityTitle}
+            </span>
             <p className="qp-bar-line">
               <span className="qp-code mono">{questionName(question, t)}</span>
               <span className="qp-sep" aria-hidden="true" />
-              <span className="qp-kind">{question.kind}</span>
+              <span className="qp-kind">
+                {question.isOwnQuestion
+                  ? t('kinds.own')
+                  : kindKey[question.kind]
+                    ? t(kindKey[question.kind])
+                    : question.kind}
+              </span>
               {question.points ? (
                 <>
                   <span className="qp-sep" aria-hidden="true" />

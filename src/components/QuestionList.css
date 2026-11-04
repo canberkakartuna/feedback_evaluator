@@ -231,6 +231,51 @@
   color: var(--graphite-faint);
 }
 
+/* An optional photo of the question, under the text box. */
+.ql-own-photo {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: 6px;
+  font-size: var(--t-12);
+}
+
+.ql-own-photo-pick {
+  cursor: pointer;
+  color: var(--pen);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ql-own-photo-pick:focus-within {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+}
+
+.ql-own-photo-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.ql-own-photo-remove {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--t-12);
+  color: var(--graphite);
+  text-decoration: underline;
+}
+
+.ql-own-photo-error {
+  margin: 6px 0 0;
+  font-size: var(--t-12);
+  color: var(--margin);
+}
+
 .ql-own-btn {
   margin-top: 6px;
   border: 1px solid var(--edge);

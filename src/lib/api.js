@@ -244,8 +244,9 @@ export const api = {
   removeUpload: (sessionId, questionId, uploadId) =>
     call('DELETE', `/api/sessions/${sessionId}/questions/${questionId}/uploads/${uploadId}`),
 
-  addOwnQuestion: (sessionId, prompt) =>
-    call('POST', `/api/sessions/${sessionId}/own-questions`, { prompt }),
+  /** `image` is optional: `{ name, dataUrl }` for a photographed question. */
+  addOwnQuestion: (sessionId, prompt, image = null) =>
+    call('POST', `/api/sessions/${sessionId}/own-questions`, { prompt, image }),
 
   /** Batched: the interesting measures are gaps between timestamps. */
   sendEvents: (sessionId, events) => call('POST', `/api/sessions/${sessionId}/events`, { events }),

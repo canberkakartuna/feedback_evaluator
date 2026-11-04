@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PHOTO_ACCEPT, isImage, partitionFiles } from '../lib/attachments'
 import StatusMark from './StatusMark'
 import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { promptFor } from '../../shared/activity'
@@ -27,12 +28,26 @@ export default function QuestionList({
 }) {
   const { lang, t } = useI18n()
   const [ownDraft, setOwnDraft] = useState('')
+  // A photo of the question instead of (or as well as) typing it.
+  const [ownPhoto, setOwnPhoto] = useState(null)
+  const [ownPhotoError, setOwnPhotoError] = useState(null)
+  const canAskOwn = Boolean(ownDraft.trim() || ownPhoto)
+
+  const pickPhoto = (fileList) => {
+    const { accepted, rejected } = partitionFiles(Array.from(fileList ?? []).slice(0, 1), {
+      photosOnly: true,
+    })
+    setOwnPhotoError(rejected.length ? `${rejected[0].name} ${rejected[0].reason}` : null)
+    if (accepted[0] && isImage(accepted[0].type)) setOwnPhoto(accepted[0])
+  }
 
   const askOwn = (event) => {
     event.preventDefault()
-    if (!ownDraft.trim()) return
-    onAskOwn(ownDraft)
+    if (!canAskOwn) return
+    onAskOwn(ownDraft, ownPhoto)
     setOwnDraft('')
+    setOwnPhoto(null)
+    setOwnPhotoError(null)
   }
 
   /** What the student said, or what the checker found. */
@@ -175,7 +190,35 @@ export default function QuestionList({
               placeholder={t('ql.ownPlaceholder')}
               onChange={(event) => setOwnDraft(event.target.value)}
             />
-            <button type="submit" className="ql-own-btn" disabled={!ownDraft.trim()}>
+            <div className="ql-own-photo">
+              {ownPhoto ? (
+                <>
+                  <span className="ql-own-photo-name mono">{ownPhoto.name}</span>
+                  <button type="button" className="ql-own-photo-remove" onClick={() => setOwnPhoto(null)}>
+                    {t('common.remove')}
+                  </button>
+                </>
+              ) : (
+                <label className="ql-own-photo-pick">
+                  <input
+                    type="file"
+                    className="sr-only"
+                    accept={PHOTO_ACCEPT}
+                    onChange={(event) => {
+                      pickPhoto(event.target.files)
+                      event.target.value = ''
+                    }}
+                  />
+                  {t('ql.ownPhoto')}
+                </label>
+              )}
+            </div>
+            {ownPhotoError ? (
+              <p className="ql-own-photo-error" role="alert">
+                {t('qp.rejected', { list: ownPhotoError })}
+              </p>
+            ) : null}
+            <button type="submit" className="ql-own-btn" disabled={!canAskOwn}>
               {t('ql.ownAdd')}
             </button>
           </form>
