@@ -109,6 +109,19 @@
   padding-left: var(--s-5);
 }
 
+/* The question itself — prompt, picture, table — on its own tinted card, so it
+   reads as the thing to answer rather than as more of the page. */
+.qp-question {
+  border: 1px solid var(--question-edge);
+  border-radius: var(--r-2);
+  background: var(--question-bg);
+  padding: var(--s-4) var(--s-5);
+}
+
+.qp-question > :first-child {
+  margin-top: 0;
+}
+
 .qp-prompt {
   margin: 0;
   font-size: var(--t-18);

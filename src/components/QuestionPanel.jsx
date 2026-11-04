@@ -136,53 +136,55 @@ export default function QuestionPanel({
 
       <div className="qp-scroll" ref={sheet}>
         <article className="qp-sheet">
-          {prompt ? (
-            <p className="qp-prompt">
-              <MathText text={prompt} />
-            </p>
-          ) : null}
+          <div className="qp-question">
+            {prompt ? (
+              <p className="qp-prompt">
+                <MathText text={prompt} />
+              </p>
+            ) : null}
 
-          {/* The teacher photographed the question instead of typing it. */}
-          {question.image ? (
-            <figure className="qp-shot">
-              <QuestionFile
-                file={question.image}
-                className="qp-shot-img"
-                frameClassName="qp-shot-pdf"
-                alt={prompt ? t('qp.questionAsSet') : t('qp.question')}
-              />
-            </figure>
-          ) : null}
+            {/* The teacher photographed the question instead of typing it. */}
+            {question.image ? (
+              <figure className="qp-shot">
+                <QuestionFile
+                  file={question.image}
+                  className="qp-shot-img"
+                  frameClassName="qp-shot-pdf"
+                  alt={prompt ? t('qp.questionAsSet') : t('qp.question')}
+                />
+              </figure>
+            ) : null}
 
-          {question.stimulus?.kind === 'table' ? (
-            <figure className="qp-figure">
-              <figcaption className="eyebrow">{question.stimulus.caption}</figcaption>
-              <div className="qp-table-wrap">
-                <table className="qp-table">
-                  <thead>
-                    <tr>
-                      {question.stimulus.columns.map((column) => (
-                        <th key={column} scope="col">
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {question.stimulus.rows.map((row) => (
-                      <tr key={row.join('|')}>
-                        {row.map((cell, cellIndex) => (
-                          <td key={cellIndex} className={cellIndex ? 'mono' : undefined}>
-                            {cell}
-                          </td>
+            {question.stimulus?.kind === 'table' ? (
+              <figure className="qp-figure">
+                <figcaption className="eyebrow">{question.stimulus.caption}</figcaption>
+                <div className="qp-table-wrap">
+                  <table className="qp-table">
+                    <thead>
+                      <tr>
+                        {question.stimulus.columns.map((column) => (
+                          <th key={column} scope="col">
+                            {column}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </figure>
-          ) : null}
+                    </thead>
+                    <tbody>
+                      {question.stimulus.rows.map((row) => (
+                        <tr key={row.join('|')}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={cellIndex} className={cellIndex ? 'mono' : undefined}>
+                              {cell}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </figure>
+            ) : null}
+          </div>
 
           <section className="qp-answer-block">
             <div className="qp-answer-head">

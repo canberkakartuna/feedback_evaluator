@@ -33,6 +33,10 @@
   --stamp: #9d6a15;
   --stamp-soft: #f5eddc;
 
+  /* the question card — set apart from the page around it (3 Nov 2026 doc) */
+  --question-bg: #e9f0f8;
+  --question-edge: #c9d8e8;
+
   /* type */
   --f-display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
   --f-body: 'Literata', Georgia, 'Times New Roman', serif;
@@ -90,6 +94,9 @@
 
     --stamp: #d8a44c;
     --stamp-soft: #2d2415;
+
+    --question-bg: #172430;
+    --question-edge: #2a4052;
 
     --shade: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
   }
