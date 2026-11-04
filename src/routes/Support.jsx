@@ -73,7 +73,7 @@ export default function Support() {
         <h1 className="en-title">{t('support.title')}</h1>
         <p className="en-lede">{t('support.lede')}</p>
 
-        <form className="cs-form" onSubmit={send}>
+        <form className="cs-form" style={{ marginTop: 'var(--s-4)' }} onSubmit={send}>
           <div className="cs-field">
             <label className="cs-label" htmlFor="sp-category">
               {t('support.category')}
