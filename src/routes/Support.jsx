@@ -21,7 +21,7 @@ const CATEGORY_KEY = { support: 'support.categorySupport', suggestion: 'support.
  */
 export default function Support() {
   const t = useT()
-  const { user, ready } = useAuth()
+  const { user, ready, refreshSupportUnread } = useAuth()
   const mine = useAsync(() => (user ? api.mySupport() : Promise.resolve({ messages: [] })), [user?.id])
 
   const [category, setCategory] = useState('support')
@@ -31,11 +31,17 @@ export default function Support() {
   const [error, setError] = useState(null)
   const [sent, setSent] = useState(false)
 
-  // Read once shown — after the list has loaded with its unread flags intact.
+  // Read once shown — after the list has loaded with its unread flags intact —
+  // and only up to when that list was read, then the navbar dot is refreshed.
   const hasUnread = (mine.data?.messages ?? []).some((message) => message.unread)
+  const asOf = mine.data?.asOf
   useEffect(() => {
-    if (hasUnread) api.markSupportSeen().catch(() => {})
-  }, [hasUnread])
+    if (!hasUnread || !asOf) return
+    api
+      .markSupportSeen(asOf)
+      .then(refreshSupportUnread)
+      .catch(() => {})
+  }, [asOf, hasUnread, refreshSupportUnread])
 
   if (!ready) {
     return (

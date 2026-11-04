@@ -1908,14 +1908,15 @@ try {
     token: writer,
     body: { category: 'support', subject: 'Upload fails', body: 'My photo does not upload.' },
   })
-  check('a student writes in', ticket.status === 201 && ticket.body.message.reply === null)
-  check('filed with their teacher', ticket.body.message.teacherId === teacher.id)
+  check('a student writes in', ticket.status === 201 && ticket.body.message.replies.length === 0)
+  check('and is shown no staff ids', ticket.body.message.teacherId === undefined)
   await call('POST', '/api/support', {
     token: writer,
     body: { category: 'suggestion', subject: 'Dark mode', body: 'Please add one.' },
   })
   const teacherInbox = await call('GET', '/api/support', { token: teacherToken })
   check('their teacher sees both', teacherInbox.status === 200 && teacherInbox.body.messages.length === 2)
+  check('filed with their teacher', teacherInbox.body.messages.every((message) => message.teacherId === teacher.id))
   const onlySuggestions = await call('GET', '/api/support?category=suggestion', { token: teacherToken })
   check('filtered by category', onlySuggestions.body.messages.length === 1 && onlySuggestions.body.messages[0].category === 'suggestion')
   check('another teacher sees none', (await call('GET', '/api/support', { token: otherTeacherToken })).body.messages.length === 0)
@@ -1929,11 +1930,31 @@ try {
     token: teacherToken,
     body: { text: 'Try a JPG under 10 MB.' },
   })
-  check('their teacher replies', replied.status === 200 && replied.body.message.reply.text === 'Try a JPG under 10 MB.')
+  check('their teacher replies', replied.status === 200 && replied.body.message.replies.at(-1).text === 'Try a JPG under 10 MB.')
   check('which is unread for the student', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 1)
   const mine = await call('GET', '/api/support/mine', { token: writer })
-  check('they see the reply when they come back', mine.body.messages.some((message) => message.reply?.text === 'Try a JPG under 10 MB.' && message.unread))
-  await call('POST', '/api/support/mine/seen', { token: writer })
+  const mineTicket = mine.body.messages.find((message) => message.id === ticket.body.message.id)
+  check('they see the reply when they come back', mineTicket.replies[0].text === 'Try a JPG under 10 MB.' && mineTicket.unread)
+  check('without the staff ids behind it', mineTicket.teacherId === undefined && mineTicket.replies[0].byId === undefined)
+
+  // A second reply lands after the list was read: it must survive being marked
+  // seen, and stay unread.
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await call('POST', `/api/support/${ticket.body.message.id}/reply`, {
+    token: teacherToken,
+    body: { text: 'Also check it is under 10 MB.' },
+  })
+  check('a seen receipt needs the list it read', (await call('POST', '/api/support/mine/seen', { token: writer, body: {} })).status === 400)
+  await call('POST', '/api/support/mine/seen', { token: writer, body: { asOf: mine.body.asOf } })
+  const afterSeen = (await call('GET', '/api/support/mine', { token: writer })).body.messages.find(
+    (message) => message.id === ticket.body.message.id,
+  )
+  check('a second reply keeps the first', afterSeen.replies.map((reply) => reply.text).join(' | ') === 'Try a JPG under 10 MB. | Also check it is under 10 MB.')
+  check('and one posted after the list was read stays unread', afterSeen.unread === true)
+  await call('POST', '/api/support/mine/seen', {
+    token: writer,
+    body: { asOf: (await call('GET', '/api/support/mine', { token: writer })).body.asOf },
+  })
   check('and once read it is no longer unread', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 0)
 
   console.log('\nnot found')

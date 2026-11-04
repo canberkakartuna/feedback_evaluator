@@ -566,6 +566,14 @@ export function createMongoStore({ uri, dbName } = {}) {
           { ...BARE, returnDocument: 'after' },
         )
       },
+      /** `$push`, so two staff replying at once both land. */
+      async addReply(id, reply) {
+        return (await col('support')).findOneAndUpdate(
+          { _id: id },
+          { $push: { replies: reply } },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
       async list({ userId, teacherId, category, limit = 500 } = {}) {
         const filter = {}
         const where = (field, value) => {

@@ -447,6 +447,13 @@ export function createMemoryStore() {
         support.set(id, next)
         return clone(next)
       },
+      async addReply(id, reply) {
+        const current = support.get(id)
+        if (!current) return null
+        const next = { ...current, replies: [...(current.replies ?? []), reply] }
+        support.set(id, next)
+        return clone(next)
+      },
       async list({ userId, teacherId, category, limit = 500 } = {}) {
         return [...support.values()]
           .filter(

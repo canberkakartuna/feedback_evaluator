@@ -19,10 +19,21 @@ import { badRequest, forbidden, id, notFound, now, requireString, route } from '
 export function supportRoutes(store) {
   const router = express.Router()
 
-  /** What the writer sees: no staff ids, just who answered. */
-  const forWriter = (message) => ({
+  /**
+   * Replies are a list, appended to — a second answer adds to the first rather
+   * than replacing it. "Unread" is a reply newer than `repliesSeenAt`, the
+   * moment the writer last loaded their list (see /mine/seen).
+   */
+  const unread = (message) => {
+    const last = message.replies?.at(-1)?.at
+    return Boolean(last && (!message.repliesSeenAt || last > message.repliesSeenAt))
+  }
+
+  /** What the writer sees: who answered and when, but no staff ids. */
+  const forWriter = ({ teacherId: _teacherId, replies = [], ...message }) => ({
     ...message,
-    unread: Boolean(message.reply && !message.reply.seenAt),
+    replies: replies.map(({ byId: _byId, ...reply }) => reply),
+    unread: unread({ ...message, replies }),
   })
 
   const inScope = (actor, message) =>
@@ -50,7 +61,8 @@ export function supportRoutes(store) {
         category,
         subject,
         body,
-        reply: null,
+        replies: [],
+        repliesSeenAt: null,
         createdAt: now(),
       })
 
@@ -58,30 +70,42 @@ export function supportRoutes(store) {
     }),
   )
 
-  /** Your own messages, newest first, with any replies. */
+  /**
+   * Your own messages, newest first, with any replies. `asOf` is when this
+   * list was read; sending it back to /mine/seen marks read exactly what was
+   * shown, and nothing that arrived after.
+   */
   router.get(
     '/mine',
     requireAuth,
     route(async (req, res) => {
+      const asOf = now()
       const messages = await store.support.list({ userId: req.user.id })
-      res.json({ messages: messages.map(forWriter) })
+      res.json({ messages: messages.map(forWriter), asOf })
     }),
   )
 
-  /** Read receipts for replies, so the navbar dot goes out once they are read. */
+  /**
+   * Read receipts, so the navbar dot goes out once replies are read. Only
+   * `repliesSeenAt` is written — never the replies — so a reply posted in the
+   * meantime can be neither lost nor marked read unseen.
+   */
   router.post(
     '/mine/seen',
     requireAuth,
     route(async (req, res) => {
+      const asOf = req.body?.asOf
+      if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf))) {
+        throw badRequest('"asOf" must be the timestamp /mine returned')
+      }
+      // Never later than now: a client cannot mark future replies read.
+      const through = asOf < now() ? asOf : now()
       const messages = await store.support.list({ userId: req.user.id })
-      const at = now()
-      const unseen = messages.filter((message) => message.reply && !message.reply.seenAt)
-      await Promise.all(
-        unseen.map((message) =>
-          store.support.update(message.id, { reply: { ...message.reply, seenAt: at } }),
-        ),
+      const toMark = messages.filter(
+        (message) => message.replies?.length && (!message.repliesSeenAt || message.repliesSeenAt < through),
       )
-      res.json({ seen: unseen.length })
+      await Promise.all(toMark.map((message) => store.support.update(message.id, { repliesSeenAt: through })))
+      res.json({ seen: toMark.filter(unread).length })
     }),
   )
 
@@ -90,7 +114,7 @@ export function supportRoutes(store) {
     requireAuth,
     route(async (req, res) => {
       const messages = await store.support.list({ userId: req.user.id })
-      res.json({ unread: messages.filter((message) => message.reply && !message.reply.seenAt).length })
+      res.json({ unread: messages.filter(unread).length })
     }),
   )
 
@@ -122,8 +146,12 @@ export function supportRoutes(store) {
       const text = requireString(req.body, 'text', { max: 5000 }).trim()
       if (!text) throw badRequest('Write a reply first')
 
-      const updated = await store.support.update(message.id, {
-        reply: { text, at: now(), byId: req.user.id, byName: req.user.name, seenAt: null },
+      // Appended, so an earlier answer is kept (and the writer sees both).
+      const updated = await store.support.addReply(message.id, {
+        text,
+        at: now(),
+        byId: req.user.id,
+        byName: req.user.name,
       })
       res.json({ message: updated })
     }),

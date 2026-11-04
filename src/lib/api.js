@@ -129,7 +129,8 @@ export const api = {
   /* The support / suggestion channel — server/routes/support.js. */
   sendSupport: ({ category, subject, body }) => call('POST', '/api/support', { category, subject, body }),
   mySupport: () => call('GET', '/api/support/mine'),
-  markSupportSeen: () => call('POST', '/api/support/mine/seen'),
+  /** `asOf` from mySupport: marks read what that list showed, nothing newer. */
+  markSupportSeen: (asOf) => call('POST', '/api/support/mine/seen', { asOf }),
   supportUnread: () => call('GET', '/api/support/unread'),
   supportInbox: (category) =>
     call('GET', `/api/support${category ? `?category=${encodeURIComponent(category)}` : ''}`),

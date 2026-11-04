@@ -32,13 +32,15 @@ export default function SupportMessage({ message, from = false, children }) {
       {from ? <p className="sp-msg-from mono">{message.userName}</p> : null}
       <p className="sp-msg-body">{message.body}</p>
 
-      {message.reply ? (
-        <div className="sp-reply">
-          <p className="sp-reply-head eyebrow">
-            {t('support.replyFrom', { name: message.reply.byName, date: when(message.reply.at, lang) })}
-          </p>
-          <p className="sp-msg-body">{message.reply.text}</p>
-        </div>
+      {message.replies?.length ? (
+        message.replies.map((reply) => (
+          <div key={reply.at} className="sp-reply">
+            <p className="sp-reply-head eyebrow">
+              {t('support.replyFrom', { name: reply.byName, date: when(reply.at, lang) })}
+            </p>
+            <p className="sp-msg-body">{reply.text}</p>
+          </div>
+        ))
       ) : (
         <p className="sp-waiting">{t('support.waiting')}</p>
       )}

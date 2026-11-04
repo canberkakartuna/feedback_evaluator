@@ -94,7 +94,7 @@ export default function SupportInbox() {
                   className="cs-textarea"
                   rows={2}
                   maxLength={5000}
-                  placeholder={message.reply ? t('support.replyAgain') : t('support.replyLabel')}
+                  placeholder={message.replies?.length ? t('support.replyAgain') : t('support.replyLabel')}
                   value={drafts[message.id] ?? ''}
                   onChange={(event) =>
                     setDrafts((prior) => ({ ...prior, [message.id]: event.target.value }))

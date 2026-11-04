@@ -233,7 +233,7 @@ const en = {
     all: 'All',
     reply: 'Send reply',
     replyLabel: 'Write a reply',
-    replyAgain: 'Replace the reply',
+    replyAgain: 'Add another reply',
   },
 
   kinds: {
@@ -849,7 +849,7 @@ const tr = {
     all: 'Tümü',
     reply: 'Cevabı gönder',
     replyLabel: 'Cevap yazın',
-    replyAgain: 'Cevabı değiştirin',
+    replyAgain: 'Bir cevap daha ekleyin',
   },
 
   kinds: {

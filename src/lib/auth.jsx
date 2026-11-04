@@ -17,6 +17,28 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [ready, setReady] = useState(false)
   const [problem, setProblem] = useState(null)
+  /**
+   * Replies waiting on the support channel, for the dot on the navbar's Support
+   * button. Held here rather than fetched by every TopBar, so it is one request
+   * per sign-in, and the Support page can put it out the moment it marks them
+   * read. Keyed on the user id so a different account starts from its own count.
+   */
+  const [supportUnread, setSupportUnread] = useState(0)
+  const userId = user?.id ?? null
+
+  const refreshSupportUnread = useCallback(async () => {
+    if (!getToken()) return setSupportUnread(0)
+    try {
+      setSupportUnread((await api.supportUnread()).unread)
+    } catch {
+      // A missing dot is not worth an error on every screen.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (userId) refreshSupportUnread()
+    else setSupportUnread(0)
+  }, [refreshSupportUnread, userId])
 
   const load = useCallback(async () => {
     if (!getToken()) {
@@ -84,8 +106,10 @@ export function AuthProvider({ children }) {
       },
       refresh: load,
       setUser,
+      supportUnread,
+      refreshSupportUnread,
     }),
-    [load, problem, ready, user],
+    [load, problem, ready, refreshSupportUnread, supportUnread, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
