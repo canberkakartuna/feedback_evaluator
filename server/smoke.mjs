@@ -1735,28 +1735,29 @@ try {
   console.log('\na class list, and signing in with a student number')
   const pasted = await call('POST', '/api/users/class-list', {
     token: teacherToken,
-    body: { studentNumbers: ['2023001', ' 2023-002 ', 'not a number!', '2023001'] },
+    body: { studentNumbers: ['20230001', ' 2023 0002 ', 'not a number!', '2023001', '20230001'] },
   })
   check('a teacher pastes their class list', pasted.status === 201)
-  check('each number once, cleaned', pasted.body.added.join() === '2023001,2023-002')
-  check('and the bad line is reported, not fatal', pasted.body.invalid.length === 1)
+  check('each number once, cleaned', pasted.body.added.join() === '20230001,20230002')
+  check('and the bad lines are reported, not fatal', pasted.body.invalid.length === 2)
+  check('a number that is not 8 digits is not a username', pasted.body.invalid.includes('2023001'))
   const pastedAgain = await call('POST', '/api/users/class-list', {
     token: teacherToken,
-    body: { studentNumbers: ['2023001', '2023-002'] },
+    body: { studentNumbers: ['20230001', '20230002'] },
   })
   check('pasting the same list twice is harmless', pastedAgain.status === 200 && pastedAgain.body.already.length === 2)
   const managerPaste = await call('POST', '/api/users/class-list', {
     token: managerToken,
-    body: { studentNumbers: ['2023003'] },
+    body: { studentNumbers: ['20230003'] },
   })
   check('a manager has to name the teacher', managerPaste.status === 400)
   const taken = await call('POST', '/api/users/class-list', {
     token: adminToken,
-    body: { studentNumbers: ['2023001'], teacherId: null },
+    body: { studentNumbers: ['20230001'], teacherId: null },
   })
   check('an admin with no teacher named is refused too', taken.status === 400)
 
-  const numberLogin = await call('POST', '/api/auth/student', { body: { studentNumber: ' 2023001 ' } })
+  const numberLogin = await call('POST', '/api/auth/student', { body: { studentNumber: ' 20230001 ' } })
   check('a listed number signs in with nothing else', numberLogin.status === 200 && Boolean(numberLogin.body.token))
   check('as a student on that teacher\'s list', numberLogin.body.user.role === 'student' && numberLogin.body.user.teacherId === teacher.id)
   check('with no email shown', numberLogin.body.user.email === null)
@@ -1764,16 +1765,16 @@ try {
   const numberToken = numberLogin.body.token
   const studentPaste = await call('POST', '/api/users/class-list', {
     token: numberToken,
-    body: { studentNumbers: ['2023009'] },
+    body: { studentNumbers: ['20230009'] },
   })
   check('a student cannot keep a class list', studentPaste.status === 403)
   check(
     'an unlisted number is refused',
-    (await call('POST', '/api/auth/student', { body: { studentNumber: '9999999' } })).status === 401,
+    (await call('POST', '/api/auth/student', { body: { studentNumber: '99999999' } })).status === 401,
   )
   check(
     'and the password door stays shut for them',
-    (await call('POST', '/api/auth/login', { body: { email: '2023001@class-list.invalid', password: 'anything at all' } })).status === 401,
+    (await call('POST', '/api/auth/login', { body: { email: '20230001@class-list.invalid', password: 'anything at all' } })).status === 401,
   )
 
   config.studentSignInRequired = true
@@ -1793,7 +1794,7 @@ try {
     body: { mode: 'write', draft: 'f and g agree everywhere' },
   })
 
-  const relogin = await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })
+  const relogin = await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })
   check('signing in again needs no consent', relogin.body.user.consented === true)
   const secondVisit = await call('POST', '/api/sessions', {
     token: relogin.body.token,
@@ -1846,13 +1847,13 @@ try {
   check('a teacher removes a number by deactivating it', removed.body.user.active === false)
   check(
     'and it stops signing in',
-    (await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })).status === 401,
+    (await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })).status === 401,
   )
   const putBack = await call('POST', '/api/users/class-list', {
     token: teacherToken,
-    body: { studentNumbers: ['2023001'] },
+    body: { studentNumbers: ['20230001'] },
   })
-  check('pasting it again puts them back', putBack.body.added.join() === '2023001')
+  check('pasting it again puts them back', putBack.body.added.join() === '20230001')
   check(
     'a class-list student has no email to edit',
     (await call('PATCH', `/api/users/${numberLogin.body.user.id}`, { token: teacherToken, body: { email: 'x@example.com' } })).status === 400,
@@ -1860,7 +1861,7 @@ try {
   config.studentSignInRequired = false
 
   console.log('\nsupport and suggestions')
-  const writer = (await call('POST', '/api/auth/student', { body: { studentNumber: '2023001' } })).body.token
+  const writer = (await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })).body.token
   check('anonymous cannot write in', (await call('POST', '/api/support', { body: {} })).status === 401)
   check(
     'a category is required',

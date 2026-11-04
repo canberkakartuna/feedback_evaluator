@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
+import { isUsername } from '../../../shared/student-number'
 import { isStaff } from '../../../shared/roles'
 import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
@@ -50,7 +51,7 @@ export default function StudentLayout() {
   const steps = [...(needsWho ? ['who'] : []), 'work']
 
   /** A username is exactly eight digits (3 Nov 2026 doc). */
-  const usernameReady = /^\d{8}$/.test(studentNumber)
+  const usernameReady = isUsername(studentNumber)
   const stepOf = (name) => steps.indexOf(name) + 1
 
   const signIn = async (event) => {

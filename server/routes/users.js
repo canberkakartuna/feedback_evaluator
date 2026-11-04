@@ -4,7 +4,7 @@ import { requireAuth } from '../lib/auth.js'
 import { hashPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, notFound, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
-import { CLASS_LIST_MAX, cleanStudentNumber } from '../../shared/student-number.js'
+import { CLASS_LIST_MAX, cleanStudentNumber, isUsername } from '../../shared/student-number.js'
 import {
   assertCanManage,
   classListEmail,
@@ -162,7 +162,7 @@ export function userRoutes(store) {
 
       for (const entry of raw) {
         const studentNumber = cleanStudentNumber(entry)
-        if (!studentNumber) {
+        if (!studentNumber || !isUsername(studentNumber)) {
           result.invalid.push(String(entry).slice(0, 40))
           continue
         }

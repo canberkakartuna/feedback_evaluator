@@ -40,6 +40,15 @@ export function cleanStudentNumber(value) {
   return cleaned
 }
 
+/**
+ * A username is exactly eight digits (3 Nov 2026 doc). The sign-in screen only
+ * lets eight digits be typed, so the class list only takes numbers of that
+ * shape too — otherwise a teacher could list a student who can never sign in.
+ */
+export const USERNAME_SHAPE = /^\d{8}$/
+
+export const isUsername = (value) => USERNAME_SHAPE.test(String(value ?? ''))
+
 /** A pasted column, a comma list, or both — split on anything that is not part of a number. */
 export function splitStudentNumbers(text) {
   return String(text ?? '')
