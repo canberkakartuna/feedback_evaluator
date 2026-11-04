@@ -470,17 +470,6 @@ export default function Session() {
     [fail, questions, sessionId],
   )
 
-  /** The withdrawal half of consent, offered where the student actually is. */
-  const withdraw = useCallback(async () => {
-    if (!window.confirm(t('ws.confirmWithdraw'))) return
-    try {
-      await api.deleteSession(sessionId)
-      navigate('/', { replace: true })
-    } catch (error) {
-      fail(error)
-    }
-  }, [fail, navigate, sessionId, t])
-
   const revealTutor = useCallback(() => {
     setTutorCollapsed(false)
     setTutorOpen(true)
@@ -642,7 +631,6 @@ export default function Session() {
             onSelect={selectQuestion}
             onAskOwn={addOwnQuestion}
             onCollapse={() => setListCollapsed(true)}
-            onWithdraw={withdraw}
           />
         </div>
       </aside>

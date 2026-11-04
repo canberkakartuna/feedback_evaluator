@@ -177,7 +177,6 @@ const en = {
     markedLine: 'Marked {code} — {earned} of {total}.',
     fullMarks: 'Full marks.',
     handMarked: '{code} is with your teacher to mark by hand. I cannot score a drawing or a photo.',
-    confirmWithdraw: 'Delete everything from this session? This cannot be undone.',
     tabQuestions: 'Questions',
     tabProblem: 'Problem',
     tabTutor: 'Tutor',
@@ -217,7 +216,6 @@ const en = {
     ownPlaceholder: 'Stuck on something else? Type that question here and work on it with the tutor.',
     ownAdd: 'Add to my list',
     points: '{count} pts',
-    withdraw: 'Delete everything I did',
   },
 
   qp: {
@@ -750,7 +748,6 @@ const tr = {
     markedLine: '{code} değerlendirildi — {total} üzerinden {earned}.',
     fullMarks: 'Tam puan.',
     handMarked: '{code} elle değerlendirilmek üzere öğretmeninizde. Bir çizimi ya da fotoğrafı puanlayamam.',
-    confirmWithdraw: 'Bu oturumdaki her şey silinsin mi? Bu geri alınamaz.',
     tabQuestions: 'Sorular',
     tabProblem: 'Soru',
     tabTutor: 'Öğretmen',
@@ -785,7 +782,6 @@ const tr = {
     ownPlaceholder: 'Başka bir yerde mi takıldınız? O soruyu buraya yazın ve öğretmenle üzerinde çalışın.',
     ownAdd: 'Listeme ekle',
     points: '{count} puan',
-    withdraw: 'Yaptığım her şeyi sil',
   },
 
   qp: {

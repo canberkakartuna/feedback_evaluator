@@ -24,7 +24,6 @@ export default function QuestionList({
   onSelect,
   onAskOwn,
   onCollapse,
-  onWithdraw,
 }) {
   const { lang, t } = useI18n()
   const [ownDraft, setOwnDraft] = useState('')
@@ -192,14 +191,6 @@ export default function QuestionList({
             </li>
           ))}
         </ul>
-
-        {/* The withdrawal half of consent, where the student actually is
-            rather than in a policy page they will never open. */}
-        {onWithdraw ? (
-          <button type="button" className="ql-withdraw" onClick={onWithdraw}>
-            {t('ql.withdraw')}
-          </button>
-        ) : null}
       </footer>
     </>
   )
