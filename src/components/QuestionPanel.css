@@ -154,7 +154,41 @@
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 2px;
+  padding-bottom: var(--s-2);
+  /* Scroll shadows: a soft shade on whichever side still has formula hidden.
+     The two "local" covers ride along with the content and hide the shade once
+     that edge is reached, so a formula that fits shows nothing extra. */
+  background:
+    linear-gradient(to right, var(--question-bg) 30%, transparent) left center / 32px 100% no-repeat local,
+    linear-gradient(to left, var(--question-bg) 30%, transparent) right center / 32px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 22%, transparent), transparent) left center / 12px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 22%, transparent), transparent) right center / 12px 100% no-repeat scroll;
+}
+
+/* macOS hides overlay scrollbars until you scroll, so a student would never
+   learn the formula is wider than the card. A styled WebKit scrollbar is drawn
+   classic-style and stays visible in Chrome and Safari. */
+.qp-prompt .katex-display::-webkit-scrollbar {
+  height: 6px;
+}
+
+.qp-prompt .katex-display::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--question-edge) 45%, transparent);
+  border-radius: 3px;
+}
+
+.qp-prompt .katex-display::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--graphite) 70%, transparent);
+  border-radius: 3px;
+}
+
+/* Firefox has no ::-webkit-scrollbar; the standard properties at least give it
+   a visible thumb colour (Chrome would drop the rules above if it saw these). */
+@supports not selector(::-webkit-scrollbar) {
+  .qp-prompt .katex-display {
+    scrollbar-width: thin;
+    scrollbar-color: var(--graphite) transparent;
+  }
 }
 
 /* ── stimulus ───────────────────────────────────────────────── */
