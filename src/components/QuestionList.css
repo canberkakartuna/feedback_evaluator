@@ -247,7 +247,9 @@
   text-underline-offset: 2px;
 }
 
-.ql-own-photo-pick:focus-within {
+/* focus-visible, not focus-within: the hidden input keeps focus after the
+   picker closes, which left a ring around the link after every mouse click. */
+.ql-own-photo-pick:has(input:focus-visible) {
   outline: 2px solid var(--pen);
   outline-offset: 2px;
 }
