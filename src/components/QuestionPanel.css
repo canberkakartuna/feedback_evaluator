@@ -93,6 +93,9 @@
 /* ── the page ───────────────────────────────────────────────── */
 
 .qp-scroll {
+  /* Containing block for the .sr-only inputs and labels inside, so they
+     scroll and clip with this pane instead of stretching the page. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;

@@ -13,7 +13,14 @@
   grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   background: var(--paper-sunk);
+  /* The panes scroll inside themselves; the shell never does. `hidden` alone
+     still lets focus and caret-into-view scroll it, which slid the header off
+     the top and left a blank band below — `clip` forbids that. `position`
+     keeps any absolutely positioned descendant inside this box rather than
+     laid out against the page, where it made the document itself scroll. */
+  position: relative;
   overflow: hidden;
+  overflow: clip;
   transition: grid-template-columns 0.24s cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
