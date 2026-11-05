@@ -147,6 +147,16 @@
   white-space: pre-wrap;
 }
 
+/* Display math cannot wrap, so a formula wider than a phone scrolls inside the
+   card instead of pushing the whole page sideways. The bit of bottom padding
+   keeps the scrollbar off the formula's descenders. */
+.qp-prompt .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
 /* ── stimulus ───────────────────────────────────────────────── */
 
 .qp-figure {
