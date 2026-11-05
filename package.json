@@ -10,6 +10,8 @@
     "start:api": "node server/index.js",
     "test:api": "node server/smoke.mjs",
     "test:api:mongo": "SMOKE_MONGO=1 node server/smoke.mjs",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test": "npm run test:unit && npm run test:api && npm run check:strings",
     "check:strings": "node server/strings.mjs",
     "check:openai": "node server/openai.mjs",
     "setup:spaces": "node server/spaces.mjs",
@@ -17,7 +19,8 @@
     "seed:class-list": "node server/seed-class-list.mjs",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",

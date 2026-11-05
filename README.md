@@ -13,7 +13,8 @@ npm install
 cp .env.example .env          # then MONGODB_URI and OPENAI_API_KEY in .env.local
 npm run dev:api               # API on :4000
 npm run dev                   # client on :5173, proxying /api
-npm run test:api              # 316 end-to-end assertions over real HTTP
+npm test                      # unit + API smoke + strings (see TESTING.md)
+npm run test:api              # end-to-end assertions over real HTTP
 npm run check:strings         # every interface string, in both languages
 npm run check:openai          # one real call to the tutor's model
 npm run seed:functions -- <teacher email>   # the 5-question Functions activity, EN + TR

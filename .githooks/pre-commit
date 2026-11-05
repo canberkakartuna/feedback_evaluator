@@ -1,0 +1,22 @@
+#!/bin/sh
+# Lint the JavaScript being committed. Installed by `npm install` (the
+# `prepare` script points core.hooksPath here). Errors block the commit;
+# warnings are printed but do not. Bypass in an emergency: git commit --no-verify
+set -e
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.js' '*.jsx' '*.mjs' '*.cjs')
+[ -z "$files" ] && exit 0
+
+oxlint="./node_modules/.bin/oxlint"
+if [ ! -x "$oxlint" ]; then
+  echo "pre-commit: oxlint is not installed — run npm install first." >&2
+  exit 1
+fi
+
+echo "pre-commit: linting $(echo "$files" | wc -l | tr -d ' ') staged file(s)"
+# Paths come from git one per line; none in this repo contain spaces.
+# shellcheck disable=SC2086
+"$oxlint" $files || {
+  echo "pre-commit: lint errors above — fix them, or commit with --no-verify." >&2
+  exit 1
+}
