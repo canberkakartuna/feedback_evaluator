@@ -9,7 +9,7 @@ import './Entry.css'
  * The one-time research notice, shown to every signed-in account except an
  * admin — see the gate in App.jsx, which is what decides *whether* this
  * renders. This component only ever has one job once it is on screen: hold
- * the checkbox, and send the one call that means "recorded, for good".
+ * the two checkboxes, and send the one call that means "recorded, for good".
  *
  * Nothing here reads `user.consented` — the gate in App.jsx already checked
  * it before rendering this at all — so there is nothing to get out of sync.
@@ -23,6 +23,10 @@ import './Entry.css'
 export default function ConsentScreen() {
   const t = useT()
   const { setUser } = useAuth()
+  // Two separate ticks (design doc): having read the information sheet
+  // is not the same statement as agreeing to take part, so each is its own box
+  // and both are needed before the agreement is recorded.
+  const [readSheet, setReadSheet] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -50,6 +54,15 @@ export default function ConsentScreen() {
         <label className="en-agree">
           <input
             type="checkbox"
+            checked={readSheet}
+            onChange={(event) => setReadSheet(event.target.checked)}
+          />
+          <span>{t('consent.readSheet')}</span>
+        </label>
+
+        <label className="en-agree en-agree-next">
+          <input
+            type="checkbox"
             checked={agreed}
             onChange={(event) => setAgreed(event.target.checked)}
           />
@@ -66,7 +79,7 @@ export default function ConsentScreen() {
           <button
             type="button"
             className="en-btn en-btn-primary"
-            disabled={!agreed || busy}
+            disabled={!readSheet || !agreed || busy}
             onClick={submit}
           >
             {busy ? t('consent.submitting') : t('consent.submit')}

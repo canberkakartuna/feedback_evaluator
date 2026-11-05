@@ -1143,6 +1143,37 @@ try {
   })
   check('a board replaces its own export', second.body.answer.attachments.length === 1)
 
+  // A question can be photographed again and again; only the latest shows,
+  // every one is kept (design doc).
+  const photoOne = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'try-1.png', dataUrl: PNG },
+  })
+  const photoTwo = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'try-2.png', dataUrl: PNG },
+  })
+  const shownPhotos = photoTwo.body.answer.attachments.filter((item) => item.source !== 'whiteboard')
+  check(
+    'a new photo replaces the one before it on the answer',
+    shownPhotos.length === 1 && shownPhotos[0].id === photoTwo.body.upload.id,
+  )
+  check(
+    'next to the board, which stays',
+    photoTwo.body.answer.attachments.some((item) => item.source === 'whiteboard'),
+  )
+  check('the earlier photo is still kept', (await fetch(`${base}${photoOne.body.upload.url}`)).status === 200)
+  const photoThree = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
+    body: { name: 'try-3.png', dataUrl: PNG },
+  })
+  const removedPhoto = await call(
+    'DELETE',
+    `/api/sessions/${session.id}/questions/${markedQ.id}/uploads/${photoThree.body.upload.id}`,
+  )
+  check(
+    'removing a photo takes it off the answer',
+    removedPhoto.body.answer.attachments.every((item) => item.id !== photoThree.body.upload.id),
+  )
+  check('but keeps it', (await fetch(`${base}${photoThree.body.upload.url}`)).status === 200)
+
   const badFile = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/uploads`, {
     body: { name: 'x.txt', dataUrl: 'data:text/plain;base64,aGVsbG8=' },
   })
@@ -1489,8 +1520,9 @@ try {
   console.log('\nwithdrawal')
   const deleted = await call('DELETE', `/api/sessions/${session.id}`)
   check('session deleted', deleted.body.deleted === true)
-  // Two answer uploads plus the photographed own question.
-  check('its files were removed', deleted.body.files === 3)
+  // Two board exports, three photos (every attempt is kept) and the
+  // photographed own question.
+  check('its files were removed', deleted.body.files === 6)
   const gone = await call('GET', `/api/sessions/${session.id}`)
   check('session no longer readable', gone.status === 404)
   const afterDelete = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
@@ -1839,8 +1871,7 @@ try {
   )
   const withdrawn = await call('POST', '/api/auth/consent/withdraw', { token: numberToken })
   check('withdrawing works from the sign-in that agreed', withdrawn.status === 200 && withdrawn.body.withdrawn === true)
-  check('it removes their work', withdrawn.body.sessions === 1)
-  check('the session is gone', (await call('GET', `/api/sessions/${firstVisit.body.session.id}`)).status === 404)
+  check('it keeps their work', (await call('GET', `/api/sessions/${firstVisit.body.session.id}`)).status === 200)
   check('and the notice is asked again', withdrawn.body.user.consented === false && withdrawn.body.user.canWithdrawConsent === false)
   check(
     'withdrawing twice is refused',

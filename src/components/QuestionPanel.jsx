@@ -83,8 +83,13 @@ export default function QuestionPanel({
     setPendingMode(null)
   }, [question.id])
 
+  // One photo per hand-in: a new one replaces the photo shown on the answer
+  // (the server keeps every earlier one — routes/uploads.js), so taking
+  // several at once would show only the last of them.
   const takeFiles = (fileList) => {
-    const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []), { photosOnly: true })
+    const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []).slice(0, 1), {
+      photosOnly: true,
+    })
     setRejected(refused)
     if (accepted.length) onAttach(accepted)
   }
@@ -342,7 +347,6 @@ export default function QuestionPanel({
                   <input
                     type="file"
                     className="sr-only"
-                    multiple
                     accept={PHOTO_ACCEPT}
                     onChange={(event) => {
                       takeFiles(event.target.files)
@@ -350,7 +354,9 @@ export default function QuestionPanel({
                     }}
                   />
                   <span className="qp-way-text">
-                    <span className="qp-way-main">{t('qp.addFile')}</span>
+                    <span className="qp-way-main">
+                      {files.length ? t('qp.replaceFile') : t('qp.addFile')}
+                    </span>
                     <span className="qp-way-sub mono">{t('qp.addFileMeta')}</span>
                   </span>
                 </label>

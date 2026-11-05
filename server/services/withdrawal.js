@@ -4,9 +4,9 @@ import { removeBytes } from '../routes/uploads.js'
  * Everything one session left behind, removed: answers, tutor thread, events,
  * own questions, the session itself, and the bytes of every file it uploaded.
  *
- * Shared by `DELETE /api/sessions/:id` and withdrawing consent from the
- * profile (`POST /api/auth/consent/withdraw`), which removes every session the
- * student has — the two must delete the same things or one of them is a lie.
+ * Used by `DELETE /api/sessions/:id`. Withdrawing consent from the profile
+ * (`POST /api/auth/consent/withdraw`) no longer calls this: withdrawing from
+ * the study keeps the work (design doc: "withdraw", not "withdraw and delete").
  */
 export async function removeSessionData(store, session) {
   const removedUploads = await store.uploads.removeBySession(session.id)

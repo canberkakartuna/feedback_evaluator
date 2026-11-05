@@ -5,7 +5,6 @@ import { burnPassword, hashPassword, verifyPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
 import { cleanStudentNumber } from '../../shared/student-number.js'
-import { removeSessionData } from '../services/withdrawal.js'
 import {
   classListEmail,
   hasCurrentConsent,
@@ -218,9 +217,10 @@ export function authRoutes(store) {
    *
    * Only while still signed in under the agreement: a student who agreed, then
    * signed out and back in, can no longer withdraw, and gets a 403 saying so.
-   * Withdrawal deletes their work — every session with its answers, tutor
-   * thread, events, own questions and files — and clears the agreement, so the
-   * notice is asked again before they can carry on.
+   * Withdrawal clears the agreement, so the notice is asked again before they
+   * can carry on. It does not delete their work: the design doc asks for
+   * "withdraw from the study", not "withdraw and delete". `withdrawnAt` stays on
+   * the account so the research side can tell who withdrew and when.
    */
   router.post(
     '/consent/withdraw',
@@ -230,10 +230,6 @@ export function authRoutes(store) {
       if (!canWithdrawConsent(req.user, req.authToken)) {
         throw forbidden('Consent can only be withdrawn during the sign-in it was given in')
       }
-
-      const sessions = await store.sessions.list({ userId: req.user.id, limit: 10000 })
-      let files = 0
-      for (const session of sessions) files += (await removeSessionData(store, session)).files
 
       const updated = await store.users.update(req.user.id, {
         consent: {
@@ -252,15 +248,13 @@ export function authRoutes(store) {
           userId: req.user.id,
           type: 'consent_withdrawn',
           at: now(),
-          payload: { version: req.user.consent.version, sessions: sessions.length, files },
+          payload: { version: req.user.consent.version },
         },
       ])
 
       res.json({
         user: publicUser(updated, { authToken: req.authToken }),
         withdrawn: true,
-        sessions: sessions.length,
-        files,
       })
     }),
   )

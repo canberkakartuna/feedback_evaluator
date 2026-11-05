@@ -369,7 +369,7 @@ timestamps, not states worth a request each.
 `session_started` · `session_ended` · `question_shown` · `answer_saved` ·
 `answer_checked` · `student_marked_question` · `student_message_sent` ·
 `student_requested_help` · `ai_feedback_shown` · `student_rated_feedback` ·
-`student_uploaded_image` · `student_added_own_question` · `user_signed_in` ·
+`student_uploaded_image` · `student_removed_image` · `student_added_own_question` · `user_signed_in` ·
 `user_created`
 
 The last two are account events rather than session telemetry, so they carry

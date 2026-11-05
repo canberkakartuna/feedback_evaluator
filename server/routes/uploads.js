@@ -65,11 +65,20 @@ export function uploadRoutes(store, { resolveQuestion }) {
       })
       const { name, type } = upload
 
-      /** A board replaces its previous export rather than stacking copies. */
+      /**
+       * The new upload replaces the earlier one of its kind on the answer: a
+       * board its previous export, a photo the photo before it. A student may
+       * hand in a question again and again, but sees only the latest
+       * (design doc). Nothing is thrown away — every earlier upload keeps its
+       * record and bytes in `uploads`, and the event below names what it
+       * replaced, so the research side has every attempt.
+       */
       const stored = await store.answers.find(session.id, question.id)
-      const kept = (stored?.attachments ?? []).filter((item) =>
-        source === 'whiteboard' ? item.source !== 'whiteboard' : true,
+      const previous = stored?.attachments ?? []
+      const kept = previous.filter((item) =>
+        source === 'whiteboard' ? item.source !== 'whiteboard' : item.source === 'whiteboard',
       )
+      const replaced = previous.filter((item) => !kept.includes(item)).map((item) => item.id)
 
       const answer = await store.answers.upsert(session.id, question.id, {
         attachments: [
@@ -85,7 +94,14 @@ export function uploadRoutes(store, { resolveQuestion }) {
           questionId: question.id,
           type: 'student_uploaded_image',
           at: now(),
-          payload: { uploadId: upload.id, source, type, size: upload.size, storage: upload.storage },
+          payload: {
+            uploadId: upload.id,
+            source,
+            type,
+            size: upload.size,
+            storage: upload.storage,
+            replaced,
+          },
         },
       ])
 
@@ -106,7 +122,19 @@ export function uploadRoutes(store, { resolveQuestion }) {
         attachments: (stored?.attachments ?? []).filter((item) => item.id !== upload.id),
       })
 
-      await removeBytes(upload)
+      // Off the answer, but kept: every photo a student hands in is part of
+      // the record (design doc). Deleting the session still removes the bytes.
+      await store.events.insertMany([
+        {
+          id: id('evt'),
+          sessionId: session.id,
+          questionId: question.id,
+          type: 'student_removed_image',
+          at: now(),
+          payload: { uploadId: upload.id, source: upload.source },
+        },
+      ])
+
       res.json({ deleted: true, answer })
     }),
   )

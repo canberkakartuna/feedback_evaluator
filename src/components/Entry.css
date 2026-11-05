@@ -93,6 +93,11 @@
   cursor: pointer;
 }
 
+/* The second of the two ticks sits close under the first: one decision in two parts. */
+.en-agree-next {
+  margin-top: var(--s-2);
+}
+
 .en-agree input {
   flex: none;
   width: 17px;
