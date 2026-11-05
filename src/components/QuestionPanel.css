@@ -851,11 +851,14 @@
     font-size: var(--t-16);
   }
 
-  /* Three segments plus their hints do not fit a phone: share the width
-     evenly and drop the hints, since the labels already say enough. */
+  /* The segments plus their hints do not fit a phone: share the width
+     evenly and drop the hints, since the labels already say enough.
+     Two or three segments are offered (Draw only for an existing drawing),
+     so size columns from the count rather than fixing three. */
   .qp-modes {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     width: 100%;
   }
 
