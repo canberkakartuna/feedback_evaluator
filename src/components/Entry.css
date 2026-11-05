@@ -241,3 +241,14 @@
   background: var(--pen-soft);
   color: var(--pen-deep);
 }
+
+/* Student sign-in: room between the lede and the field, and a label that reads
+   as the one thing to fill in. Scoped here because .cs-form/.cs-label are shared. */
+.en-who-form {
+  margin-top: var(--s-5);
+}
+
+.en-who-form .cs-label {
+  font-weight: 700;
+  color: var(--ink);
+}

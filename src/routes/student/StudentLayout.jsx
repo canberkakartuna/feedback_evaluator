@@ -141,7 +141,7 @@ export default function StudentLayout() {
           <h1 className="en-title">{t('entry.who.title')}</h1>
           <p className="en-lede">{t('entry.who.lede')}</p>
 
-          <form className="cs-form" onSubmit={signIn}>
+          <form className="cs-form en-who-form" onSubmit={signIn}>
             <div className="cs-field">
               <label className="cs-label" htmlFor="student-number">
                 {t('entry.who.numberLabel')}
