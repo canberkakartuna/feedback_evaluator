@@ -61,9 +61,9 @@ behaviour first, then change it, so the diff shows what changed on purpose.
 2. **No end-to-end test of a student's path.** One Playwright test of sign in →
    consent → answer with a photo → withdraw would cover what the smoke test
    cannot: that the screens call the API correctly.
-3. **Deploys are not gated on tests.** [deploy.yml](.github/workflows/deploy.yml)
-   deploys every push to `main` whether or not CI passes. Either add the CI steps
-   as a job the deploy `needs`, or protect `main` so only green PRs merge.
+3. **Deploys are not gated on tests.** Render deploys every push to `main`
+   whether or not CI passes. Either turn on Render's "wait for CI checks" auto-deploy
+   setting, or protect `main` so only green PRs merge.
 4. **Mongo smoke is manual.** It could run in CI with a `mongo` service
    container.
 5. **Lint warnings never fail anything.** There are 9 `only-export-components`
