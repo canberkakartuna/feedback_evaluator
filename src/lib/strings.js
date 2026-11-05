@@ -26,7 +26,7 @@
  *   forgotten.
  *
  * Keys are nested for readability and flattened to `a.b.c` on load; see
- * ./i18n.jsx.
+ * ./i18n.js.
  */
 
 const en = {

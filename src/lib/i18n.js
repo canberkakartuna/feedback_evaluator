@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { DICTIONARIES } from './strings'
+import { createContext, useContext } from 'react'
+import { DICTIONARIES } from './strings.js'
 
 /**
  * Which language the interface is in.
@@ -13,9 +13,12 @@ import { DICTIONARIES } from './strings'
  * **What is translated is the interface.** Titles, prompts, rubric labels and
  * every tutor reply are content — authored by a teacher or generated against
  * their words — and are shown exactly as written. See ./strings.js.
+ *
+ * The provider lives in ./I18nProvider.jsx; this file holds everything else, so
+ * that file exports only a component and Fast Refresh can hot-swap it.
  */
 
-const STORAGE_KEY = 'dropshot.lang'
+export const STORAGE_KEY = 'dropshot.lang'
 
 export const LANGUAGES = [
   { id: 'en', label: 'English', short: 'EN' },
@@ -47,7 +50,7 @@ const FLAT = Object.fromEntries(
  * pressed TR on a machine set to English, that is an answer and guessing again
  * would undo it.
  */
-function initialLanguage() {
+export function initialLanguage() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (isLanguage(stored)) return stored
@@ -94,28 +97,7 @@ export function translate(lang, key, vars) {
   )
 }
 
-const I18nContext = createContext(null)
-
-export function I18nProvider({ children }) {
-  const [lang, setLang] = useState(initialLanguage)
-
-  // The document has to agree, or a screen reader announces Turkish in an
-  // English voice and `:lang()` rules in CSS never match.
-  useEffect(() => {
-    document.documentElement.lang = lang
-    try {
-      localStorage.setItem(STORAGE_KEY, lang)
-    } catch {
-      // As above: an unwritable store is not a reason to refuse the switch.
-    }
-  }, [lang])
-
-  const t = useCallback((key, vars) => translate(lang, key, vars), [lang])
-
-  const value = useMemo(() => ({ lang, setLang, t }), [lang, t])
-
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
-}
+export const I18nContext = createContext(null)
 
 export function useI18n() {
   const value = useContext(I18nContext)

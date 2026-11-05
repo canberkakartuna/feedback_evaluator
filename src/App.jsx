@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { AuthProvider, homeFor, useAuth } from './lib/auth'
+import { homeFor, useAuth } from './lib/auth'
+import { AuthProvider } from './lib/AuthProvider'
 import { useT } from './lib/i18n'
 import ConsentScreen from './components/ConsentScreen'
 import Profile from './routes/Profile'

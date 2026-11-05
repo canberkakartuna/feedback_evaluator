@@ -4,7 +4,8 @@ import { LIMITS, TOPICS } from '../../../shared/activity'
 import { api } from '../../lib/api'
 import { useT } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
-import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
+import TopicFilter from '../../components/TopicFilter'
+import { matchesTopic } from '../../lib/topics'
 
 /**
  * Every activity this teacher can reach, and the form that makes another.

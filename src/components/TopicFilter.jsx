@@ -1,12 +1,8 @@
 import { useMemo } from 'react'
 import { TOPICS } from '../../shared/activity'
 import { useT } from '../lib/i18n'
+import { NO_TOPIC, topicKey } from '../lib/topics'
 import './Chrome.css'
-
-/** null is a real bucket — "no topic" — so it needs a key a Map can hold. */
-const NO_TOPIC = 'none'
-
-const topicKey = (topic) => topic ?? NO_TOPIC
 
 /**
  * Counts per topic, so the chips can say how much is behind each one and hide
@@ -20,9 +16,6 @@ function countByTopic(activities) {
   }
   return counts
 }
-
-export const matchesTopic = (activity, selected) =>
-  selected === 'all' || topicKey(activity.topic) === selected
 
 /**
  * Filter a list of activities by what they are about.

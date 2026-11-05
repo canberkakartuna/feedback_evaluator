@@ -3,7 +3,8 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
-import TopicFilter, { matchesTopic } from '../../components/TopicFilter'
+import TopicFilter from '../../components/TopicFilter'
+import { matchesTopic } from '../../lib/topics'
 
 /**
  * What to work on — the last step, and the only one this file owns.
