@@ -42,6 +42,7 @@ export function publicActivity(activity, questions) {
     id: activity.id,
     code: activity.code,
     title: activity.title,
+    titleByLang: activity.titleByLang ?? {},
     blurb: activity.blurb,
     status: activity.status,
     questionCount: questions.length,
@@ -73,6 +74,7 @@ export async function resolveQuestion(store, session, questionId) {
       tutor: withFallbacks(question.tutor),
       activityId: question.activityId,
       activityTitle: activity?.title ?? null,
+      activityTitleByLang: activity?.titleByLang ?? {},
     }
   }
 
@@ -84,6 +86,7 @@ export async function resolveQuestion(store, session, questionId) {
       tutor: withFallbacks(null),
       activityId: null,
       activityTitle: null,
+      activityTitleByLang: {},
       isOwnQuestion: true,
     }
   }
@@ -127,6 +130,7 @@ export async function studentActivities(store, user) {
       id: activity.id,
       started: startedIds.has(activity.id),
       title: activity.title,
+      titleByLang: activity.titleByLang ?? {},
       blurb: activity.blurb,
       /**
        * What the list is filtered by. Null for anything a teacher has not

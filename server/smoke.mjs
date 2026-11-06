@@ -456,6 +456,55 @@ try {
   check('it is owned by its author', activity.ownerId === teacher.id)
   check('it starts empty', activity.questionCount === 0)
   check('the topic is stored', activity.topic === 'ratio')
+  check('a name given once has no per-language names', Object.keys(activity.titleByLang).length === 0)
+
+  console.log('\nactivity names per language')
+  const namedTr = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { titleByLang: { tr: '  Oran ve orantı  ', en: '' } },
+  })
+  check('an activity can be named in one language alone', namedTr.status === 201)
+  check('the name is trimmed and the blank language dropped', JSON.stringify(namedTr.body.activity.titleByLang) === '{"tr":"Oran ve orantı"}')
+  check('and the title is filled from it', namedTr.body.activity.title === 'Oran ve orantı')
+
+  const renamedActivity = await call('PATCH', `/api/activities/${namedTr.body.activity.id}`, {
+    token: teacherToken,
+    body: { titleByLang: { en: 'Ratio', tr: 'Oran' } },
+  })
+  check('both names can be set', renamedActivity.body.activity.titleByLang.en === 'Ratio')
+  check('and the title follows English first', renamedActivity.body.activity.title === 'Ratio')
+
+  const badLangName = await call('PATCH', `/api/activities/${namedTr.body.activity.id}`, {
+    token: teacherToken,
+    body: { titleByLang: { de: 'Verhältnis' } },
+  })
+  check('a name in a language the interface lacks is refused', badLangName.status === 400)
+
+  const blankNames = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { titleByLang: { en: ' ', tr: '' } },
+  })
+  check('blank names in every language are no title', blankNames.status === 400)
+  await call('DELETE', `/api/activities/${namedTr.body.activity.id}`, { token: teacherToken })
+
+  console.log('\nAI translation')
+  const translateAnon = await call('POST', '/api/translate', { body: { text: 'Hi', from: 'en', to: 'tr' } })
+  check('translating needs a token', translateAnon.status === 401)
+  const translateStudent = await call('POST', '/api/translate', {
+    token: studentToken,
+    body: { text: 'Hi', from: 'en', to: 'tr' },
+  })
+  check('and is for authors, not students', translateStudent.status === 403)
+  const translateSame = await call('POST', '/api/translate', {
+    token: teacherToken,
+    body: { text: 'Hi', from: 'en', to: 'en' },
+  })
+  check('the two languages must differ', translateSame.status === 400)
+  const translateOff = await call('POST', '/api/translate', {
+    token: teacherToken,
+    body: { text: 'Hi', from: 'en', to: 'tr' },
+  })
+  check('with no model key it says so with a 503', translateOff.status === 503)
 
   /**
    * The class code. Six characters from the unambiguous alphabet, allocated at

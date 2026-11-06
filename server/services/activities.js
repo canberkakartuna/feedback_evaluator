@@ -91,6 +91,32 @@ function optionalString(body, field, max) {
 }
 
 /**
+ * Text written out per interface language — a question's `promptByLang`, an
+ * activity's `titleByLang`. Sent whole: an object replaces what is stored, a
+ * blank language is dropped, and `null` clears every translation. Returns
+ * `undefined` when the field was not sent at all.
+ */
+function parseByLang(value, field, max) {
+  if (value === undefined) return undefined
+  if (value === null) return {}
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw badRequest(`"${field}" must be an object or null`)
+  }
+
+  const out = {}
+  for (const [lang, text] of Object.entries(value)) {
+    if (!PROMPT_LANGS.includes(lang)) {
+      throw badRequest(`"${field}" keys must be one of: ${PROMPT_LANGS.join(', ')}`)
+    }
+    if (text === null || text === undefined) continue
+    if (typeof text !== 'string') throw badRequest(`"${field}.${lang}" must be a string`)
+    if (text.length > max) throw badRequest(`"${field}.${lang}" must be at most ${max} characters`)
+    if (text.trim()) out[lang] = text.trim()
+  }
+  return out
+}
+
+/**
  * A stimulus is the table or figure printed above a question. Only tables are
  * supported so far; the kind is checked rather than assumed so that adding a
  * chart later cannot silently store a shape nothing renders.
@@ -236,27 +262,8 @@ export function parseQuestionInput(body, { forCreate } = {}) {
    * object replaces what is stored, a blank language is dropped, and `null`
    * clears every translation.
    */
-  const byLang = body?.promptByLang
-  if (byLang !== undefined) {
-    if (byLang === null) {
-      patch.promptByLang = {}
-    } else if (typeof byLang !== 'object' || Array.isArray(byLang)) {
-      throw badRequest('"promptByLang" must be an object or null')
-    } else {
-      patch.promptByLang = {}
-      for (const [lang, text] of Object.entries(byLang)) {
-        if (!PROMPT_LANGS.includes(lang)) {
-          throw badRequest(`"promptByLang" keys must be one of: ${PROMPT_LANGS.join(', ')}`)
-        }
-        if (text === null || text === undefined) continue
-        if (typeof text !== 'string') throw badRequest(`"promptByLang.${lang}" must be a string`)
-        if (text.length > LIMITS.prompt) {
-          throw badRequest(`"promptByLang.${lang}" must be at most ${LIMITS.prompt} characters`)
-        }
-        if (text.trim()) patch.promptByLang[lang] = text.trim()
-      }
-    }
-  }
+  const byLang = parseByLang(body?.promptByLang, 'promptByLang', LIMITS.prompt)
+  if (byLang !== undefined) patch.promptByLang = byLang
 
   /**
    * The teacher's own answer. Optional everywhere: `null` and `''` both mean
@@ -309,12 +316,27 @@ export function parseQuestionInput(body, { forCreate } = {}) {
 export function parseActivityInput(body, { forCreate } = {}) {
   const patch = {}
 
+  /**
+   * The name, per interface language — see titleFor in shared/activity.js.
+   * `title` stays the one every reader can rely on: when it is not sent, it is
+   * filled from the per-language names (English first), so an activity named
+   * only in Turkish still has a title in the researcher export and anywhere
+   * else that reads it.
+   */
+  const titleByLang = parseByLang(body?.titleByLang, 'titleByLang', LIMITS.title)
+  if (titleByLang !== undefined) patch.titleByLang = titleByLang
+  const named = PROMPT_LANGS.map((lang) => titleByLang?.[lang]).find(Boolean)
+
   const title = body?.title
-  if (forCreate || title !== undefined) {
+  if (title !== undefined && title !== null && title !== '') {
     if (typeof title !== 'string' || !title.trim()) {
       throw badRequest('"title" must be a non-empty string')
     }
     patch.title = trimmed(title, LIMITS.title)
+  } else if (named) {
+    patch.title = named
+  } else if (forCreate || title !== undefined) {
+    throw badRequest('"title" must be a non-empty string')
   }
 
   const blurb = optionalString(body, 'blurb', LIMITS.blurb)
@@ -402,12 +424,13 @@ export async function ensureClassCode(store, activity) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, blurb = '', topic = null, level = '', code, ownerId, status = 'draft' }) {
+export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
     code,
     title,
+    titleByLang,
     blurb,
     topic,
     level,

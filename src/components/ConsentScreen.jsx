@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import Navbar from './Navbar'
+import ParticipantInfoSheet from './ParticipantInfoSheet'
 import './Entry.css'
 
 /**
@@ -50,6 +51,14 @@ export default function ConsentScreen() {
         <p className="eyebrow">{t('consent.eyebrow')}</p>
         <h1 className="en-title">{t('consent.title')}</h1>
         <p className="en-lede">{t('consent.lede')}</p>
+
+        {/* The sheet the first box says was read, right above that box — in
+            the interface language, so the EN/TR switch in the navbar changes
+            it. Folded so the two boxes stay in view. */}
+        <details className="pis-fold">
+          <summary>{t('consent.openSheet')}</summary>
+          <ParticipantInfoSheet />
+        </details>
 
         <label className="en-agree">
           <input

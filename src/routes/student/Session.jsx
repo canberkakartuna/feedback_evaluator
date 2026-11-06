@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { turnState } from '../../../shared/turns'
+import { titleFor } from '../../../shared/activity'
 import { readAsDataUrl } from '../../lib/attachments'
 import { numberQuestions, questionName } from '../../lib/questionName'
 import { useI18n } from '../../lib/i18n'
@@ -221,12 +222,12 @@ export default function Session() {
     return [
       {
         id: 'activity',
-        title: loaded.activity?.title ?? t('ws.questionsFallback'),
+        title: (loaded.activity && titleFor(loaded.activity, lang)) || t('ws.questionsFallback'),
         questions: authored,
       },
       ...(own.length ? [{ id: 'own', title: t('ws.ownQuestions'), questions: own }] : []),
     ]
-  }, [loaded, questions, t])
+  }, [loaded, questions, t, lang])
 
   const index = questions.findIndex((question) => question.id === activeId)
   const active = questions[index] ?? questions[0] ?? null
@@ -575,7 +576,7 @@ export default function Session() {
       <header className="ws-head">
         <div className="ws-head-id">
           <h1 className="ws-head-title">
-            {loaded.activity?.title ?? t('ws.questionsFallback')}
+            {(loaded.activity && titleFor(loaded.activity, lang)) || t('ws.questionsFallback')}
           </h1>
           {identity ? (
             <>

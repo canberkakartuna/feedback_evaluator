@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { DEFAULT_MODE } from '../../lib/answer'
-import { useT } from '../../lib/i18n'
+import { useI18n } from '../../lib/i18n'
+import { titleFor } from '../../../shared/activity'
 import { numberQuestions } from '../../lib/questionName'
 import { useAsync } from '../../lib/useAsync'
 import QuestionPanel from '../../components/QuestionPanel'
@@ -37,7 +38,7 @@ const blank = () => ({
  */
 export default function PreviewActivity() {
   const { activityId } = useParams()
-  const t = useT()
+  const { lang, t } = useI18n()
   const { data, error, loading } = useAsync(() => api.activityPreview(activityId), [activityId])
 
   const [index, setIndex] = useState(0)
@@ -68,7 +69,7 @@ export default function PreviewActivity() {
             <Link to={`/teacher/activities/${activity.id}`}>{t('editor.breadcrumb')}</Link> ·{' '}
             {t('preview.eyebrow')}
           </p>
-          <h1 className="cs-title">{activity.title}</h1>
+          <h1 className="cs-title">{titleFor(activity, lang)}</h1>
           <p className="cs-lede">{t('preview.lede')}</p>
         </div>
       </header>

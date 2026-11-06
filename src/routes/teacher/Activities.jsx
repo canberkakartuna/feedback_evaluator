@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { LIMITS, TOPICS } from '../../../shared/activity'
+import { LIMITS, TOPICS, titleFor } from '../../../shared/activity'
+import BilingualField from '../../components/BilingualField'
 import { api } from '../../lib/api'
-import { useT } from '../../lib/i18n'
+import { translate, useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import TopicFilter from '../../components/TopicFilter'
 import { matchesTopic } from '../../lib/topics'
@@ -19,11 +20,15 @@ import { matchesTopic } from '../../lib/topics'
  * The topic is set here rather than only in the editor, since it is the field a
  * teacher knows the answer to before they have written a single question — and it
  * is what both this list and the students' list are filtered by.
+ *
+ * The name is written in English and Turkish side by side, either alone being
+ * enough — students see the one matching their switch, or the other when it
+ * is blank (titleFor in shared/activity.js).
  */
 export default function Activities() {
-  const t = useT()
+  const { lang, t } = useI18n()
   const { data, error, loading, reload } = useAsync(() => api.activities(), [])
-  const [title, setTitle] = useState('')
+  const [titles, setTitles] = useState({ en: '', tr: '' })
   const [blurb, setBlurb] = useState('')
   const [topic, setTopic] = useState('')
   const [level, setLevel] = useState('')
@@ -31,16 +36,19 @@ export default function Activities() {
   const [problem, setProblem] = useState(null)
   const [filter, setFilter] = useState('all')
 
+  const named = Boolean(titles.en.trim() || titles.tr.trim())
+
   const create = async (event) => {
     event.preventDefault()
-    if (!title.trim()) return
+    if (!named) return
 
     setBusy(true)
     setProblem(null)
     try {
       // '' is the "not set" option in the select; the API wants null for that.
-      await api.createActivity({ title, blurb, topic: topic || null, level })
-      setTitle('')
+      // The server fills `title` from these, English first.
+      await api.createActivity({ titleByLang: titles, blurb, topic: topic || null, level })
+      setTitles({ en: '', tr: '' })
       setBlurb('')
       setLevel('')
       await reload()
@@ -67,21 +75,20 @@ export default function Activities() {
       <section className="cs-card">
         <h2 className="cs-section-head">{t('activities.new')}</h2>
         <form className="cs-form" onSubmit={create}>
+          <BilingualField
+            id="new-title"
+            label={t('activities.titleLabel')}
+            hint={t('activities.titleHint')}
+            maxLength={LIMITS.title}
+            placeholder={{
+              en: translate('en', 'activities.titlePlaceholder'),
+              tr: translate('tr', 'activities.titlePlaceholder'),
+            }}
+            values={titles}
+            onChange={(code, text) => setTitles((prior) => ({ ...prior, [code]: text }))}
+          />
+
           <div className="cs-row">
-            <div className="cs-field">
-              <label className="cs-label" htmlFor="new-title">
-                {t('activities.titleLabel')}
-              </label>
-              <input
-                id="new-title"
-                className="cs-input"
-                required
-                maxLength={200}
-                placeholder={t('activities.titlePlaceholder')}
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </div>
 
             <div className="cs-field">
               <label className="cs-label" htmlFor="new-topic">
@@ -139,7 +146,7 @@ export default function Activities() {
           ) : null}
 
           <div>
-            <button type="submit" className="cs-btn cs-btn-primary" disabled={busy || !title.trim()}>
+            <button type="submit" className="cs-btn cs-btn-primary" disabled={busy || !named}>
               {busy ? t('activities.creating') : t('activities.create')}
             </button>
           </div>
@@ -192,7 +199,7 @@ export default function Activities() {
                       </span>
                     </div>
 
-                    <h3 className="cs-tile-name">{activity.title}</h3>
+                    <h3 className="cs-tile-name">{titleFor(activity, lang)}</h3>
                     {activity.blurb ? <p className="cs-tile-meta">{activity.blurb}</p> : null}
 
                     <p className="cs-tile-meta mono">

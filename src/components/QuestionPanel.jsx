@@ -4,7 +4,7 @@ import { MARKS, SELF_MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { PHOTO_ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
-import { promptFor } from '../../shared/activity'
+import { promptFor, textFor } from '../../shared/activity'
 import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
@@ -129,7 +129,9 @@ export default function QuestionPanel({
             {/* An own question's title and kind are set by the server in
                 English, so they are said here instead (3 Nov 2026 doc). */}
             <span className="eyebrow">
-              {question.isOwnQuestion ? t('ws.ownQuestions') : question.activityTitle}
+              {question.isOwnQuestion
+                ? t('ws.ownQuestions')
+                : textFor(question.activityTitleByLang, question.activityTitle, lang)}
             </span>
             <p className="qp-bar-line">
               <span className="qp-code mono">{questionName(question, t)}</span>

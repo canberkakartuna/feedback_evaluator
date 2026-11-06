@@ -101,7 +101,7 @@ export default function Profile() {
           {/* The participant information form, readable again at any time. */}
           <p className="en-terms-head">{t('profile.consentHead')}</p>
           <p className="en-lede">{t('consent.lede')}</p>
-          <details className="pf-sheet">
+          <details className="pis-fold">
             <summary>{t('profile.readSheet')}</summary>
             <ParticipantInfoSheet />
           </details>

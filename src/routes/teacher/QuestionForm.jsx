@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { LIMITS } from '../../../shared/activity'
+import BilingualField from '../../components/BilingualField'
 import QuestionFile from '../../components/QuestionFile'
 import MathText from '../../components/MathText'
 import { ACCEPT, formatBytes, partitionFiles, readAsDataUrl } from '../../lib/attachments'
 import { hasMath } from '../../lib/latex'
-import { useT } from '../../lib/i18n'
+import { initialWording } from '../../lib/wording'
+import { translate, useI18n, useT } from '../../lib/i18n'
 
 /**
  * Writing or editing one question. Two blocks, question and answer, and each
@@ -15,6 +17,16 @@ import { useT } from '../../lib/i18n'
  * is optional entirely: it is never shown to a student — it goes to the AI
  * tutor so its guidance steers toward the answer the teacher actually wants,
  * rather than whatever the model would have decided on its own.
+ *
+ * The question is written **in English and Turkish side by side** (see
+ * BilingualField), with an AI button that drafts one from the other. Either
+ * language alone is enough: a student reading in the blank one sees the one
+ * that was written (promptFor in shared/activity.js). The single `prompt`
+ * field questions used to have is still sent — filled from the English, else
+ * the Turkish — so the fallback and anything else that reads `prompt` keep
+ * working. A question authored before this, with only `prompt`, opens with
+ * that text in the language box it most likely belongs to; see
+ * initialWording.
  *
  * Both text fields take LaTeX ($…$, $$…$$, \(…\), \[…\]) anywhere in the
  * prose, and a preview appears under the box the moment a formula shows up —
@@ -97,13 +109,9 @@ function MathPreview({ text }) {
 }
 
 export default function QuestionForm({ question, onSave, onCancel, busy }) {
-  const t = useT()
-  const [prompt, setPrompt] = useState(question?.prompt ?? '')
+  const { t, lang } = useI18n()
   const [answer, setAnswer] = useState(question?.answer ?? '')
-  const [byLang, setByLang] = useState({
-    en: question?.promptByLang?.en ?? '',
-    tr: question?.promptByLang?.tr ?? '',
-  })
+  const [byLang, setByLang] = useState(() => initialWording(question, lang))
 
   // `undefined` means "leave whatever is stored alone", which is what the API
   // wants too — so the three states line up and nothing has to be translated.
@@ -115,9 +123,7 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
   const shown = (field) =>
     images[field] === undefined ? (question?.[field] ?? null) : images[field]
 
-  const asksSomething = Boolean(
-    prompt.trim() || byLang.en.trim() || byLang.tr.trim() || shown('image'),
-  )
+  const asksSomething = Boolean(byLang.en.trim() || byLang.tr.trim() || shown('image'))
 
   const pick = (field) => async (fileList) => {
     const { accepted, rejected } = partitionFiles(Array.from(fileList ?? []))
@@ -170,7 +176,8 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
 
     try {
       await onSave({
-        prompt,
+        // The fallback for a blank language and for every reader of `prompt`.
+        prompt: byLang.en.trim() || byLang.tr.trim(),
         promptByLang: byLang,
         answer,
         ...imagePatch('image'),
@@ -184,19 +191,22 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
   return (
     <form className="cs-form" onSubmit={submit}>
       <div className="cs-field">
-        <label className="cs-label" htmlFor="q-prompt">
-          {t('qform.question')}
-        </label>
-        <textarea
+        <BilingualField
           id="q-prompt"
-          className="cs-textarea"
+          label={t('qform.question')}
+          multiline
           rows={4}
           maxLength={LIMITS.prompt}
-          placeholder={t('qform.placeholder')}
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
+          // Each box shows its example in its own language, whatever the
+          // interface is set to.
+          placeholder={{
+            en: translate('en', 'qform.placeholder'),
+            tr: translate('tr', 'qform.placeholder'),
+          }}
+          values={byLang}
+          onChange={(code, text) => setByLang((prior) => ({ ...prior, [code]: text }))}
+          renderExtra={(_lang, text) => <MathPreview text={text} />}
         />
-        <MathPreview text={prompt} />
         <PicturePicker
           id="q-image"
           shown={shown('image')}
@@ -205,32 +215,6 @@ export default function QuestionForm({ question, onSave, onCancel, busy }) {
           onRemove={remove('image')}
         />
         <p className="cs-hint">{t('qform.promptHint')}</p>
-      </div>
-
-      <div className="cs-field">
-        <p className="cs-label">{t('qform.byLang')}</p>
-        {[
-          ['en', t('qform.langEn')],
-          ['tr', t('qform.langTr')],
-        ].map(([lang, label]) => (
-          <div key={lang}>
-            <label className="cs-hint" htmlFor={`q-prompt-${lang}`}>
-              {label}
-            </label>
-            <textarea
-              id={`q-prompt-${lang}`}
-              className="cs-textarea"
-              rows={2}
-              maxLength={LIMITS.prompt}
-              value={byLang[lang]}
-              onChange={(event) =>
-                setByLang((prior) => ({ ...prior, [lang]: event.target.value }))
-              }
-            />
-            <MathPreview text={byLang[lang]} />
-          </div>
-        ))}
-        <p className="cs-hint">{t('qform.byLangHint')}</p>
       </div>
 
       <div className="cs-field">

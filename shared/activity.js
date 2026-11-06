@@ -6,8 +6,8 @@
  * live in shared/course.js — nothing here is content, only the shape content
  * has to take.
  *
- *   activity  { id, code, title, blurb, topic, level, ownerId, status,
- *               createdAt, updatedAt }
+ *   activity  { id, code, title, titleByLang{}, blurb, topic, level, ownerId,
+ *               status, createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
  *               stimulus, answer, answerImage, workingExpected, rubric[],
  *               tutor{}, position, ... }
@@ -151,16 +151,37 @@ export const hasAnswer = (question) =>
 export const PROMPT_LANGS = ['en', 'tr']
 
 /**
- * The wording a student reading in `lang` should see.
+ * One piece of authored text in the language asked for, with a backup.
  *
- * `promptByLang` is optional: a teacher who writes one prompt in one language
- * has a question that reads the same whatever the switch says, as it always
- * did. One who also writes it out per language gets the version matching the
- * switch, and `prompt` is the fallback for a language they left blank.
+ * `byLang` is optional: text written once, in one language, reads the same
+ * whatever the switch says. Written per language, the matching version wins;
+ * a language left blank shows `fallback` (the single-language field every
+ * document has always had), and failing that whichever language *was*
+ * written — a question typed only in Turkish is still a question to a student
+ * reading in English, not a blank card.
  */
-export function promptFor(question, lang) {
-  return question?.promptByLang?.[lang]?.trim() || question?.prompt || ''
+export function textFor(byLang, fallback, lang) {
+  const own = byLang?.[lang]?.trim()
+  if (own) return own
+  if (fallback?.trim()) return fallback
+  for (const other of PROMPT_LANGS) {
+    const text = byLang?.[other]?.trim()
+    if (text) return text
+  }
+  return ''
 }
+
+/** The wording a student reading in `lang` should see — see textFor. */
+export const promptFor = (question, lang) =>
+  textFor(question?.promptByLang, question?.prompt, lang)
+
+/**
+ * An activity's name in `lang` — see textFor. `title` is always set (to the
+ * first language written, when only per-language names are sent), so the
+ * researcher export and anything else reading `title` keeps working.
+ */
+export const titleFor = (activity, lang) =>
+  textFor(activity?.titleByLang, activity?.title, lang)
 
 /**
  * Whether this question puts a question to the student at all.
@@ -233,5 +254,7 @@ export function publicQuestion(question, activity) {
     position: question.position,
     activityId: question.activityId,
     activityTitle: activity?.title ?? null,
+    /** The activity's name per language, when written — see titleFor. */
+    activityTitleByLang: activity?.titleByLang ?? {},
   }
 }

@@ -1,0 +1,50 @@
+/* Two languages of one field, side by side — see BilingualField.jsx. */
+
+.bl {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.bl > legend {
+  padding: 0;
+  margin-bottom: var(--s-1);
+}
+
+.bl-cols {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.bl-col {
+  display: grid;
+  gap: var(--s-1);
+  align-content: start;
+  min-width: 0;
+}
+
+.bl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 28px;
+}
+
+.bl-lang {
+  font-size: var(--t-13);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.bl-ai {
+  margin-left: auto;
+}
+
+.bl-drafted {
+  color: var(--stamp);
+}

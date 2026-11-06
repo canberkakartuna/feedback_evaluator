@@ -188,6 +188,9 @@ export const api = {
   reorderQuestions: (activityId, questionIds) =>
     call('POST', `/api/activities/${activityId}/questions/reorder`, { questionIds }),
 
+  /** An AI draft of a teacher's text in the other language — see services/translate.js. */
+  translate: ({ text, from, to }) => call('POST', '/api/translate', { text, from, to }),
+
   /**
    * What the person looking may start. Sends the token when there is one, which
    * narrows it to their own teacher's work; without one it is every published

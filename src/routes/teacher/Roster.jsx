@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
+import { titleFor } from '../../../shared/activity'
 import { useAsync } from '../../lib/useAsync'
 
 /**
@@ -54,9 +55,9 @@ export default function Roster() {
   }, [students.data, t])
 
   const titleOf = useMemo(() => {
-    const map = new Map((activities.data?.activities ?? []).map((entry) => [entry.id, entry.title]))
+    const map = new Map((activities.data?.activities ?? []).map((entry) => [entry.id, titleFor(entry, lang)]))
     return (activityId) => map.get(activityId) ?? '—'
-  }, [activities.data])
+  }, [activities.data, lang])
 
   const rows = (sessions.data?.sessions ?? []).filter(
     (session) => !activityFilter || session.activityId === activityFilter,
@@ -87,7 +88,7 @@ export default function Roster() {
             <option value="">{t('common.all')}</option>
             {(activities.data?.activities ?? []).map((activity) => (
               <option key={activity.id} value={activity.id}>
-                {activity.title}
+                {titleFor(activity, lang)}
               </option>
             ))}
           </select>

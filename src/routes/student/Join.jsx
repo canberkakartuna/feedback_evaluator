@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
-import { useT } from '../../lib/i18n'
+import { useI18n } from '../../lib/i18n'
+import { titleFor } from '../../../shared/activity'
 
 /**
  * The class-code door: six characters, or the link that carries them.
@@ -28,7 +29,7 @@ import { useT } from '../../lib/i18n'
 export default function Join() {
   const { code: fromUrl } = useParams()
   const navigate = useNavigate()
-  const t = useT()
+  const { lang, t } = useI18n()
   const { step, totalSteps } = useOutletContext()
 
   const [code, setCode] = useState(fromUrl ?? '')
@@ -89,7 +90,7 @@ export default function Join() {
           {t('entry.step', { current: step, total: totalSteps })} ·{' '}
           <span className="mono">{activity.code}</span>
         </p>
-        <h1 className="en-title">{activity.title}</h1>
+        <h1 className="en-title">{titleFor(activity, lang)}</h1>
         <p className="en-lede">{t('join.found')}</p>
 
         <div className="en-terms">

@@ -13,6 +13,7 @@ import { researchRoutes } from './routes/research.js'
 import { authRoutes } from './routes/auth.js'
 import { userRoutes } from './routes/users.js'
 import { supportRoutes } from './routes/support.js'
+import { translateRoutes } from './routes/translate.js'
 import { optionalAuth } from './lib/auth.js'
 import { ApiError, notFound, route } from './lib/http.js'
 
@@ -189,6 +190,7 @@ export function createApp({ store = createStore() } = {}) {
   app.use('/api/prompts', promptRoutes(store))
   app.use('/api/research', researchRoutes(store))
   app.use('/api/support', supportRoutes(store))
+  app.use('/api/translate', translateRoutes())
 
   app.use((req, res) => {
     res.status(404).json({ error: { message: `No route for ${req.method} ${req.path}` } })

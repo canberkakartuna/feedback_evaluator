@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
-import { useT } from '../../lib/i18n'
+import { useI18n } from '../../lib/i18n'
+import { titleFor } from '../../../shared/activity'
 import TopicFilter from '../../components/TopicFilter'
 import { matchesTopic } from '../../lib/topics'
 
@@ -31,7 +32,7 @@ import { matchesTopic } from '../../lib/topics'
  */
 export default function StudentEntry() {
   const navigate = useNavigate()
-  const t = useT()
+  const { lang, t } = useI18n()
   const { user, ready } = useAuth()
   const { step, totalSteps } = useOutletContext()
 
@@ -115,7 +116,7 @@ export default function StudentEntry() {
                   disabled={busy}
                   onClick={() => begin(activity.id)}
                 >
-                  <span className="en-topic-name">{activity.title}</span>
+                  <span className="en-topic-name">{titleFor(activity, lang)}</span>
                   <span className="en-topic-meta mono">
                     {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
                     {activity.level ? `${activity.level} · ` : ''}

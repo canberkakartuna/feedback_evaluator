@@ -1,0 +1,71 @@
+/* The participant information sheet — see ParticipantInfoSheet.jsx. Shown
+   on the consent screen and the profile, folded away in a `.pis-fold`
+   <details> until asked for. */
+.pis-fold {
+  margin-top: var(--s-3);
+}
+
+.pis-fold > summary {
+  cursor: pointer;
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--pen);
+}
+
+.pis {
+  margin-top: var(--s-3);
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-2);
+  padding: var(--s-4);
+  font-size: var(--t-13);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.pis p {
+  margin: 0 0 var(--s-3);
+}
+
+.pis a {
+  color: var(--pen);
+  overflow-wrap: anywhere;
+}
+
+.pis-title {
+  margin: 0;
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+
+.pis-committee {
+  color: var(--graphite);
+}
+
+.pis-details {
+  margin: 0 0 var(--s-3);
+}
+
+.pis-details > div + div {
+  margin-top: var(--s-2);
+}
+
+.pis-details dt {
+  font-weight: 600;
+}
+
+.pis-details dd {
+  margin: 0;
+}
+
+.pis-heading {
+  margin: var(--s-4) 0 var(--s-2);
+  font-size: var(--t-13);
+  font-weight: 700;
+}
+
+.pis-closing {
+  font-style: italic;
+  color: var(--graphite);
+}

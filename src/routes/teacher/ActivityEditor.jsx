@@ -1,12 +1,60 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { LIMITS, TOPICS, promptFor } from '../../../shared/activity'
+import { LIMITS, PROMPT_LANGS, TOPICS, promptFor, titleFor } from '../../../shared/activity'
+import BilingualField from '../../components/BilingualField'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
+import { initialNames } from '../../lib/wording'
 import QuestionForm from './QuestionForm'
 import ShareActivity from './ShareActivity'
+
+/**
+ * The activity's name in both languages, with a Save that appears once either
+ * box differs from what is stored. Keyed by `updatedAt` where it is used, so
+ * a save (or any other change that reloads the activity) starts it afresh
+ * from what the server kept.
+ */
+function ActivityName({ activity, busy, onSave }) {
+  const { lang, t } = useI18n()
+  // Fixed at mount, so flipping the EN/TR switch cannot make an untouched
+  // older name look edited — see initialByLang on where a lone `title` goes.
+  const [stored] = useState(() => initialNames(activity, lang))
+  const [names, setNames] = useState(stored)
+
+  const changed = PROMPT_LANGS.some((code) => names[code].trim() !== stored[code].trim())
+  const named = Boolean(names.en.trim() || names.tr.trim())
+
+  return (
+    <div className="cs-form" style={{ marginTop: 'var(--s-4)' }}>
+      <BilingualField
+        id="activity-name"
+        label={t('editor.nameLabel')}
+        hint={t('activities.titleHint')}
+        maxLength={LIMITS.title}
+        disabled={busy}
+        values={names}
+        onChange={(code, text) => setNames((prior) => ({ ...prior, [code]: text }))}
+      />
+      {changed ? (
+        <div className="cs-actions">
+          <button
+            type="button"
+            className="cs-btn cs-btn-primary cs-btn-sm"
+            disabled={busy || !named}
+            onClick={() => onSave({ titleByLang: names })}
+          >
+            {busy ? t('common.saving') : t('editor.saveName')}
+          </button>
+          <button type="button" className="cs-btn cs-btn-sm" onClick={() => setNames(stored)}>
+            {t('common.cancel')}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
 /**
  * One activity: its settings, how students reach it, and its questions.
@@ -87,7 +135,7 @@ export default function ActivityEditor() {
             <Link to="/teacher">{t('editor.breadcrumb')}</Link> ·{' '}
             {published ? t('activities.open') : t('activities.draft')}
           </p>
-          <h1 className="cs-title">{activity.title}</h1>
+          <h1 className="cs-title">{titleFor(activity, lang)}</h1>
           {activity.blurb ? <p className="cs-lede">{activity.blurb}</p> : null}
         </div>
 
@@ -134,6 +182,13 @@ export default function ActivityEditor() {
             </p>
           </>
         )}
+
+        <ActivityName
+          key={activity.updatedAt}
+          activity={activity}
+          busy={busy}
+          onSave={(patch) => act(() => api.updateActivity(activity.id, patch)).catch(() => {})}
+        />
 
         {/* The topic, saved on change rather than behind a Save button: it is one
             field, and the list a class reads is filtered by it. */}

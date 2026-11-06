@@ -1,5 +1,6 @@
 import { useI18n } from '../lib/i18n'
 import { linkify, participantInfoFor } from '../lib/participantInfo'
+import './ParticipantInfoSheet.css'
 
 /** One paragraph of the sheet, with its emails and URLs made clickable. */
 function Linked({ text }) {

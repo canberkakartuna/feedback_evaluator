@@ -101,6 +101,7 @@ const en = {
     eyebrow: 'Before you continue',
     title: 'How this system uses your data',
     lede: 'Everything you do in this system — every action you take and every piece of data you generate — is used for research. Please read this before continuing.',
+    openSheet: 'Read the participant information sheet',
     readSheet: 'I have read and understood the participant information sheet',
     agree: 'I agree to take part in this study',
     submit: 'Submit',
@@ -406,6 +407,8 @@ const en = {
     new: 'New activity',
     titleLabel: 'Title',
     titlePlaceholder: 'Sharing a bill three ways',
+    titleHint:
+      'Write it in English, Turkish or both. Students see the name in the language their EN/TR switch is set to, or the other one when that is blank.',
     blurbLabel: 'Blurb',
     levelLabel: 'Grade or level',
     levelPlaceholder: '9th grade',
@@ -424,6 +427,8 @@ const en = {
 
   editor: {
     breadcrumb: 'Activities',
+    nameLabel: 'Name',
+    saveName: 'Save name',
     seeWork: 'See their work',
     publish: 'Publish',
     closeToStudents: 'Close to students',
@@ -463,7 +468,7 @@ const en = {
     question: 'Question',
     placeholder: 'A recipe for four uses 300 g of flour. How much flour is needed for ten?',
     promptHint:
-      'Type it, attach a photo of it, or both — either alone is enough. LaTeX renders for students: $\\frac{3}{4}$ becomes a real fraction.',
+      'Write it in English, Turkish or both — a language left blank shows students the other one. Or attach a photo instead; either alone is enough. LaTeX renders for students: $\\frac{3}{4}$ becomes a real fraction.',
     attach: 'Attach a picture',
     answer: 'Answer (optional)',
     answerPlaceholder: '750 g — the recipe scales by 10 ÷ 4, so 300 g × 2.5.',
@@ -473,11 +478,19 @@ const en = {
     needSomething: 'Write the question above, or attach a picture of it.',
     saveChanges: 'Save changes',
     add: 'Add question',
-    byLang: 'The question in each language (optional)',
-    byLangHint:
-      'Students see the version that matches their EN/TR switch. A language left blank shows the question above instead.',
-    langEn: 'English',
-    langTr: 'Turkish',
+  },
+
+  /** One field written in both languages — see components/BilingualField.jsx. */
+  bilingual: {
+    en: 'English',
+    tr: 'Turkish',
+    written: 'Written',
+    blank: 'Blank',
+    translateFrom: 'Translate from {lang} with AI',
+    translating: 'Translating…',
+    overwrite: 'Replace the {lang} text with a new AI translation?',
+    drafted: 'AI draft — read it through before saving.',
+    fallsBack: 'Students reading in this language will see the {lang} version.',
   },
 
   preview: {
@@ -729,6 +742,7 @@ const tr = {
     eyebrow: 'Devam etmeden önce',
     title: 'Verileriniz nasıl kullanılıyor',
     lede: 'Bu sistemde yaptığınız her şey — her işlem ve oluşturduğunuz her veri — araştırma amacıyla kullanılır. Devam etmeden önce lütfen bunu okuyun.',
+    openSheet: 'Katılımcı bilgilendirme formunu oku',
     readSheet: 'Katılımcı bilgilendirme formunu okudum ve anladım',
     agree: 'Bu çalışmaya katılmayı onaylıyorum',
     submit: 'Gönder',
@@ -1019,6 +1033,8 @@ const tr = {
     new: 'Yeni etkinlik',
     titleLabel: 'Başlık',
     titlePlaceholder: 'Bir hesabı üç kişiye bölmek',
+    titleHint:
+      'İngilizce, Türkçe ya da ikisiyle yazın. Öğrenciler adı EN/TR seçimindeki dilde, o boşsa diğer dilde görür.',
     blurbLabel: 'Kısa açıklama',
     levelLabel: 'Sınıf ya da seviye',
     levelPlaceholder: '9. sınıf',
@@ -1037,6 +1053,8 @@ const tr = {
 
   editor: {
     breadcrumb: 'Etkinlikler',
+    nameLabel: 'Ad',
+    saveName: 'Adı kaydet',
     seeWork: 'Çalışmalarını gör',
     publish: 'Yayımla',
     closeToStudents: 'Öğrencilere kapat',
@@ -1076,7 +1094,7 @@ const tr = {
     question: 'Soru',
     placeholder: 'Dört kişilik bir tarifte 300 g un kullanılıyor. On kişi için ne kadar un gerekir?',
     promptHint:
-      'Yazın, fotoğrafını ekleyin ya da ikisini birden yapın — biri tek başına yeterli. LaTeX öğrencilere işlenmiş görünür: $\\frac{3}{4}$ gerçek bir kesir olur.',
+      'İngilizce, Türkçe ya da ikisiyle yazın — boş bırakılan dilde öğrencilere diğeri gösterilir. Ya da yerine fotoğrafını ekleyin; biri tek başına yeterli. LaTeX öğrencilere işlenmiş görünür: $\\frac{3}{4}$ gerçek bir kesir olur.',
     attach: 'Görsel ekle',
     answer: 'Cevap (isteğe bağlı)',
     answerPlaceholder: '750 g — tarif 10 ÷ 4 ile ölçeklenir, yani 300 g × 2,5.',
@@ -1086,11 +1104,18 @@ const tr = {
     needSomething: 'Yukarıya soruyu yazın ya da bir görselini ekleyin.',
     saveChanges: 'Değişiklikleri kaydet',
     add: 'Soru ekle',
-    byLang: 'Sorunun her dildeki hâli (isteğe bağlı)',
-    byLangHint:
-      'Öğrenciler EN/TR seçimine uyan hâlini görür. Boş bırakılan dilde yukarıdaki soru gösterilir.',
-    langEn: 'İngilizce',
-    langTr: 'Türkçe',
+  },
+
+  bilingual: {
+    en: 'İngilizce',
+    tr: 'Türkçe',
+    written: 'Yazıldı',
+    blank: 'Boş',
+    translateFrom: '{lang} metinden yapay zekâ ile çevir',
+    translating: 'Çevriliyor…',
+    overwrite: '{lang} metin yeni bir yapay zekâ çevirisiyle değiştirilsin mi?',
+    drafted: 'Yapay zekâ taslağı — kaydetmeden önce okuyun.',
+    fallsBack: 'Bu dilde okuyan öğrenciler {lang} hâlini görür.',
   },
 
   preview: {
