@@ -48,7 +48,9 @@ export default function StudentWork() {
     t('common.events', { count: events.length }),
     session.staffPreview
       ? t('transcript.consentWaived')
-      : t('transcript.consentVersion', { version: session.consent?.version ?? '—' }),
+      : session.consent?.withdrawnAt
+        ? t('transcript.consentWithdrawn')
+        : t('transcript.consentVersion', { version: session.consent?.version ?? '—' }),
     session.promptVersion
       ? t('transcript.prompt', { version: session.promptVersion })
       : t('transcript.noPrompt'),

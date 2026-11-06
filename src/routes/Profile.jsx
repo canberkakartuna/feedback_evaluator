@@ -29,8 +29,8 @@ export default function Profile() {
     setBusy(true)
     setError(null)
     try {
-      // The updated user has `consented: false`, so the consent gate in App.jsx
-      // shows the notice again straight away.
+      // The updated user has `withdrawn: true`, so the consent gate in App.jsx
+      // lets them carry on, and this page now says they withdrew.
       const { user: updated } = await api.withdrawConsent()
       setUser(updated)
     } catch (failure) {
@@ -52,15 +52,17 @@ export default function Profile() {
   if (!user) return <Navigate to="/" replace />
 
   const consent = user.consent
-  const consentDate = consent?.at
-    ? new Date(consent.at).toLocaleString(lang, {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : null
+  const formatDate = (value) =>
+    value
+      ? new Date(value).toLocaleString(lang, {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      : null
+  const consentDate = formatDate(consent?.at)
 
   return (
     <main className="en-page">
@@ -100,6 +102,10 @@ export default function Profile() {
           <p className="en-lede">{t('consent.lede')}</p>
           {consent?.given ? (
             <p className="pf-consent-note">{t('profile.consentGiven', { date: consentDate })}</p>
+          ) : user.withdrawn ? (
+            <p className="pf-consent-note">
+              {t('profile.withdrawn', { date: formatDate(consent.withdrawnAt) })}
+            </p>
           ) : (
             <p className="pf-consent-note">{t('profile.consentNone')}</p>
           )}

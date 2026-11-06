@@ -1872,13 +1872,34 @@ try {
   const withdrawn = await call('POST', '/api/auth/consent/withdraw', { token: numberToken })
   check('withdrawing works from the sign-in that agreed', withdrawn.status === 200 && withdrawn.body.withdrawn === true)
   check('it keeps their work', (await call('GET', `/api/sessions/${firstVisit.body.session.id}`)).status === 200)
-  check('and the notice is asked again', withdrawn.body.user.consented === false && withdrawn.body.user.canWithdrawConsent === false)
+  check('no longer consented', withdrawn.body.user.consented === false && withdrawn.body.user.canWithdrawConsent === false)
+  check('but marked withdrawn, so they are not asked again', withdrawn.body.user.withdrawn === true)
+  check(
+    'and they can carry on with their work',
+    (await call('POST', '/api/sessions', { token: numberToken, body: { activityId: seeded.activity.id } })).status === 200,
+  )
   check(
     'withdrawing twice is refused',
     (await call('POST', '/api/auth/consent/withdraw', { token: numberToken })).status === 400,
   )
   const againConsent = await call('POST', '/api/auth/consent', { token: numberToken })
   check('agreeing again records a fresh consent', againConsent.body.recorded === true && againConsent.body.user.consented === true)
+  check('which clears the withdrawal', againConsent.body.user.withdrawn === false)
+
+  // Work started after withdrawing is kept, but recorded as not consented.
+  const otherLogin = await call('POST', '/api/auth/student', { body: { studentNumber: '20230002' } })
+  check('a student who never agreed is not withdrawn', otherLogin.body.user.withdrawn === false)
+  await call('POST', '/api/auth/consent', { token: otherLogin.body.token })
+  await call('POST', '/api/auth/consent/withdraw', { token: otherLogin.body.token })
+  const afterWithdrawing = await call('POST', '/api/sessions', {
+    token: otherLogin.body.token,
+    body: { consent: true, activityId: seeded.activity.id },
+  })
+  check('a withdrawn student can start a new session', afterWithdrawing.status === 201)
+  check(
+    'recorded as not consented, with when they withdrew',
+    afterWithdrawing.body.session.consent.given === false && Boolean(afterWithdrawing.body.session.consent.withdrawnAt),
+  )
 
   // A consent recorded before sign-in keys existed has no `signInKey`: the
   // sign-in issued before it may still withdraw, a later one may not.

@@ -47,6 +47,17 @@ export const hasCurrentConsent = (user) =>
   Boolean(user?.consent?.given && user.consent.version === config.consentVersion)
 
 /**
+ * Withdrew from the study from the profile, and has not agreed again since.
+ *
+ * A withdrawn student keeps using the system (feedback after the 3 Nov doc):
+ * withdrawing takes them out of the research, not out of the class. So the
+ * consent gate lets them through, and what they do from then on is recorded
+ * as not consented rather than refused.
+ */
+export const hasWithdrawnConsent = (user) =>
+  Boolean(user?.consent && !user.consent.given && user.consent.withdrawnAt)
+
+/**
  * `signInKey` is the key of the login token the agreement was given under. It
  * is what limits withdrawal to that same sign-in (3 Nov 2026 doc): once the
  * student signs out and back in, the key no longer matches and their consent
@@ -97,6 +108,7 @@ export function publicUser(user, { authToken = null } = {}) {
     // something to show anybody as theirs.
     email: user.studentNumber ? null : user.email,
     consented: hasCurrentConsent(user),
+    withdrawn: hasWithdrawnConsent(user),
   }
 }
 

@@ -2,7 +2,7 @@ import express from 'express'
 import { config } from '../config.js'
 import { isStaff } from '../../shared/roles.js'
 import { cleanNickname } from '../../shared/session.js'
-import { canWithdrawConsent, hasCurrentConsent } from '../services/users.js'
+import { canWithdrawConsent, hasCurrentConsent, hasWithdrawnConsent } from '../services/users.js'
 import { removeSessionData } from '../services/withdrawal.js'
 import { activityQuestions, publicActivity } from '../services/delivery.js'
 import {
@@ -96,9 +96,15 @@ export function sessionRoutes(store) {
       }
 
       const onAccount = hasCurrentConsent(req.user)
-      const consented = req.body?.consent === true || onAccount
+      /**
+       * A student who withdrew from the profile may still work, but nothing
+       * they start is an agreement: the account's withdrawal outranks the
+       * `consent: true` the entry screens always send.
+       */
+      const withdrawn = hasWithdrawnConsent(req.user)
+      const consented = !withdrawn && (req.body?.consent === true || onAccount)
 
-      if (!consented) {
+      if (!consented && !withdrawn) {
         throw badRequest('Consent is required to start a session', {
           field: 'consent',
           expected: true,
@@ -166,6 +172,7 @@ export function sessionRoutes(store) {
            * would put a date on an agreement that was given weeks earlier.
            */
           ...(onAccount ? { firstGivenAt: req.user.consent.at } : {}),
+          ...(withdrawn ? { withdrawnAt: req.user.consent.withdrawnAt } : {}),
         },
         /**
          * Never true from here on: staff are refused above. The field stays on

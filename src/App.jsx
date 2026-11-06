@@ -78,7 +78,9 @@ function Splash() {
 function ConsentGate({ children }) {
   const { user, ready } = useAuth()
 
-  if (ready && user && user.role !== 'admin' && !user.consented) {
+  // A student who withdrew from the profile carries on without being asked
+  // again: withdrawing takes them out of the study, not out of the system.
+  if (ready && user && user.role !== 'admin' && !user.consented && !user.withdrawn) {
     return <ConsentScreen />
   }
 
