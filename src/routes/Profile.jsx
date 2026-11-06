@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
 import Navbar from '../components/Navbar'
+import ParticipantInfoSheet from '../components/ParticipantInfoSheet'
 import './console.css'
 import '../components/Entry.css'
 import './Profile.css'
@@ -100,6 +101,10 @@ export default function Profile() {
           {/* The participant information form, readable again at any time. */}
           <p className="en-terms-head">{t('profile.consentHead')}</p>
           <p className="en-lede">{t('consent.lede')}</p>
+          <details className="pf-sheet">
+            <summary>{t('profile.readSheet')}</summary>
+            <ParticipantInfoSheet />
+          </details>
           {consent?.given ? (
             <p className="pf-consent-note">{t('profile.consentGiven', { date: consentDate })}</p>
           ) : user.withdrawn ? (
