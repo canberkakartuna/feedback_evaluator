@@ -13,9 +13,11 @@ const when = (iso, lang) =>
     : ''
 
 /**
- * One support or suggestion message, with its reply if there is one. Shown to
+ * One support or suggestion message, with the conversation under it: staff
+ * replies and the writer's own follow-ups (`fromWriter`), in order. Shown to
  * the writer on /support and to staff in the inbox; `from` names the writer,
- * which only the inbox needs. `children` is the inbox's reply box.
+ * which only the inbox needs. `children` is the reply box — staff's in the
+ * inbox, the writer's on /support.
  */
 export default function SupportMessage({ message, from = false, children }) {
   const { lang, t } = useI18n()
@@ -32,18 +34,22 @@ export default function SupportMessage({ message, from = false, children }) {
       {from ? <p className="sp-msg-from mono">{message.userName}</p> : null}
       <p className="sp-msg-body">{message.body}</p>
 
-      {message.replies?.length ? (
-        message.replies.map((reply) => (
-          <div key={reply.at} className="sp-reply">
-            <p className="sp-reply-head eyebrow">
-              {t('support.replyFrom', { name: reply.byName, date: when(reply.at, lang) })}
-            </p>
-            <p className="sp-msg-body">{reply.text}</p>
-          </div>
-        ))
-      ) : (
+      {(message.replies ?? []).map((reply, index) => (
+        <div key={`${reply.at}-${index}`} className="sp-reply" data-writer={reply.fromWriter || undefined}>
+          <p className="sp-reply-head eyebrow">
+            {reply.fromWriter
+              ? from
+                ? t('support.followUpFrom', { name: reply.byName, date: when(reply.at, lang) })
+                : t('support.youWrote', { date: when(reply.at, lang) })
+              : t('support.replyFrom', { name: reply.byName, date: when(reply.at, lang) })}
+          </p>
+          <p className="sp-msg-body">{reply.text}</p>
+        </div>
+      ))}
+      {/* Waiting on staff: nothing answered yet, or the writer spoke last. */}
+      {!message.replies?.length || message.replies.at(-1).fromWriter ? (
         <p className="sp-waiting">{t('support.waiting')}</p>
-      )}
+      ) : null}
 
       {children}
     </article>

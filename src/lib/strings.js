@@ -101,7 +101,6 @@ const en = {
     eyebrow: 'Before you continue',
     title: 'How this system uses your data',
     lede: 'Everything you do in this system — every action you take and every piece of data you generate — is used for research. Please read this before continuing.',
-    openSheet: 'Read the participant information sheet',
     readSheet: 'I have read and understood the participant information sheet',
     agree: 'I agree to take part in this study',
     submit: 'Submit',
@@ -124,6 +123,8 @@ const en = {
     withdrawHint: 'You can withdraw until you sign out. After that your consent stands.',
     withdrawWarn: 'You are withdrawing from the study. You can keep using the system; what you do from now on is not part of the research.',
     withdrawn: 'You withdrew from the study on {date}.',
+    withdrawnContact:
+      'If you have any conversations recorded so far, the researcher will contact you to find out whether you would like them to be kept or deleted.',
     withdrawConfirm: 'Withdraw from the study',
     withdrawing: 'Withdrawing…',
     withdrawClosed: 'Consent can only be withdrawn during the sign-in it was given in.',
@@ -238,6 +239,10 @@ const en = {
     reply: 'Send reply',
     replyLabel: 'Write a reply',
     replyAgain: 'Add another reply',
+    replyMine: 'Reply in this conversation',
+    youWrote: 'You wrote · {date}',
+    followUpFrom: '{name} wrote back · {date}',
+    threadHint: 'To follow up, reply under the message. For a different topic, write a new message above.',
   },
 
   kinds: {
@@ -742,7 +747,6 @@ const tr = {
     eyebrow: 'Devam etmeden önce',
     title: 'Verileriniz nasıl kullanılıyor',
     lede: 'Bu sistemde yaptığınız her şey — her işlem ve oluşturduğunuz her veri — araştırma amacıyla kullanılır. Devam etmeden önce lütfen bunu okuyun.',
-    openSheet: 'Katılımcı bilgilendirme formunu oku',
     readSheet: 'Katılımcı bilgilendirme formunu okudum ve anladım',
     agree: 'Bu çalışmaya katılmayı onaylıyorum',
     submit: 'Gönder',
@@ -764,6 +768,8 @@ const tr = {
     withdrawHint: 'Çıkış yapana kadar onayını geri çekebilirsin. Sonrasında onayın geçerli kalır.',
     withdrawWarn: 'Çalışmadan çekiliyorsun. Sistemi kullanmaya devam edebilirsin; bundan sonra yaptıkların araştırmaya dahil edilmez.',
     withdrawn: '{date} tarihinde çalışmadan çekildin.',
+    withdrawnContact:
+      'Bu zamana kadar kaydedilmiş konuşmalarınız varsa, bunların saklanmasını mı yoksa silinmesini mi istediğinizi öğrenmek üzere araştırmacı sizinle iletişime geçecektir.',
     withdrawConfirm: 'Çalışmadan çekil',
     withdrawing: 'Geri çekiliyor…',
     withdrawClosed: 'Onay yalnızca verildiği oturum boyunca geri çekilebilir.',
@@ -872,6 +878,10 @@ const tr = {
     reply: 'Cevabı gönder',
     replyLabel: 'Cevap yazın',
     replyAgain: 'Bir cevap daha ekleyin',
+    replyMine: 'Bu konuşmaya cevap yaz',
+    youWrote: 'Sen yazdın · {date}',
+    followUpFrom: '{name} tekrar yazdı · {date}',
+    threadHint: 'Devam etmek için mesajın altından cevap yaz. Farklı bir konu için yukarıdan yeni bir mesaj aç.',
   },
 
   kinds: {

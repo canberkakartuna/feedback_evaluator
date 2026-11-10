@@ -59,6 +59,11 @@
   padding-left: var(--s-3);
 }
 
+/* The writer's own follow-up in the thread, told apart from a staff reply. */
+.sp-reply[data-writer] {
+  border-left-color: var(--edge);
+}
+
 .sp-reply-head {
   margin: 0;
 }

@@ -108,8 +108,11 @@ export default function Profile() {
           {consent?.given ? (
             <p className="pf-consent-note">{t('profile.consentGiven', { date: consentDate })}</p>
           ) : user.withdrawn ? (
+            // What happens to what was already recorded is settled with the
+            // researcher, not here (design doc) — so the note says who will ask.
             <p className="pf-consent-note">
-              {t('profile.withdrawn', { date: formatDate(consent.withdrawnAt) })}
+              {t('profile.withdrawn', { date: formatDate(consent.withdrawnAt) })}{' '}
+              {t('profile.withdrawnContact')}
             </p>
           ) : (
             <p className="pf-consent-note">{t('profile.consentNone')}</p>

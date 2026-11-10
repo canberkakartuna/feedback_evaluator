@@ -2067,6 +2067,39 @@ try {
   })
   check('and once read it is no longer unread', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 0)
 
+  // The writer answers back in the same thread instead of opening a new one.
+  const ticketId = ticket.body.message.id
+  check(
+    'a follow-up needs text',
+    (await call('POST', `/api/support/mine/${ticketId}/reply`, { token: writer, body: { text: '  ' } })).status === 400,
+  )
+  check(
+    'nobody else can follow up on it',
+    (await call('POST', `/api/support/mine/${ticketId}/reply`, { token: teacherToken, body: { text: 'hi' } })).status === 404,
+  )
+  check(
+    'nor anonymously',
+    (await call('POST', `/api/support/mine/${ticketId}/reply`, { body: { text: 'hi' } })).status === 401,
+  )
+  const followed = await call('POST', `/api/support/mine/${ticketId}/reply`, {
+    token: writer,
+    body: { text: 'Still failing with a JPG.' },
+  })
+  check(
+    'the writer follows up in the same thread',
+    followed.status === 200 &&
+      followed.body.message.replies.length === 3 &&
+      followed.body.message.replies.at(-1).fromWriter === true &&
+      followed.body.message.replies.at(-1).byId === undefined,
+  )
+  check('their own follow-up is not unread for them', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 0)
+  const inboxThread = (await call('GET', '/api/support', { token: teacherToken })).body.messages.find((m) => m.id === ticketId)
+  check('their teacher sees the follow-up in the thread', inboxThread.replies.at(-1).text === 'Still failing with a JPG.')
+  check('and no new message was opened', (await call('GET', '/api/support/mine', { token: writer })).body.messages.length === 2)
+  await new Promise((resolve) => setTimeout(resolve, 5))
+  await call('POST', `/api/support/${ticketId}/reply`, { token: teacherToken, body: { text: 'Send me the file.' } })
+  check('a staff reply after the follow-up is unread again', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 1)
+
   console.log('\nnot found')
   const nowhere = await call('GET', '/api/nope')
   check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))

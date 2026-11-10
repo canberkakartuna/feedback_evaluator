@@ -1,6 +1,6 @@
 /* The participant information sheet — see ParticipantInfoSheet.jsx. Shown
-   on the consent screen and the profile, folded away in a `.pis-fold`
-   <details> until asked for. */
+   open on the consent screen (`.pis-open`), and on the profile folded away in
+   a `.pis-fold` <details> until asked for. */
 .pis-fold {
   margin-top: var(--s-3);
 }
@@ -10,6 +10,11 @@
   font-size: var(--t-14);
   font-weight: 600;
   color: var(--pen);
+}
+
+/* Open above the consent boxes: a shorter box, so they stay in view. */
+.pis-open .pis {
+  max-height: 45vh;
 }
 
 .pis {

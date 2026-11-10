@@ -54,11 +54,11 @@ export default function ConsentScreen() {
 
         {/* The sheet the first box says was read, right above that box — in
             the interface language, so the EN/TR switch in the navbar changes
-            it. Folded so the two boxes stay in view. */}
-        <details className="pis-fold">
-          <summary>{t('consent.openSheet')}</summary>
+            it. Shown open, not folded (design doc), but in its own scrolling
+            box so the two boxes below stay within reach. */}
+        <div className="pis-open">
           <ParticipantInfoSheet />
-        </details>
+        </div>
 
         <label className="en-agree">
           <input

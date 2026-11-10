@@ -16,8 +16,10 @@ const CATEGORY_KEY = { support: 'support.categorySupport', suggestion: 'support.
  * The support / suggestion channel, for anyone signed in (3 Nov 2026 doc).
  *
  * Write a message under a category with a title; replies appear under it here,
- * the next time they sign in. Opening the page marks the replies read, which
- * is what puts out the dot on the Support button in the navbar.
+ * the next time they sign in. The writer answers back under the same message,
+ * so one topic stays one conversation; a different topic is a new message
+ * (design doc). Opening the page marks the replies read, which is what puts
+ * out the dot on the Support button in the navbar.
  */
 export default function Support() {
   const t = useT()
@@ -30,6 +32,10 @@ export default function Support() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [sent, setSent] = useState(false)
+  // Follow-up drafts, one per thread, and which thread is sending.
+  const [drafts, setDrafts] = useState({})
+  const [replyingId, setReplyingId] = useState(null)
+  const [replyError, setReplyError] = useState(null)
 
   // Read once shown — after the list has loaded with its unread flags intact —
   // and only up to when that list was read, then the navbar dot is refreshed.
@@ -68,6 +74,23 @@ export default function Support() {
       setError(failure.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  const followUp = async (event, messageId) => {
+    event.preventDefault()
+    const text = (drafts[messageId] ?? '').trim()
+    if (!text) return
+    setReplyingId(messageId)
+    setReplyError(null)
+    try {
+      await api.replyMySupport(messageId, text)
+      setDrafts((prior) => ({ ...prior, [messageId]: '' }))
+      mine.reload()
+    } catch (failure) {
+      setReplyError({ messageId, text: failure.message })
+    } finally {
+      setReplyingId(null)
     }
   }
 
@@ -159,11 +182,45 @@ export default function Support() {
         ) : mine.data.messages.length === 0 ? (
           <p className="cs-hint">{t('support.none')}</p>
         ) : (
-          <div className="sp-list">
-            {mine.data.messages.map((message) => (
-              <SupportMessage key={message.id} message={message} />
-            ))}
-          </div>
+          <>
+            <p className="cs-hint">{t('support.threadHint')}</p>
+            <div className="sp-list">
+              {mine.data.messages.map((message) => (
+                <SupportMessage key={message.id} message={message}>
+                  <form className="sp-reply-form" onSubmit={(event) => followUp(event, message.id)}>
+                    <label className="sr-only" htmlFor={`follow-${message.id}`}>
+                      {t('support.replyMine')}
+                    </label>
+                    <textarea
+                      id={`follow-${message.id}`}
+                      className="cs-textarea"
+                      rows={2}
+                      maxLength={5000}
+                      placeholder={t('support.replyMine')}
+                      value={drafts[message.id] ?? ''}
+                      onChange={(event) =>
+                        setDrafts((prior) => ({ ...prior, [message.id]: event.target.value }))
+                      }
+                    />
+                    {replyError?.messageId === message.id ? (
+                      <p className="cs-note" data-tone="bad" role="alert">
+                        {replyError.text}
+                      </p>
+                    ) : null}
+                    <div className="cs-actions">
+                      <button
+                        type="submit"
+                        className="cs-btn cs-btn-sm cs-btn-primary"
+                        disabled={replyingId === message.id || !(drafts[message.id] ?? '').trim()}
+                      >
+                        {replyingId === message.id ? t('common.saving') : t('support.reply')}
+                      </button>
+                    </div>
+                  </form>
+                </SupportMessage>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </main>
