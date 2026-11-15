@@ -79,5 +79,11 @@ export function attachLabels(snippets, labels) {
     included: labels.get(snippet.id)?.included ?? null,
     labels: labels.get(snippet.id)?.labels ?? {},
     note: labels.get(snippet.id)?.note ?? '',
+    /**
+     * A reason per criterion (criterionId -> text). `note` above is the single
+     * overall reason the screen used to ask for; it stays as written for
+     * snippets labelled before this existed, and is not offered for new ones.
+     */
+    notes: labels.get(snippet.id)?.notes ?? {},
   }))
 }

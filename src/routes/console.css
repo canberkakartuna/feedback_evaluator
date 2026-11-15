@@ -494,8 +494,11 @@
   grid-template-columns: minmax(0, 1.35fr) minmax(260px, 1fr);
   padding: var(--s-4);
   background: var(--paper-raise);
-  border: 1px solid var(--edge);
+  /* Heavier than an ordinary card: the list is long and every card looks
+     alike, so where one snippet ends has to be plain at a glance. */
+  border: 2px solid var(--graphite-faint);
   border-radius: var(--r-2);
+  box-shadow: var(--shade);
 }
 
 .cs-turn {
@@ -530,7 +533,27 @@
 
 .cs-criterion {
   display: grid;
-  gap: var(--s-1);
+  gap: var(--s-2);
+}
+
+/* A bold rule between criteria, so each one's choices and reason read as one
+   block and not as the top of the next. Ink rather than a rule colour: it has
+   to hold up in both themes. */
+.cs-criterion + .cs-criterion,
+.cs-criterion + .cs-earlier-note {
+  padding-top: var(--s-3);
+  border-top: 2px solid var(--ink);
+}
+
+.cs-criterion-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.cs-criterion .cs-textarea {
+  min-height: 52px;
 }
 
 .cs-criterion-label {
@@ -560,6 +583,125 @@
   background: var(--pen);
   border-color: var(--pen);
   color: #fff;
+}
+
+/* When something was said or handed in: quiet, and not shouted in capitals
+   the way the eyebrow around it is. */
+.cs-when {
+  margin-left: var(--s-2);
+  font-family: var(--f-body);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--graphite-faint);
+}
+
+/* The question and the answer behind a snippet, set apart from the exchange. */
+.cs-context {
+  margin-bottom: var(--s-3);
+  padding: var(--s-3);
+  background: var(--question-bg);
+  border: 1px solid var(--question-edge);
+  border-left-width: 4px;
+  border-radius: var(--r-2);
+}
+
+.cs-context-head {
+  margin: var(--s-3) 0 var(--s-1);
+}
+
+/* A long prompt or essay answer scrolls inside its box rather than pushing
+   the reply being judged off the screen. */
+.cs-context-body {
+  display: grid;
+  gap: var(--s-2);
+  max-height: 10rem;
+  overflow-y: auto;
+  font-size: var(--t-13);
+}
+
+.cs-context-text {
+  margin: 0;
+}
+
+.cs-context-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.cs-context-file {
+  justify-self: start;
+  font-size: var(--t-12);
+}
+
+.cs-context-file img {
+  display: block;
+  max-width: 160px;
+  max-height: 110px;
+  object-fit: contain;
+  background: #fffdf7;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+}
+
+/* Keep / drop: the pressed one has to look pressed, not merely tinted. */
+.cs-decide[aria-pressed='true'] {
+  font-weight: 650;
+}
+
+.cs-decide[data-kind='drop'][aria-pressed='true'] {
+  background: var(--margin);
+  border-color: var(--margin);
+  color: #fff;
+}
+
+.cs-decision {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.cs-decision-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--t-13);
+  font-weight: 600;
+  color: var(--graphite);
+}
+
+.cs-decision-state[data-decision='kept'] {
+  color: var(--pen-deep);
+}
+
+.cs-decision-state[data-decision='dropped'] {
+  color: var(--margin);
+}
+
+/* The outcome of one save. */
+.cs-save {
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 500;
+  color: var(--graphite);
+}
+
+.cs-save[data-state='saved'] {
+  color: var(--pen-deep);
+}
+
+.cs-save[data-state='failed'] {
+  padding: 1px var(--s-2);
+  background: var(--margin-soft);
+  border: 1px solid var(--margin);
+  border-radius: var(--r-1);
+  color: var(--margin);
+}
+
+.cs-earlier-note {
+  display: grid;
+  gap: var(--s-1);
 }
 
 /* ── transcript ──────────────────────────────────────────────── */

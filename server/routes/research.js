@@ -105,6 +105,101 @@ export function researchRoutes(store) {
     if (!isResearcher(req)) throw forbidden('This endpoint is for researchers')
   }
 
+  /**
+   * What a student hands in, trimmed to what a labeller reads: the words, the
+   * pictures, and how many strokes a drawing has. The raw strokes can run to
+   * thousands of points per answer, and the marker's feedback is not part of
+   * judging the tutor's reply. `null` when nothing was handed in at all.
+   */
+  function answerContext(answer) {
+    if (!answer) return null
+    const draft = answer.draft ?? ''
+    const strokeCount = answer.strokes?.length ?? 0
+    const attachments = (answer.attachments ?? []).map(({ id, name, type, source, url }) => ({
+      id,
+      name,
+      type,
+      source,
+      url,
+    }))
+    if (!draft.trim() && !strokeCount && !attachments.length) return null
+
+    return {
+      mode: answer.mode ?? null,
+      draft,
+      strokeCount,
+      attachments,
+      updatedAt: answer.updatedAt ?? null,
+    }
+  }
+
+  /**
+   * The question and the student's answer behind each snippet, resolved the
+   * same way the transcript route does it.
+   *
+   * Read once per distinct session (answers, own questions) and once per
+   * distinct activity (authored questions) rather than per snippet: without a
+   * session filter one page can span every session in a teacher's scope.
+   */
+  async function withContext(snippets) {
+    const sessionIds = [...new Set(snippets.map((snippet) => snippet.sessionId))]
+
+    const perSession = new Map(
+      await Promise.all(
+        sessionIds.map(async (sessionId) => {
+          const [session, answers, own] = await Promise.all([
+            store.sessions.findById(sessionId),
+            store.answers.listBySession(sessionId),
+            store.ownQuestions.listBySession(sessionId),
+          ])
+          return [sessionId, { activityId: session?.activityId ?? null, answers, own }]
+        }),
+      ),
+    )
+
+    const activityIds = [
+      ...new Set([...perSession.values()].map((entry) => entry.activityId).filter(Boolean)),
+    ]
+    const authoredBy = new Map(
+      await Promise.all(
+        activityIds.map(async (activityId) => {
+          const authored = await store.questions.list({ activityId })
+          // Codes are ordinals within the activity, so they come from the
+          // full list and not from whichever questions have snippets.
+          return [
+            activityId,
+            new Map(
+              authored.map((question, index) => [
+                question.id,
+                { question, code: displayCode(question, index) },
+              ]),
+            ),
+          ]
+        }),
+      ),
+    )
+
+    return snippets.map((snippet) => {
+      const { activityId, answers, own } = perSession.get(snippet.sessionId)
+      const authored = authoredBy.get(activityId)?.get(snippet.questionId)
+      const ownQuestion = own.find((entry) => entry.id === snippet.questionId)
+      const source = authored?.question ?? ownQuestion
+      const image = source?.image
+
+      return {
+        ...snippet,
+        question: {
+          code: authored?.code ?? ownQuestion?.code ?? snippet.questionId,
+          prompt: source?.prompt ?? null,
+          promptByLang: authored?.question.promptByLang ?? {},
+          image: image ? { url: image.url, name: image.name, type: image.type } : null,
+          isOwnQuestion: Boolean(ownQuestion),
+        },
+        answer: answerContext(answers.find((entry) => entry.questionId === snippet.questionId)),
+      }
+    })
+  }
+
   /** Teacher view: who has been in, and how much they produced. */
   router.get(
     '/sessions',
@@ -221,6 +316,9 @@ export function researchRoutes(store) {
       if (included === 'false') snippets = snippets.filter((s) => s.included === false)
       if (included === 'undecided') snippets = snippets.filter((s) => s.included == null)
 
+      // After the filter, so only the sessions still on the page are read.
+      snippets = await withContext(snippets)
+
       res.json({ criteria: DEFAULT_CRITERIA, count: snippets.length, snippets })
     }),
   )
@@ -265,6 +363,36 @@ export function researchRoutes(store) {
       if (req.body.note !== undefined) {
         if (typeof req.body.note !== 'string') throw badRequest('"note" must be a string')
         patch.note = req.body.note.slice(0, 4000)
+      }
+
+      if (req.body.notes !== undefined) {
+        const notes = req.body.notes
+        if (typeof notes !== 'object' || notes === null || Array.isArray(notes)) {
+          throw badRequest('"notes" must be an object of criterionId -> text')
+        }
+
+        const known = new Set(DEFAULT_CRITERIA.map((criterion) => criterion.id))
+        for (const [criterionId, value] of Object.entries(notes)) {
+          if (!known.has(criterionId)) throw badRequest(`Unknown criterion "${criterionId}"`)
+          if (typeof value !== 'string') {
+            throw badRequest(`The note for "${criterionId}" must be a string`)
+          }
+        }
+
+        /**
+         * Merged here rather than replaced, unlike `labels`. The store's upsert
+         * is a shallow merge, so a body carrying only the criterion whose box
+         * was just left would otherwise wipe the reasons written for the other
+         * four. The client sends one criterion at a time for exactly that
+         * reason: it cannot hold a stale copy of the others.
+         */
+        const current = await store.snippetLabels.get(req.params.snippetId)
+        patch.notes = {
+          ...(current?.notes ?? {}),
+          ...Object.fromEntries(
+            Object.entries(notes).map(([criterionId, text]) => [criterionId, text.slice(0, 4000)]),
+          ),
+        }
       }
 
       // Checked before attribution is stamped on, or every request would carry
@@ -320,6 +448,9 @@ export function researchRoutes(store) {
           'student_rating',
           'note',
           ...DEFAULT_CRITERIA.map((criterion) => `label_${criterion.id}`),
+          // Appended rather than placed beside `note`, so no existing column
+          // moves for a script that reads them by position.
+          ...DEFAULT_CRITERIA.map((criterion) => `note_${criterion.id}`),
         ]
 
         const rows = snippets.map((snippet) => [
@@ -332,6 +463,7 @@ export function researchRoutes(store) {
           snippet.rating ?? '',
           snippet.note ?? '',
           ...DEFAULT_CRITERIA.map((criterion) => snippet.labels[criterion.id] ?? ''),
+          ...DEFAULT_CRITERIA.map((criterion) => snippet.notes[criterion.id] ?? ''),
         ])
 
         res.type('text/csv').send(

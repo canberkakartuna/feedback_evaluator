@@ -1388,6 +1388,12 @@ try {
   })
   check('another teacher cannot read that transcript', strangerTranscript.status === 404)
 
+  // A written answer on the marked question, so a snippet has one to carry
+  // (the last thing done to it above was switching to an empty drawing).
+  await call('PUT', `/api/sessions/${session.id}/answers/${markedQ.id}`, {
+    body: { mode: 'write', draft: 'Water moves in by osmosis.' },
+  })
+
   const snippets = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
     token: teacherToken,
   })
@@ -1408,6 +1414,31 @@ try {
   )
   check('labelling criteria offered', snippets.body.criteria.length === 5)
   check('undecided by default', snippets.body.snippets.every((s) => s.included === null))
+  check('no per-criterion notes yet', snippets.body.snippets.every((s) => JSON.stringify(s.notes) === '{}'))
+
+  // The question and the answer travel with each snippet, so a labeller can
+  // judge a reply against what the student was actually working on.
+  check(
+    'each snippet names its question',
+    snippets.body.snippets.every((s) => s.question && typeof s.question.code === 'string'),
+  )
+  const onMarked = snippets.body.snippets.find((s) => s.questionId === markedQ.id)
+  check('authored questions carry their code and prompt', onMarked?.question.code === 'Q1' && Boolean(onMarked.question.prompt))
+  check('and the answer the student handed in', onMarked?.answer?.draft === 'Water moves in by osmosis.')
+  check('without the raw drawing data', onMarked?.answer && !('strokes' in onMarked.answer))
+  check(
+    'own questions are flagged',
+    snippets.body.snippets.some((s) => s.question.isOwnQuestion && s.question.code.startsWith('OWN-')),
+  )
+  check(
+    'and a question with nothing handed in has no answer',
+    snippets.body.snippets.some((s) => s.answer === null),
+  )
+  const allSnippets = await call('GET', '/api/research/snippets', { token: teacherToken })
+  check(
+    'context is attached across sessions too',
+    allSnippets.status === 200 && allSnippets.body.snippets.every((s) => s.question && 'answer' in s),
+  )
 
   const target = snippets.body.snippets[0]
   const labelled = await call('PATCH', `/api/research/snippets/${target.id}`, {
@@ -1455,6 +1486,59 @@ try {
   })
   check('can filter to kept snippets', included.body.count === 1)
 
+  console.log('\na reason per criterion')
+  const firstNote = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: { specific: 'Names the membrane.' } },
+  })
+  check('a criterion gets its own reason', firstNote.body.label.notes?.specific === 'Names the membrane.')
+  const secondNote = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: { tone: 'Warm.' } },
+  })
+  check(
+    "a second criterion's reason does not erase the first",
+    secondNote.body.label.notes?.specific === 'Names the membrane.' &&
+      secondNote.body.label.notes?.tone === 'Warm.',
+  )
+  check('the overall note is untouched', secondNote.body.label.note === 'Good nudge, stops short of the answer.')
+  const longNote = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: { accurate: 'x'.repeat(5000) } },
+  })
+  check('a reason is capped', longNote.body.label.notes?.accurate.length === 4000)
+  const badNoteCriterion = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: { invented: 'why' } },
+  })
+  check('a reason for an unknown criterion is rejected', badNoteCriterion.status === 400)
+  const badNoteValue = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: { specific: 3 } },
+  })
+  check('a reason must be text', badNoteValue.status === 400)
+  const badNotes = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { notes: ['specific'] },
+  })
+  check('"notes" must be an object', badNotes.status === 400)
+  const legacyNote = await call('PATCH', `/api/research/snippets/${target.id}`, {
+    token: teacherToken,
+    body: { note: 'Still a good nudge.' },
+  })
+  check(
+    'the single overall note still saves, beside the per-criterion ones',
+    legacyNote.body.label.note === 'Still a good nudge.' && legacyNote.body.label.notes?.tone === 'Warm.',
+  )
+  const reread = await call('GET', `/api/research/snippets?sessionId=${session.id}`, {
+    token: teacherToken,
+  })
+  const rereadTarget = reread.body.snippets.find((s) => s.id === target.id)
+  check(
+    'and both read back',
+    rereadTarget?.note === 'Still a good nudge.' && rereadTarget?.notes.specific === 'Names the membrane.',
+  )
+
   console.log('\nresearcher access')
   const noToken = await call('GET', '/api/research/sessions')
   check('research needs a token', noToken.status === 403)
@@ -1468,6 +1552,7 @@ try {
 
   const exportJson = await call('GET', '/api/research/export', { token: 'smoke-token' })
   check('export holds only kept snippets', exportJson.body.count === 1)
+  check('export carries the per-criterion reasons', exportJson.body.snippets[0]?.notes?.tone === 'Warm.')
   const teacherExport = await call('GET', '/api/research/export', { token: teacherToken })
   check('a teacher cannot export the dataset', teacherExport.status === 403)
   const adminExport = await call('GET', '/api/research/export', { token: adminToken })
@@ -1480,6 +1565,8 @@ try {
   check('csv export', exportCsv.headers.get('content-type').includes('text/csv'))
   check('csv has a header and one row', csv.trim().split('\n').length === 2)
   check('csv includes the label column', csv.includes('label_specific'))
+  check('csv keeps the overall note column', csv.split('\n')[0].includes('"note"'))
+  check('csv adds a reason column per criterion', csv.includes('note_specific') && csv.includes('"Warm."'))
 
   /* ================================================================= deletion */
 
