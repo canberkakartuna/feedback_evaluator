@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import MathText from '../../components/MathText'
 import { promptFor } from '../../../shared/activity'
+import { teacherCanLabel } from '../../../shared/roles'
 import { api } from '../../lib/api'
+import { useAuth } from '../../lib/auth'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 
@@ -133,17 +135,55 @@ function Context({ snippet, lang, t }) {
  * Everything saves the moment it is pressed rather than behind a Save button.
  * Labelling is a long sitting of small judgements, and a lost batch because a
  * tab was closed is the failure mode that matters.
+ *
+ * One screen, three ways of holding it (server/routes/research.js):
+ *
+ * - **teacher** — their own classes' snippets, both decisions. An admin or
+ *   their manager can switch a teacher's labelling off (`canLabel`); they are
+ *   then told so here instead of being shown the server's refusal.
+ * - **admin, manager** — the same, plus handing snippets to annotators: a
+ *   checkbox per card, "select all shown", and a filter on who has them.
+ * - **annotator** — only what has been assigned to them, under /annotate.
+ *   They label, they do not keep or drop (the server refuses `included`), so
+ *   the decision is shown to them read-only.
  */
 export default function Labelling() {
   const { lang, t } = useI18n()
+  const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const sessionId = params.get('session') ?? ''
-  const filter = params.get('show') ?? 'undecided'
 
+  const isAnnotator = user?.role === 'annotator'
+  const canAssign = user?.role === 'admin' || user?.role === 'manager'
+  const mayLabel = teacherCanLabel(user)
+
+  // An annotator starts from everything assigned: "not yet decided" is the
+  // staff's keep-or-drop queue, which is not theirs to work through.
+  const filter = params.get('show') ?? (isAnnotator ? 'all' : 'undecided')
+  /** Client-side, over what was loaded: `all`, `none`, or an annotator's id. */
+  const assigneeFilter = params.get('assignee') ?? 'all'
+
+  // Not requested at all when labelling is off: the answer is known to be a 403.
   const { data, error, loading, setData } = useAsync(
-    () => api.snippets({ sessionId, included: filter === 'all' ? undefined : filter }),
-    [sessionId, filter],
+    () =>
+      mayLabel
+        ? api.snippets({ sessionId, included: filter === 'all' ? undefined : filter })
+        : Promise.resolve(null),
+    [sessionId, filter, mayLabel],
   )
+
+  // Only the people who assign may list annotators; nobody else asks.
+  const annotators = useAsync(
+    () => (canAssign ? api.annotators() : Promise.resolve({ annotators: [] })),
+    [canAssign],
+  )
+  const annotatorList = annotators.data?.annotators ?? []
+
+  /** Ids ticked for assignment. Acted on only where they are also shown. */
+  const [selected, setSelected] = useState(() => new Set())
+  const [assignTo, setAssignTo] = useState('')
+  /** { state: saving | saved | failed, text } — the last assignment's outcome. */
+  const [assignState, setAssignState] = useState(null)
 
   /** `${snippetId}|${field}` -> { state: saving | saved | failed, message, token } */
   const [status, setStatus] = useState({})
@@ -163,6 +203,88 @@ export default function Labelling() {
 
   const snippets = data?.snippets ?? []
   const criteria = data?.criteria ?? []
+
+  const shown = canAssign
+    ? snippets.filter((snippet) =>
+        assigneeFilter === 'all'
+          ? true
+          : assigneeFilter === 'none'
+            ? !snippet.assigneeId
+            : snippet.assigneeId === assigneeFilter,
+      )
+    : snippets
+  const selectedShown = shown.filter((snippet) => selected.has(snippet.id))
+  const allShownSelected = shown.length > 0 && selectedShown.length === shown.length
+
+  const setParam = (name, value, fallback) => {
+    const next = new URLSearchParams(params)
+    if (value === fallback) next.delete(name)
+    else next.set(name, value)
+    setParams(next, { replace: true })
+  }
+
+  const toggle = (snippetId) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(snippetId)) next.delete(snippetId)
+      else next.add(snippetId)
+      return next
+    })
+
+  const toggleAllShown = () =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const snippet of shown) {
+        if (allShownSelected) next.delete(snippet.id)
+        else next.add(snippet.id)
+      }
+      return next
+    })
+
+  /**
+   * Hands the ticked, shown snippets to one annotator, or takes them back
+   * (`assigneeId: null`). The server does all or nothing, so the rows are
+   * patched only on success, and a failure leaves both list and selection as
+   * they were for another try.
+   */
+  const assign = async (assigneeId) => {
+    const ids = selectedShown.map((snippet) => snippet.id)
+    if (!ids.length) return
+    const assignee = assigneeId ? annotatorList.find((entry) => entry.id === assigneeId) : null
+
+    setAssignState({ state: 'saving', text: t('labelling.assigning') })
+    try {
+      const result = await api.assignSnippets(ids, assigneeId)
+      const moved = new Set(result.snippetIds)
+      const at = new Date().toISOString()
+      setData(
+        (prev) =>
+          prev && {
+            ...prev,
+            snippets: prev.snippets.map((row) =>
+              moved.has(row.id)
+                ? {
+                    ...row,
+                    assigneeId,
+                    assigneeName: assignee?.name ?? null,
+                    assignedBy: assigneeId ? user.id : null,
+                    assignedAt: assigneeId ? at : null,
+                  }
+                : row,
+            ),
+          },
+      )
+      setSelected(new Set())
+      setAssignState({
+        state: 'saved',
+        text: assigneeId
+          ? t('labelling.assignedDone', { count: result.count, name: assignee?.name ?? '' })
+          : t('labelling.unassignedDone', { count: result.count }),
+      })
+    } catch (failure) {
+      setAssignState({ state: 'failed', text: t('labelling.assignFailed', { message: failure.message }) })
+    }
+  }
 
   /**
    * Patches the row in place rather than refetching.
@@ -232,30 +354,41 @@ export default function Labelling() {
         <div>
           <p className="eyebrow">{t('labelling.eyebrow')}</p>
           <h1 className="cs-title">{t('labelling.title')}</h1>
-          <p className="cs-lede">{t('labelling.lede')}</p>
+          <p className="cs-lede">
+            {isAnnotator ? t('labelling.ledeAnnotator') : t('labelling.lede')}
+          </p>
         </div>
 
-        <div className="cs-field">
-          <label className="cs-label" htmlFor="show">
-            {t('labelling.show')}
-          </label>
-          <select
-            id="show"
-            className="cs-select"
-            value={filter}
-            onChange={(event) => {
-              const next = new URLSearchParams(params)
-              next.set('show', event.target.value)
-              setParams(next, { replace: true })
-            }}
-          >
-            <option value="undecided">{t('labelling.filterUndecided')}</option>
-            <option value="true">{t('labelling.filterKept')}</option>
-            <option value="false">{t('labelling.filterDropped')}</option>
-            <option value="all">{t('labelling.filterAll')}</option>
-          </select>
-        </div>
+        {mayLabel ? (
+          <div className="cs-field">
+            <label className="cs-label" htmlFor="show">
+              {t('labelling.show')}
+            </label>
+            <select
+              id="show"
+              className="cs-select"
+              value={filter}
+              onChange={(event) => {
+                const next = new URLSearchParams(params)
+                next.set('show', event.target.value)
+                setParams(next, { replace: true })
+              }}
+            >
+              <option value="undecided">{t('labelling.filterUndecided')}</option>
+              <option value="true">{t('labelling.filterKept')}</option>
+              <option value="false">{t('labelling.filterDropped')}</option>
+              <option value="all">{t('labelling.filterAll')}</option>
+            </select>
+          </div>
+        ) : null}
       </header>
+
+      {/* Said plainly, with no request made: the server would answer 403. */}
+      {!mayLabel ? (
+        <p className="cs-note" data-tone="warn" role="status">
+          {t('labelling.turnedOff')}
+        </p>
+      ) : null}
 
       {sessionId ? (
         <p className="cs-note">
@@ -274,27 +407,158 @@ export default function Labelling() {
         </p>
       ) : null}
 
-      {error ? (
+      {canAssign && mayLabel && !error && !loading ? (
+        <section className="cs-card cs-assign" aria-label={t('labelling.assignHead')}>
+          <div className="cs-assign-row">
+            <div className="cs-field">
+              <label className="cs-label" htmlFor="assignee-filter">
+                {t('labelling.assignedTo')}
+              </label>
+              <select
+                id="assignee-filter"
+                className="cs-select"
+                value={assigneeFilter}
+                onChange={(event) => setParam('assignee', event.target.value, 'all')}
+              >
+                <option value="all">{t('labelling.assigneeAll')}</option>
+                <option value="none">{t('labelling.assigneeNone')}</option>
+                {annotatorList.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <label className="cs-check cs-assign-all">
+              <input
+                type="checkbox"
+                checked={allShownSelected}
+                disabled={shown.length === 0}
+                ref={(node) => {
+                  // "Some" is a third state a checkbox can only show from script.
+                  if (node) node.indeterminate = selectedShown.length > 0 && !allShownSelected
+                }}
+                onChange={toggleAllShown}
+              />
+              <span>
+                {t('labelling.selectAllShown', { count: shown.length })}
+                <span className="cs-hint">
+                  {' · '}
+                  {t('labelling.selectedCount', { count: selectedShown.length })}
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {annotators.error ? (
+            <p className="cs-note" data-tone="bad" role="alert">
+              {annotators.error.message}
+            </p>
+          ) : annotatorList.length === 0 && !annotators.loading ? (
+            <p className="cs-note">
+              {t('labelling.noAnnotators')}{' '}
+              {user.role === 'admin' ? (
+                <Link to="/admin">{t('labelling.noAnnotatorsAdmin')}</Link>
+              ) : (
+                t('labelling.noAnnotatorsManager')
+              )}
+            </p>
+          ) : (
+            <div className="cs-assign-row">
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="assign-to">
+                  {t('labelling.assignTo')}
+                </label>
+                <select
+                  id="assign-to"
+                  className="cs-select"
+                  value={assignTo}
+                  onChange={(event) => setAssignTo(event.target.value)}
+                >
+                  <option value="">{t('labelling.pickAnnotator')}</option>
+                  {annotatorList.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="cs-actions">
+                <button
+                  type="button"
+                  className="cs-btn cs-btn-sm cs-btn-primary"
+                  disabled={!assignTo || selectedShown.length === 0 || assignState?.state === 'saving'}
+                  onClick={() => assign(assignTo)}
+                >
+                  {t('labelling.assignSelected', { count: selectedShown.length })}
+                </button>
+                <button
+                  type="button"
+                  className="cs-btn cs-btn-sm"
+                  disabled={selectedShown.length === 0 || assignState?.state === 'saving'}
+                  onClick={() => assign(null)}
+                >
+                  {t('labelling.unassignSelected', { count: selectedShown.length })}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Always rendered so the outcome is announced when it arrives. */}
+          <p className="cs-assign-state" aria-live="polite">
+            {assignState ? (
+              <span className="cs-save" data-state={assignState.state}>
+                {assignState.text}
+              </span>
+            ) : null}
+          </p>
+        </section>
+      ) : null}
+
+      {!mayLabel ? null : error ? (
         <p className="cs-note" data-tone="bad">
           {error.message}
         </p>
       ) : loading ? (
         <p className="cs-note">{t('common.loading')}</p>
-      ) : snippets.length === 0 ? (
+      ) : shown.length === 0 ? (
         <p className="cs-empty">
-          {filter === 'undecided'
-            ? t('labelling.emptyUndecided')
-            : t('labelling.emptyOther')}
+          {isAnnotator && snippets.length === 0 && filter === 'all' && !sessionId
+            ? t('labelling.emptyAnnotator')
+            : filter === 'undecided' && !isAnnotator && snippets.length === 0
+              ? t('labelling.emptyUndecided')
+              : t('labelling.emptyOther')}
         </p>
       ) : (
         <div style={{ display: 'grid', gap: 'var(--s-5)', marginTop: 'var(--s-4)' }}>
-          {snippets.map((snippet) => {
+          {shown.map((snippet) => {
             const decision =
               snippet.included === true ? 'kept' : snippet.included === false ? 'dropped' : 'none'
             const decisionStatus = status[`${snippet.id}|included`]
 
             return (
               <article key={snippet.id} className="cs-snip">
+                {canAssign ? (
+                  <div className="cs-snip-assign">
+                    <label className="cs-check">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(snippet.id)}
+                        onChange={() => toggle(snippet.id)}
+                      />
+                      <span>{t('labelling.select')}</span>
+                    </label>
+                    <span className="cs-pill" data-tone={snippet.assigneeId ? 'live' : 'quiet'}>
+                      {snippet.assigneeId
+                        ? t('labelling.assignedToName', {
+                            name: snippet.assigneeName ?? t('labelling.unknownAnnotator'),
+                          })
+                        : t('labelling.notAssigned')}
+                    </span>
+                  </div>
+                ) : null}
+
                 <div>
                   <Context snippet={snippet} lang={lang} t={t} />
 
@@ -318,28 +582,31 @@ export default function Labelling() {
                   </div>
 
                   <div className="cs-decision">
-                    <div className="cs-actions">
-                      <button
-                        type="button"
-                        className={`cs-btn cs-btn-sm cs-decide ${snippet.included === true ? 'cs-btn-primary' : ''}`}
-                        data-kind="keep"
-                        aria-pressed={snippet.included === true}
-                        onClick={() => save(snippet.id, 'included', () => ({ included: true }))}
-                      >
-                        {snippet.included === true ? '✓ ' : ''}
-                        {t('labelling.keep')}
-                      </button>
-                      <button
-                        type="button"
-                        className={`cs-btn cs-btn-sm cs-decide ${snippet.included === false ? 'cs-btn-danger' : ''}`}
-                        data-kind="drop"
-                        aria-pressed={snippet.included === false}
-                        onClick={() => save(snippet.id, 'included', () => ({ included: false }))}
-                      >
-                        {snippet.included === false ? '✓ ' : ''}
-                        {t('labelling.drop')}
-                      </button>
-                    </div>
+                    {/* Keep-or-drop is staff's: an annotator sees where it stands. */}
+                    {isAnnotator ? null : (
+                      <div className="cs-actions">
+                        <button
+                          type="button"
+                          className={`cs-btn cs-btn-sm cs-decide ${snippet.included === true ? 'cs-btn-primary' : ''}`}
+                          data-kind="keep"
+                          aria-pressed={snippet.included === true}
+                          onClick={() => save(snippet.id, 'included', () => ({ included: true }))}
+                        >
+                          {snippet.included === true ? '✓ ' : ''}
+                          {t('labelling.keep')}
+                        </button>
+                        <button
+                          type="button"
+                          className={`cs-btn cs-btn-sm cs-decide ${snippet.included === false ? 'cs-btn-danger' : ''}`}
+                          data-kind="drop"
+                          aria-pressed={snippet.included === false}
+                          onClick={() => save(snippet.id, 'included', () => ({ included: false }))}
+                        >
+                          {snippet.included === false ? '✓ ' : ''}
+                          {t('labelling.drop')}
+                        </button>
+                      </div>
+                    )}
 
                     {/* The standing decision and the save that changed it, read
                         out together so a press is never met with silence. */}

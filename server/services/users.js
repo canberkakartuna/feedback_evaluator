@@ -1,5 +1,6 @@
 import {
   PARENT_FIELDS,
+  ROLES,
   canManageRole,
   isRole,
   parentField,
@@ -26,6 +27,8 @@ import { cleanStudentNumber, isUsername } from '../../shared/student-number.js'
  *   manager  self + teachers whose managerId is them + those teachers' students
  *   teacher  self + students whose teacherId is them
  *   student  self
+ *   annotator  self — their work is reached through snippet assignments in
+ *              routes/research.js, never through this scope
  */
 
 /**
@@ -92,7 +95,7 @@ export function canWithdrawConsent(user, authToken) {
  */
 export function publicUser(user, { authToken = null } = {}) {
   if (!user) return null
-  const { passwordHash: _passwordHash, ...rest } = user
+  const { passwordHash: _passwordHash, canLabel: _canLabel, ...rest } = user
   let consent = user.consent
   if (consent && typeof consent === 'object') {
     const { signInKey: _signInKey, ...shown } = consent
@@ -109,6 +112,13 @@ export function publicUser(user, { authToken = null } = {}) {
     email: user.studentNumber ? null : user.email,
     consented: hasCurrentConsent(user),
     withdrawn: hasWithdrawnConsent(user),
+    /**
+     * The labelling switch, on teachers only (see teacherCanLabel in
+     * shared/roles.js). Resolved here so an account that has never had it set
+     * reads `true` rather than absent, and so a stale value left on someone who
+     * is no longer a teacher is never shown as if it meant something.
+     */
+    ...(user.role === 'teacher' ? { canLabel: user.canLabel !== false } : {}),
   }
 }
 
@@ -210,7 +220,7 @@ export function requireName(body, field = 'name') {
 
 export function requireRoleValue(body, field = 'role') {
   const value = body?.[field]
-  if (!isRole(value)) throw badRequest(`"${field}" must be one of: admin, manager, teacher, student`)
+  if (!isRole(value)) throw badRequest(`"${field}" must be one of: ${ROLES.join(', ')}`)
   return value
 }
 
@@ -273,6 +283,10 @@ export async function resolveParent(store, actor, role, requested, { scope } = {
  * Both pointer fields are always present, `null` when unused, rather than
  * absent: a document whose fields depend on its role is one every reader has to
  * remember to guard.
+ *
+ * `password` may be omitted only for a student, who no longer has one (see
+ * routes/users.js). The hash is then `null`, which `verifyPassword` reads as
+ * "never matches" — the same shut door a class-list student has.
  */
 export async function newUser({ role, name, email, password, parent }) {
   const at = now()
@@ -282,7 +296,7 @@ export async function newUser({ role, name, email, password, parent }) {
     role,
     name,
     email,
-    passwordHash: await hashPassword(password),
+    passwordHash: password == null ? null : await hashPassword(password),
     teacherId: null,
     managerId: null,
     ...(parent?.field ? { [parent.field]: parent.value } : {}),
@@ -312,13 +326,13 @@ export const classListEmail = (studentNumber) =>
  * `verifyPassword` reads as "never matches", so the email-and-password door
  * stays shut for them rather than open with a blank.
  */
-export function newClassListStudent({ studentNumber, teacherId }) {
+export function newClassListStudent({ studentNumber, teacherId, name = null }) {
   const at = now()
 
   return {
     id: id('usr'),
     role: 'student',
-    name: studentNumber,
+    name: name ?? studentNumber,
     email: classListEmail(studentNumber),
     studentNumber,
     passwordHash: null,

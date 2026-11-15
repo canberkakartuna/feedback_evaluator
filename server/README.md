@@ -86,8 +86,8 @@ the client and the API never disagree about which value won.
 
 ## Users, roles and the hierarchy
 
-Four roles, and one edge type between them. `shared/roles.js` is where the shape
-is written down; `services/users.js` is where it is enforced.
+Five roles, and one edge type between four of them. `shared/roles.js` is where
+the shape is written down; `services/users.js` is where it is enforced.
 
 ```
 admin  ─ sees and does everything, including /api/research/*
@@ -97,6 +97,8 @@ manager ─ has many teachers, and through them their students
 teacher ─ has many students
   │
 student ─ sees only themselves
+
+annotator ─ outside the tree: labels the snippets assigned to them, nothing else
 ```
 
 **The hierarchy is a pointer from child to parent.** A student holds `teacherId`,
@@ -106,8 +108,9 @@ to end up on two of them because the second write failed.
 
 | Role | Can create | Can see |
 | --- | --- | --- |
-| `admin` | anyone | everyone |
+| `admin` | anyone, annotators included | everyone |
 | `manager` | teachers, and students under their own teachers | self + their teachers + those teachers' students |
+| `annotator` | nobody | self (their work is reached through snippet assignments — see [Reading and labelling](#reading-and-labelling)) |
 | `teacher` | students, on their own roster | self + their own students |
 | `student` | nobody | self |
 
@@ -124,6 +127,13 @@ Rules worth knowing before building against this:
 - **Nobody administers themselves.** `name` and `email` are yours to change;
   `active`, `role` and the parent pointer need authority over the target, and the
   last active admin cannot demote themselves out of the system.
+- **Students have no passwords.** They sign in with their student number
+  (`POST /api/auth/student`); the email door refuses a student account, a
+  password reset refuses a student target, and `POST /api/users` refuses a
+  password for a student. Every other role signs in with email and password.
+- **A teacher's labelling can be switched off.** `canLabel` on a teacher
+  (absent means `true`), set by an admin or the teacher's own manager through
+  `PATCH /api/users/:id`. It closes the snippet routes and nothing else.
 - **Deactivate, don't delete.** `PATCH { active: false }` revokes every live
   token immediately and keeps the person's work attributable. `DELETE` is refused
   when they still have people under them, when they have recorded work sessions,
@@ -132,7 +142,8 @@ Rules worth knowing before building against this:
 
 ### Authentication
 
-Email and password. The password is hashed with `node:crypto`'s **scrypt** —
+Staff (admin, manager, annotator, teacher) sign in with email and password;
+students with their student number alone. The password is hashed with `node:crypto`'s **scrypt** —
 memory-hard, no dependency — and the stored string carries its own parameters
 (`scrypt$16384$8$1$salt$key`), so raising the cost later does not lock anyone out.
 
@@ -167,12 +178,12 @@ curl -X POST localhost:4000/api/auth/bootstrap \
 | Method | Path | Notes |
 | --- | --- | --- |
 | `POST` | `/api/auth/bootstrap` | The first admin. Needs the bootstrap token; refused once any user exists |
-| `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token, expiresAt }`. A wrong password and an unknown address answer identically, and take the same time to |
-| `POST` | `/api/auth/student` | `{ studentNumber }` → `{ user, token, expiresAt }`. Signs in a student on a class list with the number alone. Spaces are ignored and letters upper-cased; an unknown and a removed number both answer 401 |
-| `POST` | `/api/auth/consent` | No body. Records the research consent against the caller's own account and returns the updated user. Idempotent: a repeat on a still-current version answers `recorded: false` and keeps the original date. This is what lets a student with a password be asked **once** instead of every visit |
-| `GET` | `/api/auth/me` | The signed-in user |
+| `POST` | `/api/auth/login` | **Staff sign-in.** `{ email, password }` → `{ user, token, expiresAt }`. A wrong password, an unknown address and a student account all answer 401 identically, and take the same time to |
+| `POST` | `/api/auth/student` | **Student sign-in.** `{ studentNumber }` → `{ user, token, expiresAt }`. Signs in a student on a class list with the number alone. Spaces are ignored and letters upper-cased; an unknown and a removed number both answer 401 |
+| `POST` | `/api/auth/consent` | No body. Records the research consent against the caller's own account and returns the updated user. Idempotent: a repeat on a still-current version answers `recorded: false` and keeps the original date. This is what lets a student with an account be asked **once** instead of every visit |
+| `GET` | `/api/auth/me` | The signed-in user. A teacher's carries `canLabel` |
 | `POST` | `/api/auth/logout` | Revokes the calling token. Other devices stay signed in |
-| `POST` | `/api/auth/password` | `{ currentPassword, newPassword }`. Revokes every other token and returns a fresh one |
+| `POST` | `/api/auth/password` | `{ currentPassword, newPassword }`. Revokes every other token and returns a fresh one. 400 for a student, who has no password |
 
 ### User endpoints
 
@@ -180,12 +191,12 @@ All require `Authorization: Bearer <login token>`.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/users` | `{ role, name, email, password, teacherId?/managerId? }` → 201. 409 on a duplicate email |
+| `POST` | `/api/users` | `{ role, name, email, password, teacherId?/managerId? }` → 201. 409 on a duplicate email. A **student** takes no password (400 if one is sent): `{ role: 'student', studentNumber, name?, teacherId? }` makes one who signs in with the number; the older `{ role: 'student', name, email }` still makes an account, which cannot sign in |
 | `POST` | `/api/users/class-list` | `{ studentNumbers: [], teacherId? }` — adds a class list (max 500 per call). Each number becomes a student who signs in with it alone. Answers `{ added, already, taken, invalid }`; `taken` is a number on another teacher's list. A teacher adds to their own; a manager or admin names `teacherId`. Remove one with `PATCH { active: false }` |
 | `GET` | `/api/users` | Everyone in scope. `?role=&teacherId=&managerId=&active=` narrow it |
 | `GET` | `/api/users/:userId` | 404 when out of scope |
-| `PATCH` | `/api/users/:userId` | `{ name?, email?, active?, role?, teacherId?/managerId? }`. `role` is admin-only |
-| `POST` | `/api/users/:userId/password` | `{ newPassword }` — a reset for someone you administer. Revokes their sessions |
+| `PATCH` | `/api/users/:userId` | `{ name?, email?, active?, role?, teacherId?/managerId?, canLabel? }`. `role` is admin-only. `canLabel` (boolean) is for a teacher target only, by an admin or their manager, never by the teacher |
+| `POST` | `/api/users/:userId/password` | `{ newPassword }` — a reset for someone you administer: a manager, annotator, teacher or admin. 400 for a student. Revokes their sessions |
 | `DELETE` | `/api/users/:userId` | Refused with 409 when it would orphan a roster or destroy recorded work |
 | `GET` | `/api/users/:userId/sessions` | A student's work sessions with counts — how a teacher checks on their own students without the researcher token |
 
@@ -339,18 +350,29 @@ everything already. Both see every session in the system.
 
 A **teacher or manager** sees only what came out of their own work: sessions
 belonging to students on their roster, *plus* anonymous sessions on activities
-they own. That second half matters, because most sessions are anonymous and
-would otherwise be invisible to the teacher who set the work. The scope is
-computed per request from the same hierarchy `services/users.js` uses, and is
-applied to writes as well as reads — a teacher cannot label a snippet out of
-another teacher's class any more than they can read one.
+they own (a manager: their own and their teachers'). That second half matters,
+because most sessions are anonymous and would otherwise be invisible to the
+teacher who set the work. The scope is computed per request from the same
+hierarchy `services/users.js` uses, and is applied to writes as well as reads —
+a teacher cannot label a snippet out of another teacher's class any more than
+they can read one. A teacher whose `canLabel` is `false` is refused the snippet
+routes (403) but keeps sessions and transcripts.
+
+An **annotator** reaches only the snippets assigned to them — `assigneeId` on
+the snippet's label record, set by an admin, or by a manager within their own
+branch. They may label those (`labels`, `notes`, `note`) but not keep or drop
+them (`included` is 403), and get no sessions, transcripts or export. Anything
+not assigned to them reads as 404. Their snippet payload leaves out
+`tutor.source` and `tutor.model`, so they label blind.
 
 | Method | Path | Who | Notes |
 | --- | --- | --- | --- |
 | `GET` | `/api/research/sessions` | scoped | Sessions with message/snippet/event counts |
 | `GET` | `/api/research/sessions/:id/transcript` | scoped | Grouped by question, with answers and events |
-| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped | **Snippets** = one student turn + the feedback that answered it |
-| `PATCH` | `/api/research/snippets/:id` | scoped | `{ included, labels: { criterionId: yes\|no\|partly }, note }` |
+| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped, annotator: assigned | **Snippets** = one student turn + the feedback that answered it. Each carries `assigneeId`, `assignedBy`, `assignedAt`; for an admin or manager also `assigneeName` |
+| `PATCH` | `/api/research/snippets/:id` | scoped, annotator: assigned | `{ included, labels: { criterionId: yes\|no\|partly }, note, notes }`. `included` is refused for an annotator |
+| `POST` | `/api/research/snippets/assign` | admin, manager | `{ snippetIds: [...], assigneeId: annotatorId \| null }` → `{ assigneeId, count, snippetIds }`. Max 500; all-or-nothing; a manager's ids must be in their branch (404 otherwise); `null` unassigns |
+| `GET` | `/api/research/annotators` | admin, manager | `{ annotators: [{ id, name }] }`, active only — what an assignment picker needs |
 | `GET` | `/api/research/export?format=json\|csv` | **researcher only** | Kept snippets across every class; CSV is one row per snippet |
 
 Snippets are **derived** from transcripts, not stored, so they stay correct as a

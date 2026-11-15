@@ -295,7 +295,9 @@ try {
   ).body.user
   check('manager creates a teacher under themselves', teacher.managerId === manager.id)
 
-  const teacherToken = (
+  // `let`: the passwords section below changes this teacher's password, which
+  // signs them out and hands back a new token.
+  let teacherToken = (
     await call('POST', '/api/auth/login', {
       body: { email: 'tia@example.com', password: 'correct horse battery' },
     })
@@ -304,10 +306,11 @@ try {
   const student = (
     await call('POST', '/api/users', {
       token: teacherToken,
-      body: { role: 'student', name: 'Sam Student', email: 'sam@example.com', password: 'correct horse battery' },
+      body: { role: 'student', name: 'Sam Student', studentNumber: '10000001' },
     })
   ).body.user
   check('teacher creates a student under themselves', student.teacherId === teacher.id)
+  check('by student number, keeping the name given', student.studentNumber === '10000001' && student.name === 'Sam Student')
   check('a student has no manager pointer', student.managerId === null)
 
   // A second branch of the tree, to prove the scoping actually excludes things.
@@ -329,8 +332,7 @@ try {
       body: {
         role: 'student',
         name: 'Zed Other',
-        email: 'zed@example.com',
-        password: 'correct horse battery',
+        studentNumber: '10000002',
         teacherId: otherTeacher.id,
       },
     })
@@ -345,13 +347,32 @@ try {
 
   const unassigned = await call('POST', '/api/users', {
     token: adminToken,
-    body: { role: 'student', name: 'Una Unassigned', email: 'una@example.com', password: 'correct horse battery' },
+    // The older shape — an email, and now no password — still makes a student.
+    body: { role: 'student', name: 'Una Unassigned', email: 'una@example.com' },
   })
   check('admin may leave a student unassigned', unassigned.body.user.teacherId === null)
+  check(
+    'a student is refused a password',
+    (
+      await call('POST', '/api/users', {
+        token: adminToken,
+        body: { role: 'student', name: 'Pat', email: 'pat@example.com', password: 'correct horse battery' },
+      })
+    ).status === 400,
+  )
+  check(
+    'a student number must be a username',
+    (
+      await call('POST', '/api/users', {
+        token: teacherToken,
+        body: { role: 'student', studentNumber: '123' },
+      })
+    ).status === 400,
+  )
 
   console.log('\nwho can create whom')
-  const studentLoginFirst = await call('POST', '/api/auth/login', {
-    body: { email: 'sam@example.com', password: 'correct horse battery' },
+  const studentLoginFirst = await call('POST', '/api/auth/student', {
+    body: { studentNumber: '10000001' },
   })
   let studentToken = studentLoginFirst.body.token
 
@@ -385,7 +406,6 @@ try {
       role: 'student',
       name: 'Nope',
       email: 'nope@example.com',
-      password: 'correct horse battery',
       teacherId: manager.id,
     },
   })
@@ -405,9 +425,14 @@ try {
 
   const duplicate = await call('POST', '/api/users', {
     token: adminToken,
-    body: { role: 'student', name: 'Clone', email: 'sam@example.com', password: 'correct horse battery' },
+    body: { role: 'teacher', name: 'Clone', email: 'tia@example.com', password: 'correct horse battery' },
   })
   check('duplicate email is 409', duplicate.status === 409)
+  const duplicateNumber = await call('POST', '/api/users', {
+    token: adminToken,
+    body: { role: 'student', name: 'Clone', studentNumber: '10000001' },
+  })
+  check('and so is a duplicate student number', duplicateNumber.status === 409)
 
   const poached = await call('POST', '/api/users', {
     token: teacherToken,
@@ -415,7 +440,6 @@ try {
       role: 'student',
       name: 'Nope',
       email: 'nope@example.com',
-      password: 'correct horse battery',
       teacherId: otherTeacher.id,
     },
   })
@@ -957,7 +981,7 @@ try {
   )
 
   /**
-   * A student with a password is asked once. The agreement goes on the account,
+   * A student with an account is asked once. The agreement goes on the account,
    * and a later session carries it forward — with the date it was *first* given,
    * not the date the session started.
    */
@@ -1310,11 +1334,7 @@ try {
   const available = await call('GET', '/api/activities/available', { token: studentToken })
   check("a student sees their own teacher's published work", available.body.activities.length === 1)
   const strangerAvailable = await call('GET', '/api/activities/available', {
-    token: (
-      await call('POST', '/api/auth/login', {
-        body: { email: 'zed@example.com', password: 'correct horse battery' },
-      })
-    ).body.token,
+    token: (await call('POST', '/api/auth/student', { body: { studentNumber: '10000002' } })).body.token,
   })
   check("and not another teacher's", strangerAvailable.body.activities.length === 0)
 
@@ -1757,47 +1777,69 @@ try {
   check('an empty patch is rejected', nothing.status === 400)
 
   console.log('\npasswords')
-  const wrongCurrent = await call('POST', '/api/auth/password', {
+  // Students sign in with their number and have no password at all; staff do.
+  const studentChange = await call('POST', '/api/auth/password', {
     token: studentToken,
+    body: { currentPassword: 'anything', newPassword: 'a whole new password' },
+  })
+  check('a student has no password to change', studentChange.status === 400)
+
+  const wrongCurrent = await call('POST', '/api/auth/password', {
+    token: teacherToken,
     body: { currentPassword: 'not it at all', newPassword: 'a whole new password' },
   })
   check('changing a password needs the current one', wrongCurrent.status === 403)
 
   const changed = await call('POST', '/api/auth/password', {
-    token: studentToken,
+    token: teacherToken,
     body: { currentPassword: 'correct horse battery', newPassword: 'a whole new password' },
   })
   check('password changed', changed.body.changed === true)
-  const staleToken = await call('GET', '/api/auth/me', { token: studentToken })
+  const staleToken = await call('GET', '/api/auth/me', { token: teacherToken })
   check('a password change signs out the old token', staleToken.status === 401)
-  studentToken = changed.body.token
-  check('and hands back a working one', (await call('GET', '/api/auth/me', { token: studentToken })).status === 200)
+  teacherToken = changed.body.token
+  check('and hands back a working one', (await call('GET', '/api/auth/me', { token: teacherToken })).status === 200)
 
-  const selfReset = await call('POST', `/api/users/${student.id}/password`, {
-    token: studentToken,
+  const selfReset = await call('POST', `/api/users/${teacher.id}/password`, {
+    token: teacherToken,
     body: { newPassword: 'trying to skip the check' },
   })
   check('the reset route is not a way around the current password', selfReset.status === 400)
 
-  const reset = await call('POST', `/api/users/${student.id}/password`, {
+  const studentReset = await call('POST', `/api/users/${student.id}/password`, {
     token: teacherToken,
     body: { newPassword: 'teacher set this one' },
   })
-  check('teacher resets their student', reset.body.reset === true)
+  check('a student has no password to reset', studentReset.status === 400)
+  check(
+    'not even by an admin',
+    (
+      await call('POST', `/api/users/${student.id}/password`, {
+        token: adminToken,
+        body: { newPassword: 'admin set this one' },
+      })
+    ).status === 400,
+  )
+
+  const reset = await call('POST', `/api/users/${teacher.id}/password`, {
+    token: managerToken,
+    body: { newPassword: 'manager set this one' },
+  })
+  check('a manager resets their teacher', reset.body.reset === true)
   check('the reset revoked their sessions', reset.body.sessionsRevoked === 1)
   check(
     'the old password stops working',
     (
       await call('POST', '/api/auth/login', {
-        body: { email: 'sam@example.com', password: 'a whole new password' },
+        body: { email: 'tia@example.com', password: 'a whole new password' },
       })
     ).status === 401,
   )
   const reLogin = await call('POST', '/api/auth/login', {
-    body: { email: 'sam@example.com', password: 'teacher set this one' },
+    body: { email: 'tia@example.com', password: 'manager set this one' },
   })
   check('the new one works', reLogin.status === 200)
-  studentToken = reLogin.body.token
+  teacherToken = reLogin.body.token
 
   const strangerReset = await call('POST', `/api/users/${otherStudent.id}/password`, {
     token: teacherToken,
@@ -1813,9 +1855,7 @@ try {
     (await call('GET', '/api/auth/me', { token: studentToken })).status === 401,
   )
 
-  const backIn = await call('POST', '/api/auth/login', {
-    body: { email: 'sam@example.com', password: 'teacher set this one' },
-  })
+  const backIn = await call('POST', '/api/auth/student', { body: { studentNumber: '10000001' } })
   studentToken = backIn.body.token
 
   const deactivated = await call('PATCH', `/api/users/${student.id}`, {
@@ -1827,10 +1867,8 @@ try {
     'deactivation revokes live tokens immediately',
     (await call('GET', '/api/auth/me', { token: studentToken })).status === 401,
   )
-  const deactivatedLogin = await call('POST', '/api/auth/login', {
-    body: { email: 'sam@example.com', password: 'teacher set this one' },
-  })
-  check('a deactivated account cannot sign in', deactivatedLogin.status === 403)
+  const deactivatedLogin = await call('POST', '/api/auth/student', { body: { studentNumber: '10000001' } })
+  check('a deactivated account cannot sign in', deactivatedLogin.status === 401)
 
   console.log('\ndeleting a user is deliberately hard')
   const deleteSelf = await call('DELETE', `/api/users/${admin.id}`, { token: adminToken })
@@ -1846,7 +1884,7 @@ try {
   const deletable = (
     await call('POST', '/api/users', {
       token: teacherToken,
-      body: { role: 'student', name: 'Temp Student', email: 'temp@example.com', password: 'correct horse battery' },
+      body: { role: 'student', name: 'Temp Student', email: 'temp@example.com' },
     })
   ).body.user
   const deletedTemp = await call('DELETE', `/api/users/${deletable.id}`, { token: teacherToken })
@@ -1857,7 +1895,7 @@ try {
   )
   const emailFreed = await call('POST', '/api/users', {
     token: teacherToken,
-    body: { role: 'student', name: 'Reuse', email: 'temp@example.com', password: 'correct horse battery' },
+    body: { role: 'student', name: 'Reuse', email: 'temp@example.com' },
   })
   check('the email is free again', emailFreed.status === 201)
 
@@ -2187,6 +2225,564 @@ try {
   await call('POST', `/api/support/${ticketId}/reply`, { token: teacherToken, body: { text: 'Send me the file.' } })
   check('a staff reply after the follow-up is unread again', (await call('GET', '/api/support/unread', { token: writer })).body.unread === 1)
 
+  /* ================================================== annotators and labelling */
+
+  console.log('\nannotators')
+  const annotatorMade = await call('POST', '/api/users', {
+    token: adminToken,
+    body: { role: 'annotator', name: 'Ann Annotator', email: 'ann@example.com', password: 'correct horse battery' },
+  })
+  const annotator = annotatorMade.body.user
+  check('an admin creates an annotator', annotatorMade.status === 201 && annotator.role === 'annotator')
+  check('who sits outside the tree', annotator.teacherId === null && annotator.managerId === null)
+  check(
+    'a manager cannot create one',
+    (
+      await call('POST', '/api/users', {
+        token: managerToken,
+        body: { role: 'annotator', name: 'Nope', email: 'nope-ann@example.com', password: 'correct horse battery' },
+      })
+    ).status === 403,
+  )
+  check(
+    'nor give one a parent',
+    (
+      await call('POST', '/api/users', {
+        token: adminToken,
+        body: {
+          role: 'annotator',
+          name: 'Nope',
+          email: 'nope-ann@example.com',
+          password: 'correct horse battery',
+          managerId: manager.id,
+        },
+      })
+    ).status === 400,
+  )
+  check(
+    'the role list in errors names the annotator',
+    (
+      await call('POST', '/api/users', {
+        token: adminToken,
+        body: { role: 'headmaster', name: 'Nope', email: 'nope-ann@example.com', password: 'correct horse battery' },
+      })
+    ).body.error.message.includes('annotator'),
+  )
+  const annotatorLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'ann@example.com', password: 'correct horse battery' },
+  })
+  check('an annotator signs in at the staff door', annotatorLogin.status === 200)
+  let annotatorToken = annotatorLogin.body.token
+  const annotatorMe = (await call('GET', '/api/auth/me', { token: annotatorToken })).body.user
+  check('me reports the annotator role', annotatorMe.role === 'annotator')
+  check('with no labelling switch, which is a teacher thing', !('canLabel' in annotatorMe))
+
+  const secondAnnotator = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'annotator', name: 'Ben Annotator', email: 'ben@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  const secondAnnotatorToken = (
+    await call('POST', '/api/auth/login', { body: { email: 'ben@example.com', password: 'correct horse battery' } })
+  ).body.token
+  const retired = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'annotator', name: 'Cid Retired', email: 'cid@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  await call('PATCH', `/api/users/${retired.id}`, { token: adminToken, body: { active: false } })
+  check(
+    'a deactivated staff account is refused at the email door',
+    (await call('POST', '/api/auth/login', { body: { email: 'cid@example.com', password: 'correct horse battery' } }))
+      .status === 403,
+  )
+
+  console.log('\nan annotator is kept out of every staff area')
+  const closedToAnnotators = [
+    ['GET', '/api/activities', undefined, 403],
+    ['POST', '/api/activities', { title: 'Sneaky' }, 403],
+    ['GET', `/api/activities/${activity.id}`, undefined, 404],
+    ['GET', `/api/activities/${activity.id}/preview`, undefined, 404],
+    ['GET', '/api/research/sessions', undefined, 403],
+    ['GET', `/api/research/sessions/${turnSession.id}/transcript`, undefined, 403],
+    ['GET', '/api/research/export', undefined, 403],
+    ['GET', '/api/research/export?format=csv', undefined, 403],
+    ['GET', '/api/research/annotators', undefined, 403],
+    ['POST', '/api/research/snippets/assign', { snippetIds: ['x'], assigneeId: null }, 403],
+    ['GET', '/api/support', undefined, 403],
+    ['POST', `/api/support/${ticket.body.message.id}/reply`, { text: 'hi' }, 403],
+    ['POST', '/api/prompts', { text: 'Be terse.' }, 403],
+    ['POST', '/api/translate', { text: 'hello', to: 'tr' }, 403],
+    ['POST', '/api/users', { role: 'student', name: 'Nope', studentNumber: '10000099' }, 403],
+    ['POST', '/api/users/class-list', { studentNumbers: ['10000099'], teacherId: teacher.id }, 403],
+    ['GET', `/api/users/${teacher.id}`, undefined, 404],
+    ['GET', `/api/users/${student.id}/sessions`, undefined, 404],
+    ['PATCH', `/api/users/${teacher.id}`, { name: 'Renamed' }, 404],
+    ['POST', `/api/users/${teacher.id}/password`, { newPassword: 'not their call' }, 404],
+    ['POST', '/api/sessions', { consent: true, activityId: activity.id }, 403],
+  ]
+  for (const [method, url, body, expected] of closedToAnnotators) {
+    const got = await call(method, url, { token: annotatorToken, body })
+    check(`annotator: ${method} ${url.replace(/\/(act|usr|ses|sup)_[\w-]+/g, '/:id')} → ${expected}`, got.status === expected, `got ${got.status}`)
+  }
+  const annotatorUsers = await call('GET', '/api/users', { token: annotatorToken })
+  check(
+    'an annotator lists only themselves',
+    annotatorUsers.body.users.length === 1 && annotatorUsers.body.users[0].id === annotator.id,
+  )
+  check(
+    'and may rename themselves',
+    (await call('PATCH', `/api/users/${annotator.id}`, { token: annotatorToken, body: { name: 'Ann A.' } })).body.user
+      .name === 'Ann A.',
+  )
+  const annotatorChange = await call('POST', '/api/auth/password', {
+    token: annotatorToken,
+    body: { currentPassword: 'correct horse battery', newPassword: 'annotator chose this' },
+  })
+  check('and change their own password', annotatorChange.body.changed === true)
+  annotatorToken = annotatorChange.body.token
+
+  /**
+   * A second branch of the tree with work of its own, so "a manager sees their
+   * own branch" is tested against a branch they must not see.
+   */
+  console.log('\na second branch, with work in it')
+  const otherManager = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'manager', name: 'Max Manager', email: 'max@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  const otherManagerToken = (
+    await call('POST', '/api/auth/login', { body: { email: 'max@example.com', password: 'correct horse battery' } })
+  ).body.token
+  const farTeacher = (
+    await call('POST', '/api/users', {
+      token: otherManagerToken,
+      body: { role: 'teacher', name: 'Theo Far', email: 'theo@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  const farTeacherToken = (
+    await call('POST', '/api/auth/login', { body: { email: 'theo@example.com', password: 'correct horse battery' } })
+  ).body.token
+  const farActivity = (
+    await call('POST', '/api/activities', { token: farTeacherToken, body: { title: 'Far away' } })
+  ).body.activity
+  const farQuestion = (
+    await call('POST', `/api/activities/${farActivity.id}/questions`, { token: farTeacherToken, body: BARE_QUESTION })
+  ).body.question
+  await call('PATCH', `/api/activities/${farActivity.id}`, { token: farTeacherToken, body: { status: 'published' } })
+  const farSession = (
+    await call('POST', '/api/sessions', { body: { consent: true, activityId: farActivity.id } })
+  ).body.session
+  await call('POST', `/api/sessions/${farSession.id}/questions/${farQuestion.id}/messages`, {
+    body: { text: 'Where do I start?' },
+  })
+  const farSnippets = await call('GET', `/api/research/snippets?sessionId=${farSession.id}`, {
+    token: farTeacherToken,
+  })
+  check('the far teacher has a snippet of their own', farSnippets.body.count === 1)
+  const farSnippet = farSnippets.body.snippets[0]
+
+  console.log('\nassigning snippets')
+  const nearSnippets = (
+    await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: managerToken })
+  ).body.snippets
+  check('there is near work to assign', nearSnippets.length >= 3)
+  check(
+    'unassigned to begin with',
+    nearSnippets.every((entry) => entry.assigneeId === null && entry.assigneeName === null),
+  )
+  const [nearA, nearB, nearC] = nearSnippets
+
+  const annotatorsForManager = await call('GET', '/api/research/annotators', { token: managerToken })
+  const pickable = annotatorsForManager.body.annotators
+  check('a manager can list annotators to assign to', annotatorsForManager.status === 200)
+  check(
+    'active ones only',
+    pickable.some((entry) => entry.id === annotator.id) &&
+      pickable.some((entry) => entry.id === secondAnnotator.id) &&
+      !pickable.some((entry) => entry.id === retired.id),
+  )
+  check(
+    'and nothing but a name',
+    pickable.every((entry) => Object.keys(entry).sort().join() === 'id,name'),
+  )
+  check(
+    'while the users list still hides annotators from a manager',
+    !(await call('GET', '/api/users', { token: managerToken })).body.users.some((u) => u.role === 'annotator'),
+  )
+  check(
+    'a teacher cannot list annotators',
+    (await call('GET', '/api/research/annotators', { token: teacherToken })).status === 403,
+  )
+
+  const managerAssigns = await call('POST', '/api/research/snippets/assign', {
+    token: managerToken,
+    body: { snippetIds: [nearA.id, nearB.id, nearA.id], assigneeId: annotator.id },
+  })
+  check('a manager assigns snippets in their branch', managerAssigns.status === 200 && managerAssigns.body.count === 2)
+  const outOfBranch = await call('POST', '/api/research/snippets/assign', {
+    token: managerToken,
+    body: { snippetIds: [farSnippet.id], assigneeId: annotator.id },
+  })
+  check("but not another manager's", outOfBranch.status === 404)
+  const mixed = await call('POST', '/api/research/snippets/assign', {
+    token: managerToken,
+    body: { snippetIds: [nearC.id, farSnippet.id], assigneeId: secondAnnotator.id },
+  })
+  check('a batch with one out of reach is refused whole', mixed.status === 404)
+  check(
+    'and changes nothing',
+    (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: managerToken })).body.snippets.find(
+      (entry) => entry.id === nearC.id,
+    ).assigneeId === null,
+  )
+  const adminAssigns = await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: [farSnippet.id], assigneeId: annotator.id },
+  })
+  check('an admin assigns anywhere', adminAssigns.status === 200)
+  check(
+    'a teacher cannot assign',
+    (
+      await call('POST', '/api/research/snippets/assign', {
+        token: teacherToken,
+        body: { snippetIds: [nearC.id], assigneeId: annotator.id },
+      })
+    ).status === 403,
+  )
+  check(
+    'only to an annotator',
+    (
+      await call('POST', '/api/research/snippets/assign', {
+        token: adminToken,
+        body: { snippetIds: [nearC.id], assigneeId: teacher.id },
+      })
+    ).status === 400,
+  )
+  check(
+    'an active one',
+    (
+      await call('POST', '/api/research/snippets/assign', {
+        token: adminToken,
+        body: { snippetIds: [nearC.id], assigneeId: retired.id },
+      })
+    ).status === 400,
+  )
+  check(
+    'naming the assignee or null',
+    (await call('POST', '/api/research/snippets/assign', { token: adminToken, body: { snippetIds: [nearC.id] } }))
+      .status === 400,
+  )
+  check(
+    'a snippet that does not exist is refused',
+    (
+      await call('POST', '/api/research/snippets/assign', {
+        token: adminToken,
+        body: { snippetIds: [`${turnSession.id}:nope:1`], assigneeId: annotator.id },
+      })
+    ).status === 404,
+  )
+  check(
+    'the batch is capped',
+    (
+      await call('POST', '/api/research/snippets/assign', {
+        token: adminToken,
+        body: { snippetIds: Array.from({ length: 501 }, (_, n) => `${turnSession.id}:q:${n}`), assigneeId: null },
+      })
+    ).status === 400,
+  )
+  const adminView = (
+    await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })
+  ).body.snippets.find((entry) => entry.id === nearA.id)
+  check(
+    'staff who assign see to whom, by name',
+    adminView.assigneeId === annotator.id && adminView.assigneeName === 'Ann A.' && adminView.assignedBy === manager.id,
+  )
+  const teacherView = (
+    await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: teacherToken })
+  ).body.snippets.find((entry) => entry.id === nearA.id)
+  check(
+    'a teacher sees that it is assigned, not the name',
+    teacherView.assigneeId === annotator.id && !('assigneeName' in teacherView),
+  )
+
+  console.log('\nan annotator labels what is assigned to them')
+  const mineToLabel = await call('GET', '/api/research/snippets', { token: annotatorToken })
+  const mineIds = mineToLabel.body.snippets.map((entry) => entry.id).sort()
+  check(
+    'an annotator sees exactly their assignments',
+    mineToLabel.status === 200 && mineIds.join() === [nearA.id, nearB.id, farSnippet.id].sort().join(),
+  )
+  check(
+    'with the question and answer context a teacher gets',
+    mineToLabel.body.snippets.every((entry) => entry.question && 'answer' in entry && entry.student.text && entry.tutor.text),
+  )
+  check(
+    'but not who wrote the feedback — they label blind',
+    mineToLabel.body.snippets.every((entry) => !('source' in entry.tutor) && !('model' in entry.tutor)),
+  )
+  check(
+    'filtered to one of their sessions',
+    (await call('GET', `/api/research/snippets?sessionId=${farSession.id}`, { token: annotatorToken })).body.count === 1,
+  )
+  check(
+    'and refused a session with nothing assigned',
+    (await call('GET', `/api/research/snippets?sessionId=${seededForStudent.body.session.id}`, { token: annotatorToken }))
+      .status === 404,
+  )
+  check(
+    'another annotator sees none of it',
+    (await call('GET', '/api/research/snippets', { token: secondAnnotatorToken })).body.count === 0,
+  )
+
+  const annotatorLabels = await call('PATCH', `/api/research/snippets/${nearA.id}`, {
+    token: annotatorToken,
+    body: { labels: { specific: 'yes', tone: 'partly' }, notes: { tone: 'A bit curt.' }, assigneeId: secondAnnotator.id },
+  })
+  check('an annotator labels an assigned snippet', annotatorLabels.status === 200)
+  check('attributed to them', annotatorLabels.body.label.labelledBy === annotator.id)
+  check('and cannot move the assignment while at it', annotatorLabels.body.label.assigneeId === annotator.id)
+  check(
+    'but may not keep or drop it',
+    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: annotatorToken, body: { included: true } }))
+      .status === 403,
+  )
+  check(
+    'nor label one not assigned to them',
+    (await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  check(
+    "nor another annotator's",
+    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  const unassigning = await call('POST', '/api/research/snippets/assign', {
+    token: managerToken,
+    body: { snippetIds: [nearB.id], assigneeId: null },
+  })
+  check('a manager takes a snippet back', unassigning.status === 200)
+  check(
+    'and it leaves the annotator’s list',
+    !(await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.some((e) => e.id === nearB.id),
+  )
+  check(
+    'and their reach',
+    (await call('PATCH', `/api/research/snippets/${nearB.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  check(
+    'the labels an annotator wrote survive for staff',
+    (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })).body.snippets.find(
+      (entry) => entry.id === nearA.id,
+    ).notes.tone === 'A bit curt.',
+  )
+
+  console.log('\nthe teacher labelling switch')
+  check(
+    'a teacher can label by default',
+    (await call('GET', '/api/auth/me', { token: teacherToken })).body.user.canLabel === true,
+  )
+  check(
+    'and it travels on user payloads',
+    (await call('GET', `/api/users/${teacher.id}`, { token: managerToken })).body.user.canLabel === true,
+  )
+  check(
+    'a teacher cannot switch their own',
+    (await call('PATCH', `/api/users/${teacher.id}`, { token: teacherToken, body: { canLabel: false } })).status === 403,
+  )
+  check(
+    "another manager cannot switch someone else's teacher",
+    (await call('PATCH', `/api/users/${teacher.id}`, { token: otherManagerToken, body: { canLabel: false } })).status ===
+      404,
+  )
+  check(
+    'only a teacher has the switch',
+    (await call('PATCH', `/api/users/${otherManager.id}`, { token: adminToken, body: { canLabel: false } })).status ===
+      400 &&
+      (await call('PATCH', `/api/users/${annotator.id}`, { token: adminToken, body: { canLabel: false } })).status === 400,
+  )
+  check(
+    'and it is a boolean',
+    (await call('PATCH', `/api/users/${teacher.id}`, { token: managerToken, body: { canLabel: 'no' } })).status === 400,
+  )
+  const switchedOff = await call('PATCH', `/api/users/${teacher.id}`, {
+    token: managerToken,
+    body: { canLabel: false },
+  })
+  check('their manager switches it off', switchedOff.status === 200 && switchedOff.body.user.canLabel === false)
+  check(
+    'me says so, for the client to hide the screen',
+    (await call('GET', '/api/auth/me', { token: teacherToken })).body.user.canLabel === false,
+  )
+  check(
+    'the snippets are refused',
+    (await call('GET', '/api/research/snippets', { token: teacherToken })).status === 403,
+  )
+  check(
+    'and so is labelling one',
+    (await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: teacherToken, body: { labels: { tone: 'yes' } } }))
+      .status === 403,
+  )
+  check('their activities still open', (await call('GET', '/api/activities', { token: teacherToken })).status === 200)
+  check(
+    "their students' sessions still open",
+    (await call('GET', '/api/research/sessions', { token: teacherToken })).status === 200 &&
+      (await call('GET', `/api/research/sessions/${turnSession.id}/transcript`, { token: teacherToken })).status === 200,
+  )
+  check('their roster still opens', (await call('GET', '/api/users', { token: teacherToken })).status === 200)
+  check('their inbox still opens', (await call('GET', '/api/support', { token: teacherToken })).status === 200)
+  const switchedOn = await call('PATCH', `/api/users/${teacher.id}`, { token: adminToken, body: { canLabel: true } })
+  check('an admin switches it back on', switchedOn.body.user.canLabel === true)
+  check(
+    'and labelling opens again',
+    (await call('GET', '/api/research/snippets', { token: teacherToken })).status === 200,
+  )
+
+  console.log('\na manager sees their own branch and nothing else')
+  const nearManagerSnippets = (await call('GET', '/api/research/snippets', { token: managerToken })).body.snippets
+  check(
+    'snippets: their teachers’ work only',
+    nearManagerSnippets.length > 0 && !nearManagerSnippets.some((entry) => entry.sessionId === farSession.id),
+  )
+  const farManagerSnippets = (await call('GET', '/api/research/snippets', { token: otherManagerToken })).body.snippets
+  check(
+    'and the other manager theirs',
+    farManagerSnippets.length === 1 && farManagerSnippets[0].id === farSnippet.id,
+  )
+  check(
+    'sessions: likewise',
+    !(await call('GET', '/api/research/sessions', { token: managerToken })).body.sessions.some(
+      (row) => row.id === farSession.id,
+    ) &&
+      (await call('GET', '/api/research/sessions', { token: otherManagerToken })).body.sessions.some(
+        (row) => row.id === farSession.id,
+      ),
+  )
+  check(
+    'transcripts: likewise',
+    (await call('GET', `/api/research/sessions/${farSession.id}/transcript`, { token: managerToken })).status === 404 &&
+      (await call('GET', `/api/research/sessions/${farSession.id}/transcript`, { token: otherManagerToken })).status ===
+        200,
+  )
+  check(
+    'labels: likewise',
+    (await call('PATCH', `/api/research/snippets/${farSnippet.id}`, { token: managerToken, body: { included: true } }))
+      .status === 404 &&
+      (await call('PATCH', `/api/research/snippets/${farSnippet.id}`, { token: otherManagerToken, body: { included: true } }))
+        .status === 200,
+  )
+  check(
+    'activities: likewise',
+    !(await call('GET', '/api/activities', { token: managerToken })).body.activities.some((a) => a.id === farActivity.id) &&
+      (await call('GET', '/api/activities', { token: otherManagerToken })).body.activities.some(
+        (a) => a.id === farActivity.id,
+      ),
+  )
+
+  const adminAll = (await call('GET', '/api/research/snippets', { token: adminToken })).body.snippets
+  check(
+    'an admin sees both branches',
+    adminAll.some((entry) => entry.id === farSnippet.id) && adminAll.some((entry) => entry.id === nearA.id),
+  )
+  check(
+    'and keeps or drops anywhere, an assigned snippet included',
+    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: adminToken, body: { included: true } })).body.label
+      .included === true,
+  )
+  check(
+    'and reads any transcript',
+    (await call('GET', `/api/research/sessions/${farSession.id}/transcript`, { token: adminToken })).status === 200,
+  )
+
+  const farTicket = await call('POST', '/api/support', {
+    token: farTeacherToken,
+    body: { category: 'support', subject: 'From far away', body: 'A teacher writing in.' },
+  })
+  const annTicket = await call('POST', '/api/support', {
+    token: annotatorToken,
+    body: { category: 'suggestion', subject: 'Keyboard shortcuts', body: 'For labelling.' },
+  })
+  check('an annotator may write in', annTicket.status === 201)
+  const nearInbox = (await call('GET', '/api/support', { token: managerToken })).body.messages
+  const farInbox = (await call('GET', '/api/support', { token: otherManagerToken })).body.messages
+  const adminInbox = (await call('GET', '/api/support', { token: adminToken })).body.messages
+  check(
+    "support: a manager reads their teachers' students",
+    nearInbox.some((m) => m.id === ticket.body.message.id) && !farInbox.some((m) => m.id === ticket.body.message.id),
+  )
+  check(
+    'and their own teachers, not another branch’s',
+    farInbox.some((m) => m.id === farTicket.body.message.id) && !nearInbox.some((m) => m.id === farTicket.body.message.id),
+  )
+  check(
+    'what belongs to no branch goes to the admin',
+    adminInbox.some((m) => m.id === annTicket.body.message.id) &&
+      !nearInbox.some((m) => m.id === annTicket.body.message.id) &&
+      !farInbox.some((m) => m.id === annTicket.body.message.id),
+  )
+  check(
+    "a manager cannot answer another branch's message",
+    (await call('POST', `/api/support/${farTicket.body.message.id}/reply`, { token: managerToken, body: { text: 'hi' } }))
+      .status === 403,
+  )
+  check(
+    'their own manager can',
+    (await call('POST', `/api/support/${farTicket.body.message.id}/reply`, { token: otherManagerToken, body: { text: 'On it.' } }))
+      .status === 200,
+  )
+
+  console.log('\npasswords for staff, refused for students')
+  check(
+    'a manager cannot reset an annotator',
+    (await call('POST', `/api/users/${annotator.id}/password`, { token: managerToken, body: { newPassword: 'manager says so' } }))
+      .status === 404,
+  )
+  const annotatorReset = await call('POST', `/api/users/${annotator.id}/password`, {
+    token: adminToken,
+    body: { newPassword: 'admin reset this one' },
+  })
+  check('an admin resets an annotator', annotatorReset.body.reset === true && annotatorReset.body.sessionsRevoked === 1)
+  check(
+    'whose new password works',
+    (await call('POST', '/api/auth/login', { body: { email: 'ann@example.com', password: 'admin reset this one' } }))
+      .status === 200,
+  )
+  const managerReset = await call('POST', `/api/users/${otherManager.id}/password`, {
+    token: adminToken,
+    body: { newPassword: 'admin reset this one' },
+  })
+  check('an admin resets a manager', managerReset.body.reset === true)
+  check(
+    'and a teacher',
+    (await call('POST', `/api/users/${farTeacher.id}/password`, { token: adminToken, body: { newPassword: 'admin reset this one' } }))
+      .body.reset === true,
+  )
+  check(
+    'a manager resets a teacher in their branch only',
+    (await call('POST', `/api/users/${farTeacher.id}/password`, { token: managerToken, body: { newPassword: 'not my teacher' } }))
+      .status === 404,
+  )
+
+  // A student made before passwords were dropped may still have a hash. The
+  // email door no longer opens for them, and says so the way it does for a
+  // wrong password.
+  const { hashPassword } = await import('./lib/password.js')
+  const legacy = emailFreed.body.user
+  await app.locals.store.users.update(legacy.id, { passwordHash: await hashPassword('an old student password') })
+  const legacyLogin = await call('POST', '/api/auth/login', {
+    body: { email: 'temp@example.com', password: 'an old student password' },
+  })
+  check('a student is refused at the email door, even with the right password', legacyLogin.status === 401)
+  check(
+    'in the same words as a wrong password',
+    legacyLogin.body.error.message === wrongPassword.body.error.message,
+  )
+
   console.log('\nnot found')
   const nowhere = await call('GET', '/api/nope')
   check('unknown route is 404 json', nowhere.status === 404 && Boolean(nowhere.body.error))
@@ -2196,7 +2792,7 @@ try {
   check('unknown activity is 404', badActivity.status === 404)
 
   const finalHealth = await call('GET', '/api/health')
-  check('health counts users', finalHealth.body.users === 10)
+  check('health counts users', finalHealth.body.users === 15)
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })

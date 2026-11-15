@@ -4,12 +4,13 @@ import { requireAuth } from '../lib/auth.js'
 import { hashPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, notFound, now, route } from '../lib/http.js'
 import { isDuplicateEmail } from '../store/errors.js'
-import { CLASS_LIST_MAX } from '../../shared/student-number.js'
+import { CLASS_LIST_MAX, cleanStudentNumber, isUsername } from '../../shared/student-number.js'
 import {
   addToClassList,
   assertCanManage,
   clearUnusedParents,
   loadInScope,
+  newClassListStudent,
   newUser,
   publicUser,
   requireEmail,
@@ -56,6 +57,51 @@ async function childrenOf(store, user) {
   return []
 }
 
+/**
+ * A student made through `POST /api/users`, who no longer has a password.
+ *
+ * Students sign in with their student number (shared/student-number.js) and
+ * the email-and-password door is closed to them (routes/auth.js), so a password
+ * sent for one is refused rather than stored: keeping it would promise a way in
+ * that does not exist. Two shapes are accepted:
+ *
+ * - **`studentNumber`** — the way students really sign in. The same account a
+ *   class-list paste makes, with an optional `name` in place of the number.
+ * - **`email`**, the older shape, kept so a caller that has not moved over
+ *   still gets an account rather than an error. That account has no password
+ *   and so cannot sign in at all; it exists for the roster only. The
+ *   class-list door is the one to use.
+ */
+async function newStudent(body, parent) {
+  const { password } = body ?? {}
+  if (password !== undefined && password !== null && password !== '') {
+    throw badRequest('Students do not have passwords — they sign in with their student number')
+  }
+
+  if (body?.studentNumber !== undefined) {
+    const studentNumber = cleanStudentNumber(body.studentNumber)
+    if (!studentNumber || !isUsername(studentNumber)) {
+      throw badRequest('"studentNumber" must be an eight-digit student number')
+    }
+    if (body.email !== undefined && body.email !== null && body.email !== '') {
+      throw badRequest('A student with a student number has no email')
+    }
+    return newClassListStudent({
+      studentNumber,
+      teacherId: parent.value,
+      name: body.name === undefined || body.name === '' ? null : requireName(body),
+    })
+  }
+
+  return newUser({
+    role: 'student',
+    name: requireName(body),
+    email: requireEmail(body),
+    password: null,
+    parent,
+  })
+}
+
 export function userRoutes(store) {
   const router = express.Router()
 
@@ -85,13 +131,16 @@ export function userRoutes(store) {
       const scope = await scopeOf(store, req.user)
       const parent = await resolveParent(store, req.user, role, requested, { scope })
 
-      const doc = await newUser({
-        role,
-        name: requireName(req.body),
-        email: requireEmail(req.body),
-        password: requirePassword(req.body),
-        parent,
-      })
+      const doc =
+        role === 'student'
+          ? await newStudent(req.body, parent)
+          : await newUser({
+              role,
+              name: requireName(req.body),
+              email: requireEmail(req.body),
+              password: requirePassword(req.body),
+              parent,
+            })
 
       let created
       try {
@@ -250,6 +299,23 @@ export function userRoutes(store) {
         await assertNotLastAdmin(store, target, { becoming: role })
         patch.role = role
         Object.assign(patch, clearUnusedParents(role))
+        // The labelling switch belongs to the teacher role. Cleared on the way
+        // out, so a teacher who is moved away and later back starts from the
+        // default rather than from a decision made about a different job.
+        if (target.canLabel !== undefined && target.canLabel !== null) patch.canLabel = null
+      }
+
+      /**
+       * Whether a teacher may label (shared/roles.js teacherCanLabel). An
+       * administrative switch like `active`: the authority check above has
+       * already limited it to an admin or the teacher's own manager, and the
+       * teacher never sets it for themselves.
+       */
+      if (req.body.canLabel !== undefined) {
+        if (typeof req.body.canLabel !== 'boolean') throw badRequest('"canLabel" must be a boolean')
+        if (isSelf) throw forbidden('You cannot change your own labelling access')
+        if (role !== 'teacher') throw badRequest('Only a teacher has a labelling switch')
+        patch.canLabel = req.body.canLabel
       }
 
       const field = parentField(role)
@@ -286,7 +352,8 @@ export function userRoutes(store) {
 
   /**
    * Resetting someone else's password — no current password, because the point
-   * is that they have lost it. Their sessions are revoked, so a reset also ends
+   * is that they have lost it. For a manager, annotator, teacher or admin; who
+   * may reset whom is `MANAGEABLE`, as for every other administrative act. Their sessions are revoked, so a reset also ends
    * whatever access the old password had already granted.
    *
    * Changing your own password is `POST /api/auth/password`, which does require
@@ -301,6 +368,12 @@ export function userRoutes(store) {
         throw badRequest('Use POST /api/auth/password to change your own password')
       }
       assertCanManage(req.user, target)
+
+      // Students sign in with their student number and have no password to
+      // reset — see shared/student-number.js. Every other role does.
+      if (target.role === 'student') {
+        throw badRequest('Students do not have passwords — they sign in with their student number')
+      }
 
       const password = requirePassword(req.body, 'newPassword')
 

@@ -21,11 +21,19 @@ export function useAuth() {
   return value
 }
 
-/** Where each role belongs when they land on the site root or just signed in. */
+/**
+ * Where each role belongs when they land on the site root or just signed in.
+ *
+ * Every staff role must map to somewhere other than `/`: StudentLayout sends
+ * staff away from `/` to this answer, so a staff role that fell through to the
+ * last line would bounce between the two for ever. An annotator's console is
+ * the labelling screen and nothing else (`/annotate`, see App.jsx).
+ */
 export function homeFor(user) {
   if (!user) return '/'
   if (user.role === 'admin') return '/admin'
   if (user.role === 'manager' || user.role === 'teacher') return '/teacher'
+  if (user.role === 'annotator') return '/annotate'
   return '/'
 }
 

@@ -5,6 +5,8 @@ import { roleStringKey, useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import { MANAGEABLE, PARENT } from '../../../shared/roles'
 import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
+import { isUsername } from '../../../shared/student-number'
+import LabellingSwitch from '../../components/LabellingSwitch'
 
 /**
  * Accounts, and the hierarchy between them.
@@ -17,9 +19,15 @@ import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
  * services/users.js, which is the copy that holds; this just avoids offering
  * something that would be refused.
  *
- * Students can be created here too, but usually are not: most students never
- * get an account at all and start an activity anonymously instead.
+ * Students can be created here too, but usually come from a teacher's class
+ * list instead. Either way a student has **no password**: they sign in with
+ * their eight-digit student number on the student page, so the form asks for
+ * that number (and an optional name) and nothing else, and no student row
+ * offers a password reset. Every other role signs in with email and password.
  */
+
+/** Students sign in with their number; everyone else has a password to reset. */
+const hasPassword = (entry) => entry.role !== 'student'
 
 /** `'admin'` → `people.blurbAdmin`, the line under the role picker. */
 const blurbKey = (role) => `people.blurb${role.charAt(0).toUpperCase()}${role.slice(1)}`
@@ -27,13 +35,14 @@ const blurbKey = (role) => `people.blurb${role.charAt(0).toUpperCase()}${role.sl
 export default function People() {
   const { user: actor } = useAuth()
   const { lang, t } = useI18n()
-  const { data, error, loading, reload } = useAsync(() => api.users(), [])
+  const { data, error, loading, reload, setData } = useAsync(() => api.users(), [])
 
   const [form, setForm] = useState({
     role: 'teacher',
     name: '',
     email: '',
     password: '',
+    studentNumber: '',
     parentId: '',
   })
   const [busy, setBusy] = useState(false)
@@ -44,6 +53,7 @@ export default function People() {
   const users = useMemo(() => data?.users ?? [], [data])
   const creatable = MANAGEABLE[actor.role] ?? []
   const parentSpec = PARENT[form.role]
+  const isStudent = form.role === 'student'
 
   const parentOptions = useMemo(
     () => users.filter((entry) => entry.role === parentSpec?.role && entry.active),
@@ -63,20 +73,37 @@ export default function People() {
     setNotice(null)
 
     try {
-      const body = {
-        role: form.role,
-        name: form.name,
-        email: form.email,
-        password: form.password,
-      }
+      // A student is a number and, optionally, a name: the server refuses a
+      // password for one, and an email would make an account nobody can sign
+      // in to (routes/users.js).
+      const body = isStudent
+        ? {
+            role: 'student',
+            studentNumber: form.studentNumber,
+            ...(form.name.trim() ? { name: form.name } : {}),
+          }
+        : {
+            role: form.role,
+            name: form.name,
+            email: form.email,
+            password: form.password,
+          }
       if (parentSpec && form.parentId) body[parentSpec.field] = form.parentId
 
       const { user: made } = await api.createUser(body)
-      setForm({ role: form.role, name: '', email: '', password: '', parentId: '' })
-      setNotice({ tone: 'good', text: t('people.created', { name: made.name }) })
+      setForm({ role: form.role, name: '', email: '', password: '', studentNumber: '', parentId: '' })
+      setNotice({
+        tone: 'good',
+        text: isStudent
+          ? t('people.createdStudent', { number: made.studentNumber ?? form.studentNumber })
+          : t('people.created', { name: made.name }),
+      })
       await reload()
     } catch (failure) {
-      setNotice({ tone: 'bad', text: failure.message })
+      setNotice({
+        tone: 'bad',
+        text: isStudent && failure.status === 409 ? t('people.numberTaken') : failure.message,
+      })
     } finally {
       setBusy(false)
     }
@@ -97,6 +124,10 @@ export default function People() {
       })
     }
   }
+
+  /** Folds one updated account into the list, without a refetch. */
+  const replaceRow = (updated) =>
+    setData((prev) => prev && { ...prev, users: prev.users.map((row) => (row.id === updated.id ? updated : row)) })
 
   const resetFor = async (target) => {
     const next = window.prompt(t('people.resetPrompt', { name: target.name }))
@@ -181,55 +212,98 @@ export default function People() {
             ) : null}
           </div>
 
-          <div className="cs-row">
-            <div className="cs-field">
-              <label className="cs-label" htmlFor="name">
-                {t('people.name')}
-              </label>
-              <input
-                id="name"
-                className="cs-input"
-                required
-                value={form.name}
-                onChange={(event) => set({ name: event.target.value })}
-              />
-            </div>
+          {isStudent ? (
+            <div className="cs-row">
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="new-number">
+                  {t('people.studentNumber')}
+                </label>
+                <input
+                  id="new-number"
+                  className="cs-input mono"
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]{8}"
+                  maxLength={8}
+                  autoComplete="off"
+                  placeholder="20230145"
+                  value={form.studentNumber}
+                  // Digits only, as on the student sign-in screen.
+                  onChange={(event) =>
+                    set({ studentNumber: event.target.value.replace(/\D/g, '').slice(0, 8) })
+                  }
+                />
+                <p className="cs-hint">{t('people.studentNumberHint')}</p>
+              </div>
 
-            <div className="cs-field">
-              <label className="cs-label" htmlFor="new-email">
-                {t('people.email')}
-              </label>
-              <input
-                id="new-email"
-                className="cs-input"
-                type="email"
-                required
-                value={form.email}
-                onChange={(event) => set({ email: event.target.value })}
-              />
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="name">
+                  {t('people.nameOptional')}
+                </label>
+                <input
+                  id="name"
+                  className="cs-input"
+                  value={form.name}
+                  onChange={(event) => set({ name: event.target.value })}
+                />
+                <p className="cs-hint">{t('people.nameOptionalHint')}</p>
+              </div>
             </div>
+          ) : (
+            <div className="cs-row">
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="name">
+                  {t('people.name')}
+                </label>
+                <input
+                  id="name"
+                  className="cs-input"
+                  required
+                  value={form.name}
+                  onChange={(event) => set({ name: event.target.value })}
+                />
+              </div>
 
-            <div className="cs-field">
-              <label className="cs-label" htmlFor="new-password">
-                {t('people.password')}
-              </label>
-              <input
-                id="new-password"
-                className="cs-input"
-                type="text"
-                required
-                minLength={MIN_PASSWORD_LENGTH}
-                value={form.password}
-                onChange={(event) => set({ password: event.target.value })}
-              />
-              <p className="cs-hint">
-                {t('people.passwordHint', { min: MIN_PASSWORD_LENGTH })}
-              </p>
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="new-email">
+                  {t('people.email')}
+                </label>
+                <input
+                  id="new-email"
+                  className="cs-input"
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(event) => set({ email: event.target.value })}
+                />
+              </div>
+
+              <div className="cs-field">
+                <label className="cs-label" htmlFor="new-password">
+                  {t('people.password')}
+                </label>
+                <input
+                  id="new-password"
+                  className="cs-input"
+                  type="text"
+                  required
+                  minLength={MIN_PASSWORD_LENGTH}
+                  value={form.password}
+                  onChange={(event) => set({ password: event.target.value })}
+                />
+                <p className="cs-hint">
+                  {t('people.passwordHint', { min: MIN_PASSWORD_LENGTH })}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
-            <button type="submit" className="cs-btn cs-btn-primary" disabled={busy}>
+            <button
+              type="submit"
+              className="cs-btn cs-btn-primary"
+              disabled={busy || (isStudent && !isUsername(form.studentNumber))}
+            >
               {busy
                 ? t('people.creating')
                 : t('people.create', { role: t(roleStringKey(form.role)) })}
@@ -259,6 +333,7 @@ export default function People() {
                   <th>{t('people.thEmail')}</th>
                   <th>{t('people.thReportsTo')}</th>
                   <th>{t('people.thLastSeen')}</th>
+                  <th>{t('teachers.thLabelling')}</th>
                   <th />
                 </tr>
               </thead>
@@ -291,15 +366,25 @@ export default function People() {
                         ? new Date(entry.lastLoginAt).toLocaleDateString(lang)
                         : t('people.never')}
                     </td>
+                    {/* Only a teacher has the switch; see LabellingSwitch. */}
+                    <td>
+                      {entry.role === 'teacher' ? (
+                        <LabellingSwitch teacher={entry} onChange={replaceRow} />
+                      ) : (
+                        <span className="cs-hint">—</span>
+                      )}
+                    </td>
                     <td>
                       <div className="cs-actions">
-                        <button
-                          type="button"
-                          className="cs-btn cs-btn-sm"
-                          onClick={() => resetFor(entry)}
-                        >
-                          {t('people.reset')}
-                        </button>
+                        {hasPassword(entry) ? (
+                          <button
+                            type="button"
+                            className="cs-btn cs-btn-sm"
+                            onClick={() => resetFor(entry)}
+                          >
+                            {t('people.reset')}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="cs-btn cs-btn-sm"

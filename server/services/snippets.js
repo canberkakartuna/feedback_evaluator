@@ -85,5 +85,12 @@ export function attachLabels(snippets, labels) {
      * snippets labelled before this existed, and is not offered for new ones.
      */
     notes: labels.get(snippet.id)?.notes ?? {},
+    /**
+     * Which annotator this snippet is assigned to, if any — see
+     * `POST /api/research/snippets/assign`. Stored on the same label record.
+     */
+    assigneeId: labels.get(snippet.id)?.assigneeId ?? null,
+    assignedBy: labels.get(snippet.id)?.assignedBy ?? null,
+    assignedAt: labels.get(snippet.id)?.assignedAt ?? null,
   }))
 }

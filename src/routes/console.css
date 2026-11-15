@@ -854,3 +854,56 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── assigning snippets to annotators (Labelling, admin + manager) ── */
+
+.cs-assign {
+  display: grid;
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+
+.cs-assign-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-4);
+}
+
+/* Lines up with the bottom of the select beside it rather than its label. */
+.cs-assign-all {
+  padding-bottom: var(--s-2);
+}
+
+.cs-assign-state {
+  min-height: 1.2em;
+  margin: 0;
+}
+
+/* Spans both columns of a snippet card: which one, and who has it. */
+.cs-snip-assign {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+/* ── a teacher's labelling switch (People, Teachers) ─────────── */
+
+.cs-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.cs-switch-btn[aria-pressed='true'] {
+  background: var(--pen-soft);
+  border-color: var(--pen);
+  color: var(--pen-deep);
+  font-weight: 650;
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import Navbar from '../components/Navbar'
@@ -8,7 +8,12 @@ import './console.css'
 import '../components/Entry.css'
 
 /**
- * The only way in for anyone with an account.
+ * The staff door: email and password, for an admin, a manager, an annotator or
+ * a teacher. Students have their own page (`/`, StudentLayout) and sign in with
+ * their student number alone — they have no password, and the server answers
+ * a student account here exactly as it answers a wrong password. So this page
+ * carries no student-number field, and when what was typed is a student
+ * number, or the answer is that 401, it says where students go instead.
  *
  * There is deliberately **no sign-up**. Accounts are created downwards — an
  * admin creates managers and teachers, a teacher creates their own students —
@@ -35,14 +40,32 @@ export default function SignIn() {
 
   const submit = async (event) => {
     event.preventDefault()
-    setBusy(true)
     setError(null)
 
+    // Checked here rather than by the browser (the form is noValidate): an
+    // 8-digit number in the email box would otherwise get the browser's "add
+    // an @" message, which tells a student nothing about where to go.
+    if (/^\d+$/.test(email.trim())) {
+      setError({ text: t('signin.looksLikeNumber'), toStudent: true })
+      return
+    }
+    if (!email.trim() || !password) {
+      setError({ text: t('signin.missing') })
+      return
+    }
+
+    setBusy(true)
     try {
       const me = await signIn(email, password)
       navigate(landingFor(me, location.state?.from), { replace: true })
     } catch (problem) {
-      setError(problem.message)
+      // 401 covers a wrong password, an unknown address and a student account
+      // alike (routes/auth.js), so the student hint goes with every one.
+      setError(
+        problem.status === 401
+          ? { text: t('signin.wrong'), toStudent: true }
+          : { text: problem.message },
+      )
     } finally {
       setBusy(false)
     }
@@ -54,11 +77,12 @@ export default function SignIn() {
           same reason. Home and the language switch are the useful pair. */}
       <Navbar who={false} />
       <div className="en-card">
-        <SignInDoors current="teacher" />
+        <SignInDoors current="staff" />
         <p className="eyebrow">{t('signin.eyebrow')}</p>
         <h1 className="en-title">{t('signin.title')}</h1>
+        <p className="en-lede">{t('signin.lede')}</p>
 
-        <form className="cs-form" onSubmit={submit}>
+        <form className="cs-form" onSubmit={submit} noValidate>
           <div className="cs-field">
             <label className="cs-label" htmlFor="email">
               {t('signin.email')}
@@ -91,7 +115,13 @@ export default function SignIn() {
 
           {error ? (
             <p className="cs-note" data-tone="bad" role="alert">
-              {error}
+              {error.text}
+              {error.toStudent ? (
+                <>
+                  {' '}
+                  <Link to="/">{t('signin.toStudent')}</Link>
+                </>
+              ) : null}
             </p>
           ) : null}
 
@@ -101,8 +131,9 @@ export default function SignIn() {
         </form>
 
         <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
-          {t('signin.noAccount')} {t('signin.staffAccounts')}
+          {t('signin.noAccount')} <Link to="/">{t('signin.toStudent')}</Link>
         </p>
+        <p className="cs-hint">{t('signin.staffAccounts')}</p>
       </div>
     </main>
   )

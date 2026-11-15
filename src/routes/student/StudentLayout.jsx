@@ -14,7 +14,8 @@ import '../console.css'
  * to be asked:
  *
  *   1  who are you    a username (their 8-digit student number) off the class
- *                     list; teachers use the other door, /signin
+ *                     list; staff — admin, manager, annotator, teacher — use
+ *                     the other door, /signin, with email and password
  *   —  the notice     once, ever, the first time they sign in — that is the
  *                     ConsentGate in App.jsx, not a step here
  *   2  the work       pick from the list, or the activity a class code named
@@ -24,7 +25,7 @@ import '../console.css'
  *   nobody yet               their student number, on every path — the list
  *                            and a class code alike
  *   student, signed in       nothing further: they go straight to the work
- *   teacher, manager, admin  nothing: they are sent to their console instead
+ *   any staff role           nothing: they are sent to their console instead
  *
  * There is no anonymous way in any more. The server refuses a session without
  * a signed-in student (`studentSignInRequired` in server/config.js), because
@@ -123,8 +124,9 @@ export default function StudentLayout() {
    * on a guess is how a signed-in teacher ends up somewhere unexplained.
    *
    * Every role in `STAFF_ROLES` has a console in `homeFor`, so this always goes
-   * somewhere other than `/`. A staff role added without one would bounce here
-   * for ever — give it a console in the same commit.
+   * somewhere other than `/` — an annotator's is /annotate. A staff role added
+   * without one would bounce here for ever — give it a console in the same
+   * commit (test/unit/split-modules.test.js checks this).
    */
   if (isStaff(user?.role)) return <Navigate to={homeFor(user)} replace />
 

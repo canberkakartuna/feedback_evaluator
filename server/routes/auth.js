@@ -71,6 +71,8 @@ export function authRoutes(store) {
   )
 
   /**
+   * Staff sign-in: email and password.
+   *
    * A wrong password and an unknown address answer the same way, and take the
    * same time to do it — `burnPassword` does the work a real verify would, so
    * the endpoint cannot be used to find out who has an account.
@@ -87,7 +89,15 @@ export function authRoutes(store) {
 
       const user = await store.users.findByEmail(email)
 
-      if (!user) {
+      /**
+       * This door is for staff — admin, manager, annotator, teacher. A student
+       * signs in at `POST /student` with their number, and is turned away here
+       * with exactly the answer an unknown address gets, after the same work,
+       * so the email door cannot be used to find out who is a student either.
+       * That includes a student created before passwords were dropped who still
+       * has a hash on their account: it no longer opens anything.
+       */
+      if (!user || user.role === 'student') {
         await burnPassword(password)
         throw new ApiError(401, 'Email or password is incorrect')
       }
@@ -282,6 +292,12 @@ export function authRoutes(store) {
     '/password',
     requireAuth,
     route(async (req, res) => {
+      // A student has no password to change: they sign in with their number.
+      // Said plainly rather than left to fail as "current password is wrong".
+      if (req.user.role === 'student') {
+        throw badRequest('Students do not have passwords — they sign in with their student number')
+      }
+
       const current = req.body?.currentPassword
       if (typeof current !== 'string' || !current) {
         throw badRequest('"currentPassword" must be a non-empty string')

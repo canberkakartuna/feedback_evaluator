@@ -3,7 +3,8 @@ import { config } from '../config.js'
 import { DEFAULT_CRITERIA, LABEL_VALUES, attachLabels, buildSnippets } from '../services/snippets.js'
 import { activityScope, displayCode } from '../services/activities.js'
 import { scopeOf } from '../services/users.js'
-import { badRequest, forbidden, notFound, route, unavailable } from '../lib/http.js'
+import { teacherCanLabel } from '../../shared/roles.js'
+import { ApiError, badRequest, forbidden, notFound, now, route, unavailable } from '../lib/http.js'
 
 /**
  * Reading, keeping and labelling transcripts.
@@ -22,6 +23,17 @@ import { badRequest, forbidden, notFound, route, unavailable } from '../lib/http
  * another teacher's class any more than they can read one.
  *
  * Export stays researcher-only. It is the dataset, across everybody.
+ *
+ * Two narrower cases sit on top of that:
+ *
+ * - an **annotator** reaches the snippets an admin or manager has assigned to
+ *   them (`assigneeId` on the label record) and nothing else here — no
+ *   session list, no transcripts, no export — and may label those snippets but
+ *   not keep or drop them;
+ * - a **teacher whose labelling is switched off** (`canLabel: false`, see
+ *   shared/roles.js) is refused the snippet routes, but still reads their
+ *   students' sessions and transcripts, which are teaching rather than
+ *   labelling.
  */
 function researchToken(req) {
   const header = req.get('authorization') ?? ''
@@ -40,6 +52,10 @@ function requireReader(req) {
 
   if (req.user?.role === 'teacher' || req.user?.role === 'manager') return
 
+  // Let through so the snippet routes can answer them; every other route here
+  // turns them away with notForAnnotators.
+  if (req.user?.role === 'annotator') return
+
   // Nothing matched. Say which of the two doors was shut, rather than a blanket
   // 403 that leaves a researcher guessing whether their token or the env var is
   // the problem.
@@ -48,6 +64,30 @@ function requireReader(req) {
   }
   throw forbidden('Invalid research token')
 }
+
+const isAnnotator = (req) => req.user?.role === 'annotator'
+
+/** Sessions, transcripts: whole student work, which is not what an annotator is here for. */
+function notForAnnotators(req) {
+  if (isAnnotator(req)) throw forbidden('Annotators only see the snippets assigned to them')
+}
+
+/** The snippet routes, for a teacher whose labelling an admin or manager has switched off. */
+function assertMayLabel(req) {
+  if (!teacherCanLabel(req.user)) {
+    throw forbidden('Labelling is turned off for this account — ask your manager or an admin')
+  }
+}
+
+/** Assigning work to annotators: an admin, or a manager within their own branch. */
+function requireAssigner(req) {
+  if (req.user?.role !== 'admin' && req.user?.role !== 'manager') {
+    throw forbidden('Only an admin or a manager can assign labelling work')
+  }
+}
+
+/** Snippets per assignment call. A class's worth of transcripts, not the dataset. */
+export const ASSIGN_MAX = 500
 
 export function researchRoutes(store) {
   const router = express.Router()
@@ -72,6 +112,8 @@ export function researchRoutes(store) {
    */
   async function sessionScope(req) {
     if (isResearcher(req)) return { all: true }
+    // Never by roster: an annotator's reach is their assignments, read separately.
+    if (isAnnotator(req)) return { all: false, ids: new Set() }
 
     const [users, activities] = await Promise.all([
       scopeOf(store, req.user),
@@ -204,6 +246,7 @@ export function researchRoutes(store) {
   router.get(
     '/sessions',
     route(async (req, res) => {
+      notForAnnotators(req)
       const scope = await sessionScope(req)
       const all = await store.sessions.list({ limit: Number(req.query.limit ?? 100) })
       const sessions = scope.all ? all : all.filter((session) => canRead(scope, session.id))
@@ -239,6 +282,7 @@ export function researchRoutes(store) {
   router.get(
     '/sessions/:sessionId/transcript',
     route(async (req, res) => {
+      notForAnnotators(req)
       const scope = await sessionScope(req)
       const session = await store.sessions.findById(req.params.sessionId)
 
@@ -293,24 +337,80 @@ export function researchRoutes(store) {
    * The snippets themselves: one student turn plus the feedback that answered
    * it. `included` is the keep-or-drop decision; `labels` is the criteria pass.
    */
+  /**
+   * An annotator's snippets: exactly the ones assigned to them.
+   *
+   * Read from the assignments outward rather than by filtering every message in
+   * the system — the label records say which snippets, the snippet ids say which
+   * sessions, and only those sessions' messages are read. A snippet whose
+   * session has since been withdrawn simply stops appearing.
+   */
+  async function assignedSnippets(req, labels, sessionId) {
+    const assigned = new Set(
+      [...labels.values()]
+        .filter((label) => label.assigneeId === req.user.id)
+        .map((label) => label.snippetId),
+    )
+    const sessionIds = new Set([...assigned].map(sessionOfSnippet))
+
+    if (sessionId && !sessionIds.has(sessionId)) throw notFound('No such session')
+
+    const wanted = sessionId ? [sessionId] : [...sessionIds]
+    const messages = (await Promise.all(wanted.map((id) => store.messages.listBySession(id)))).flat()
+
+    return buildSnippets(messages).filter((snippet) => assigned.has(snippet.id))
+  }
+
+  /**
+   * Who each snippet is assigned to, by name, for the people who assign — an
+   * admin or a manager. One read of the annotators, not one per snippet.
+   */
+  async function withAssigneeNames(snippets) {
+    const annotators = await store.users.list({ role: 'annotator' })
+    const nameOf = new Map(annotators.map((user) => [user.id, user.name]))
+    return snippets.map((snippet) => ({
+      ...snippet,
+      assigneeName: snippet.assigneeId ? (nameOf.get(snippet.assigneeId) ?? null) : null,
+    }))
+  }
+
+  /**
+   * What an annotator is shown of a snippet. Who wrote the feedback (`source`,
+   * `model`) is left out of the payload altogether rather than only hidden on
+   * the screen, as it is for teachers: an annotator is there to label blind,
+   * and has no other use for it. Everything else is what a teacher sees.
+   */
+  const forAnnotator = ({ tutor: { source: _source, model: _model, ...tutor }, ...snippet }) => ({
+    ...snippet,
+    tutor,
+  })
+
   router.get(
     '/snippets',
     route(async (req, res) => {
+      assertMayLabel(req)
+
       const { sessionId, included } = req.query
-      const scope = await sessionScope(req)
-
-      if (sessionId && !canRead(scope, sessionId)) throw notFound('No such session')
-
-      const messages = sessionId
-        ? await store.messages.listBySession(sessionId)
-        : await store.messages.listAll()
-
-      const readable = scope.all
-        ? messages
-        : messages.filter((message) => canRead(scope, message.sessionId))
-
       const labels = await store.snippetLabels.map()
-      let snippets = attachLabels(buildSnippets(readable), labels)
+      let snippets
+
+      if (isAnnotator(req)) {
+        snippets = attachLabels(await assignedSnippets(req, labels, sessionId), labels)
+      } else {
+        const scope = await sessionScope(req)
+
+        if (sessionId && !canRead(scope, sessionId)) throw notFound('No such session')
+
+        const messages = sessionId
+          ? await store.messages.listBySession(sessionId)
+          : await store.messages.listAll()
+
+        const readable = scope.all
+          ? messages
+          : messages.filter((message) => canRead(scope, message.sessionId))
+
+        snippets = attachLabels(buildSnippets(readable), labels)
+      }
 
       if (included === 'true') snippets = snippets.filter((s) => s.included === true)
       if (included === 'false') snippets = snippets.filter((s) => s.included === false)
@@ -319,7 +419,103 @@ export function researchRoutes(store) {
       // After the filter, so only the sessions still on the page are read.
       snippets = await withContext(snippets)
 
+      if (isAnnotator(req)) snippets = snippets.map(forAnnotator)
+      else if (req.user?.role === 'admin' || req.user?.role === 'manager') {
+        snippets = await withAssigneeNames(snippets)
+      }
+
       res.json({ criteria: DEFAULT_CRITERIA, count: snippets.length, snippets })
+    }),
+  )
+
+  /**
+   * The annotators work can be assigned to: id and name, active only.
+   *
+   * Its own route because a manager cannot see annotators through
+   * `GET /api/users` — they belong to no manager's branch — and widening the
+   * manager's user scope to fix that would hand them every annotator's whole
+   * record. This hands them exactly what a picker needs.
+   */
+  router.get(
+    '/annotators',
+    route(async (req, res) => {
+      requireAssigner(req)
+      const annotators = await store.users.list({ role: 'annotator', active: true })
+      res.json({ annotators: annotators.map(({ id, name }) => ({ id, name })) })
+    }),
+  )
+
+  /**
+   * Handing snippets to an annotator, or taking them back (`assigneeId: null`).
+   *
+   * Stored on the snippet's label record beside the labels themselves —
+   * `assigneeId`, `assignedBy`, `assignedAt` — so one read of the labels answers
+   * both "what has been labelled" and "who is meant to label it". One annotator
+   * per snippet: assigning again moves it.
+   *
+   * All or nothing: every id is checked before anything is written, so a batch
+   * with one bad id in it changes nothing. A snippet must exist (be built from
+   * messages that are really there), and for a manager it must come from a
+   * session in their own branch, by the same sessionScope every other read uses.
+   * One out of reach is reported as missing, as everywhere else here.
+   */
+  router.post(
+    '/snippets/assign',
+    route(async (req, res) => {
+      requireAssigner(req)
+
+      const raw = req.body?.snippetIds
+      if (!Array.isArray(raw) || raw.length === 0) {
+        throw badRequest('"snippetIds" must be a non-empty array')
+      }
+      if (raw.length > ASSIGN_MAX) throw badRequest(`At most ${ASSIGN_MAX} snippets at a time`)
+      if (raw.some((entry) => typeof entry !== 'string' || !entry)) {
+        throw badRequest('"snippetIds" must be snippet ids')
+      }
+      const snippetIds = [...new Set(raw)]
+
+      const assigneeId = req.body?.assigneeId
+      if (assigneeId === undefined) {
+        throw badRequest('"assigneeId" is required — an annotator\'s id, or null to unassign')
+      }
+      if (assigneeId !== null) {
+        if (typeof assigneeId !== 'string') throw badRequest('"assigneeId" must be a user id or null')
+        const assignee = await store.users.findById(assigneeId)
+        if (!assignee || assignee.role !== 'annotator') {
+          throw badRequest('"assigneeId" must be the id of an annotator')
+        }
+        if (!assignee.active) throw badRequest('That annotator is deactivated')
+      }
+
+      const scope = await sessionScope(req)
+      const sessionIds = [...new Set(snippetIds.map(sessionOfSnippet))]
+      if (sessionIds.some((sessionId) => !canRead(scope, sessionId))) {
+        throw notFound('No such snippet')
+      }
+
+      const existing = new Set(
+        (
+          await Promise.all(
+            sessionIds.map(async (sessionId) =>
+              buildSnippets(await store.messages.listBySession(sessionId)),
+            ),
+          )
+        )
+          .flat()
+          .map((snippet) => snippet.id),
+      )
+      const missing = snippetIds.filter((snippetId) => !existing.has(snippetId))
+      if (missing.length) throw new ApiError(404, 'No such snippet', { snippetIds: missing })
+
+      const at = now()
+      const patch =
+        assigneeId === null
+          ? { assigneeId: null, assignedBy: null, assignedAt: null }
+          : { assigneeId, assignedBy: req.user.id, assignedAt: at }
+
+      await Promise.all(snippetIds.map((snippetId) => store.snippetLabels.upsert(snippetId, patch)))
+
+      res.json({ assigneeId, count: snippetIds.length, snippetIds })
     }),
   )
 
@@ -330,9 +526,25 @@ export function researchRoutes(store) {
       // Scoped on the way in as well as the way out. Reading is filtered by
       // sessionScope, but a teacher who learned a snippet id elsewhere must not
       // be able to write a label onto another class's data.
-      const scope = await sessionScope(req)
-      if (!canRead(scope, sessionOfSnippet(req.params.snippetId))) {
-        throw notFound('No such snippet')
+      assertMayLabel(req)
+
+      if (isAnnotator(req)) {
+        // Only what has been assigned to them. Anything else — another
+        // annotator's, an unassigned one, an id that does not exist — reads as
+        // missing, so an annotator learns nothing about the rest of the dataset.
+        const current = await store.snippetLabels.get(req.params.snippetId)
+        if (current?.assigneeId !== req.user.id) throw notFound('No such snippet')
+
+        // Keeping or dropping a snippet decides what the dataset is made of,
+        // and stays with the staff who own it. An annotator labels.
+        if (req.body.included !== undefined) {
+          throw forbidden('Annotators label snippets; keeping or dropping one is for staff')
+        }
+      } else {
+        const scope = await sessionScope(req)
+        if (!canRead(scope, sessionOfSnippet(req.params.snippetId))) {
+          throw notFound('No such snippet')
+        }
       }
 
       const patch = {}

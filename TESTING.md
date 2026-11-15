@@ -15,7 +15,7 @@ npm run test:api:mongo   # the smoke tests against a real MongoDB (needs MONGODB
 | --- | --- | --- | --- |
 | Lint | `npm run lint` | Hook rules, undefined names, likely bugs ([.oxlintrc.json](.oxlintrc.json)) | < 1 s |
 | Unit | `npm run test:unit` | Pure client helpers in `src/lib/` — no React, no DOM ([test/unit/](test/unit/)) | < 1 s |
-| API smoke | `npm run test:api` | Every route over real HTTP against the in-memory store: accounts, consent and withdrawal, sessions, marking, tutor (scripted), uploads, events, labelling ([server/smoke.mjs](server/smoke.mjs)) | ~ 5 s |
+| API smoke | `npm run test:api` | Every route over real HTTP against the in-memory store: accounts and roles (staff email sign-in, student-number sign-in, annotators kept out of staff areas, the teacher labelling switch, manager scope), consent and withdrawal, sessions, marking, tutor (scripted), uploads, events, labelling and snippet assignment ([server/smoke.mjs](server/smoke.mjs)) | ~ 5 s |
 | Strings | `npm run check:strings` | Every `t('…')` key exists in both EN and TR ([server/strings.mjs](server/strings.mjs)) | < 1 s |
 | Build | `npm run build` | The client compiles | ~ 2 s |
 | Mongo smoke | `npm run test:api:mongo` | The same smoke assertions against MongoDB | manual |

@@ -281,5 +281,13 @@ export const api = {
   },
   labelSnippet: (snippetId, patch) =>
     call('PATCH', `/api/research/snippets/${encodeURIComponent(snippetId)}`, patch),
+  /**
+   * Hands snippets to an annotator, or takes them back with `assigneeId: null`.
+   * Admin or manager; all or nothing — one id out of reach and nothing moves.
+   */
+  assignSnippets: (snippetIds, assigneeId) =>
+    call('POST', '/api/research/snippets/assign', { snippetIds, assigneeId }),
+  /** The active annotators work can be assigned to: `{ annotators: [{ id, name }] }`. */
+  annotators: () => call('GET', '/api/research/annotators'),
   exportUrl: (format = 'json') => `${BASE}/api/research/export?format=${format}`,
 }

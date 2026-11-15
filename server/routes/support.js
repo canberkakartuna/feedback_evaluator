@@ -3,6 +3,7 @@ import { isStaff } from '../../shared/roles.js'
 import { SUPPORT_CATEGORIES } from '../../shared/support.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
 import { badRequest, forbidden, id, notFound, now, requireString, route } from '../lib/http.js'
+import { scopeOf } from '../services/users.js'
 
 /**
  * The support / suggestion channel (3 Nov 2026 doc).
@@ -13,8 +14,12 @@ import { badRequest, forbidden, id, notFound, now, requireString, route } from '
  *
  * Who reads whose: a teacher answers their own students (`teacherId` is copied
  * onto the message when it is written, so a later reassignment does not move
- * old threads); a manager or an admin reads everything, which is also where a
- * teacher's own messages land.
+ * old threads); a manager reads their own branch — messages filed with one of
+ * their teachers, and anything written by someone in their scope, which is
+ * where their teachers' own messages land; an admin reads everything,
+ * including what belongs to no branch (an annotator's, an unassigned
+ * student's, another manager's). An annotator writes in like anyone else but
+ * has no inbox.
  */
 export function supportRoutes(store) {
   const router = express.Router()
@@ -39,8 +44,25 @@ export function supportRoutes(store) {
     unread: unread({ ...message, replies }),
   })
 
-  const inScope = (actor, message) =>
-    actor.role === 'admin' || actor.role === 'manager' || message.teacherId === actor.id
+  /**
+   * `null` for an admin (everything), otherwise the ids that put a message in
+   * this caller's inbox. A manager's is computed from the same hierarchy as
+   * every other scope (services/users.js), so moving a teacher between
+   * managers moves their inbox with them.
+   */
+  async function inboxScope(actor) {
+    if (actor.role === 'admin') return null
+    if (actor.role === 'manager') {
+      const scope = await scopeOf(store, actor)
+      return { teacherIds: scope.teacherIds, userIds: [...scope.ids] }
+    }
+    return { teacherIds: [actor.id], userIds: [] }
+  }
+
+  const inScope = (scope, message) =>
+    scope === null ||
+    scope.teacherIds.includes(message.teacherId) ||
+    scope.userIds.includes(message.userId)
 
   router.post(
     '/',
@@ -159,9 +181,23 @@ export function supportRoutes(store) {
       if (category !== undefined && !SUPPORT_CATEGORIES.includes(category)) {
         throw badRequest(`"category" must be one of: ${SUPPORT_CATEGORIES.join(', ')}`)
       }
-      const filter = { category }
-      if (req.user.role === 'teacher') filter.teacherId = req.user.id
-      res.json({ messages: await store.support.list(filter) })
+      const scope = await inboxScope(req.user)
+      if (scope === null) {
+        res.json({ messages: await store.support.list({ category }) })
+        return
+      }
+
+      // Two reads rather than one `$or`, so neither store needs a new filter:
+      // filed with one of their teachers, or written by someone in their scope.
+      // A message can match both, so it is de-duplicated before sorting.
+      const [filed, written] = await Promise.all([
+        store.support.list({ category, teacherId: scope.teacherIds }),
+        scope.userIds.length ? store.support.list({ category, userId: scope.userIds }) : [],
+      ])
+      const messages = [...new Map([...filed, ...written].map((m) => [m.id, m])).values()].sort(
+        (a, b) => b.createdAt.localeCompare(a.createdAt),
+      )
+      res.json({ messages })
     }),
   )
 
@@ -172,7 +208,9 @@ export function supportRoutes(store) {
     route(async (req, res) => {
       const message = await store.support.findById(req.params.messageId)
       if (!message) throw notFound('No such message')
-      if (!inScope(req.user, message)) throw forbidden('This message is not in your inbox')
+      if (!inScope(await inboxScope(req.user), message)) {
+        throw forbidden('This message is not in your inbox')
+      }
 
       const text = requireString(req.body, 'text', { max: 5000 }).trim()
       if (!text) throw badRequest('Write a reply first')

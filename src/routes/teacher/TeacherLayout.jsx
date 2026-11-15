@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
 import { roleStringKey, useT } from '../../lib/i18n'
+import { teacherCanLabel } from '../../../shared/roles'
 import Navbar from '../../components/Navbar'
 import '../console.css'
 
@@ -8,8 +9,14 @@ const LINKS = [
   { to: '/teacher', end: true, key: 'teacher.activities' },
   { to: '/teacher/students', key: 'teacher.studentWork' },
   { to: '/teacher/class-list', key: 'teacher.classList' },
-  { to: '/teacher/labelling', key: 'teacher.labelling' },
+  /** Hidden for a teacher whose labelling an admin or manager switched off. */
+  { to: '/teacher/labelling', key: 'teacher.labelling', shown: teacherCanLabel },
   { to: '/teacher/support', key: 'teacher.support' },
+  /**
+   * Their teachers: the labelling switch and the password reset. A teacher has
+   * nobody at this level to manage, so the link is not drawn for them.
+   */
+  { to: '/teacher/teachers', key: 'teacher.teachers', shown: (user) => user.role !== 'teacher' },
 ]
 
 /**
@@ -40,7 +47,7 @@ export default function TeacherLayout() {
       <div className="cs">
         <nav className="cs-nav" aria-label={t('teacher.sections')}>
           <ul className="cs-links">
-            {LINKS.map((link) => (
+            {LINKS.filter((link) => !link.shown || link.shown(user)).map((link) => (
               <li key={link.to}>
                 <NavLink className="cs-link" to={link.to} end={link.end}>
                   {t(link.key)}

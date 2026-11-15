@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { homeFor, landingFor } from '../../src/lib/auth.js'
 import { DEFAULT_LANGUAGE, LANGUAGES, roleStringKey, translate } from '../../src/lib/i18n.js'
 import { NO_TOPIC, matchesTopic, topicKey } from '../../src/lib/topics.js'
+import { STAFF_ROLES } from '../../shared/roles.js'
 
 // Pins the helpers moved out of auth.jsx, i18n.jsx and TopicFilter.jsx so
 // those files export only components (react/only-export-components).
@@ -12,7 +13,16 @@ test('homeFor sends each role to its console', () => {
   assert.equal(homeFor({ role: 'admin' }), '/admin')
   assert.equal(homeFor({ role: 'manager' }), '/teacher')
   assert.equal(homeFor({ role: 'teacher' }), '/teacher')
+  assert.equal(homeFor({ role: 'annotator' }), '/annotate')
   assert.equal(homeFor({ role: 'student' }), '/')
+})
+
+// StudentLayout sends staff from `/` to homeFor — a staff role mapped to `/`
+// would redirect for ever, which is what an annotator did before /annotate.
+test('homeFor gives every staff role a console other than /', () => {
+  for (const role of STAFF_ROLES) assert.notEqual(homeFor({ role }), '/', role)
+  assert.equal(landingFor({ role: 'annotator' }, '/annotate'), '/annotate')
+  assert.equal(landingFor({ role: 'annotator' }, '/teacher/labelling'), '/annotate')
 })
 
 test('landingFor honours `from` only inside the user’s own console', () => {

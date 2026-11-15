@@ -19,6 +19,8 @@ import PreviewActivity from './routes/teacher/PreviewActivity'
 import StudentWork from './routes/teacher/StudentWork'
 import Labelling from './routes/teacher/Labelling'
 import SupportInbox from './routes/teacher/SupportInbox'
+import Teachers from './routes/teacher/Teachers'
+import AnnotatorLayout from './routes/annotator/AnnotatorLayout'
 import AdminLayout from './routes/admin/AdminLayout'
 import People from './routes/admin/People'
 
@@ -28,7 +30,9 @@ import People from './routes/admin/People'
  *   /            students — pick from a list
  *   /join        the same, reached by a class code (/join/:code resolves one)
  *   /work/:id    the workspace itself
+ *   /signin      everyone else with an account: email and password
  *   /teacher     authoring, rosters, transcripts, labelling
+ *   /annotate    an annotator's labelling screen, and nothing else
  *   /admin       accounts
  *
  * The student half is deliberately reachable with no account at all, which is
@@ -136,6 +140,24 @@ export default function App() {
               <Route path="students/:sessionId" element={<StudentWork />} />
               <Route path="labelling" element={<Labelling />} />
               <Route path="support" element={<SupportInbox />} />
+              {/* A manager's or admin's teachers, with the labelling switch and
+                  the password reset. Teachers are sent back by the page. */}
+              <Route path="teachers" element={<Teachers />} />
+            </Route>
+
+            {/* The annotator's console is the labelling screen alone. Its own
+                guard, so every other console URL bounces them to here (Guard
+                sends a wrong role to homeFor), and its own layout, so no nav
+                item leads to a page the server would refuse them. */}
+            <Route
+              path="/annotate"
+              element={
+                <Guard roles={['annotator']}>
+                  <AnnotatorLayout />
+                </Guard>
+              }
+            >
+              <Route index element={<Labelling />} />
             </Route>
 
             <Route
