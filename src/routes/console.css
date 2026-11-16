@@ -912,6 +912,15 @@
   margin: 0;
 }
 
+/* The page's faint greys fall under 3:1 on the sunk panel in the light theme,
+   so the hint and the time are set in ink here and kept quiet by size. */
+.cs-annot .cs-annot-head,
+.cs-annot .cs-annot-hint,
+.cs-annot .cs-when {
+  color: var(--ink);
+  font-size: var(--t-12);
+}
+
 .cs-annot-entry {
   display: grid;
   gap: var(--s-2);
@@ -934,7 +943,8 @@
 
 .cs-annot-tag {
   font-size: var(--t-12);
-  color: var(--graphite);
+  font-style: italic;
+  color: var(--ink);
 }
 
 .cs-annot-entry[data-current='true'] .cs-annot-tag {
@@ -968,7 +978,8 @@
 
 .cs-annot-value[data-value='none'] {
   font-weight: 400;
-  color: var(--graphite);
+  font-style: italic;
+  color: var(--ink);
 }
 
 /* ── a teacher's labelling switch (People, Teachers) ─────────── */

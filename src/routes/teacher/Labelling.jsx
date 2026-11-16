@@ -119,7 +119,9 @@ function AnnotatorWork({ snippet, criteria, lang, t, nameOf }) {
       <p className="eyebrow cs-annot-head">{t('labelling.annotatorWorkHead')}</p>
       <p className="cs-hint cs-annot-hint">{t('labelling.annotatorWorkHint')}</p>
       {snippet.assigneeId && !current ? (
-        <p className="cs-hint">{t('labelling.annotatorWorkNone', { name: nameOf(snippet) })}</p>
+        <p className="cs-hint cs-annot-hint">
+          {t('labelling.annotatorWorkNone', { name: nameOf(snippet) })}
+        </p>
       ) : null}
       {ordered.map((entry) => (
         <div key={entry.annotatorId} className="cs-annot-entry" data-current={entry === current}>

@@ -5,8 +5,8 @@ in-memory when it is not — see [The store](#the-store).
 
 ```bash
 npm run dev:api          # node --watch, port 4000
-npm run test:api         # end-to-end check over real HTTP, in-memory (311 assertions)
-npm run test:api:mongo   # the same assertions against MongoDB (313)
+npm run test:api         # end-to-end check over real HTTP, in-memory (669 assertions)
+npm run test:api:mongo   # the same assertions against MongoDB (671)
 ```
 
 `npm run test:api` ignores `MONGODB_URI` on purpose and runs in-memory: it counts
