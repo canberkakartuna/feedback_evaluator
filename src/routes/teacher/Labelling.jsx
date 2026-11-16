@@ -56,6 +56,106 @@ function FileLink({ file, label }) {
 }
 
 /**
+ * A file only its annotator may fetch (`/api/research/snippets/:handle/files/:index`,
+ * see server/routes/research.js). An `<img src>` cannot carry the bearer
+ * token and the token never goes in a URL, so it is fetched with the token,
+ * shown through an object URL, and the object URL is let go with the card.
+ * If it cannot be loaded, `fallback` says what is missing instead.
+ */
+function PrivateFile({ file, label, fallback, t }) {
+  const [loaded, setLoaded] = useState({ url: null, failed: false })
+
+  useEffect(() => {
+    let objectUrl = null
+    let cancelled = false
+    api
+      .privateFile(file.url)
+      .then((blob) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setLoaded({ url: objectUrl, failed: false })
+      })
+      .catch(() => {
+        if (!cancelled) setLoaded({ url: null, failed: true })
+      })
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [file.url])
+
+  if (loaded.failed) return <p className="cs-hint">{fallback}</p>
+  if (!loaded.url) return <p className="cs-hint">{t('labelling.loadingFile')}</p>
+  return <FileLink file={{ ...file, url: loaded.url }} label={label} />
+}
+
+/** Behind a login (an annotator's copy) or not: the one place that decides. */
+function ContextFile({ file, label, fallback, t }) {
+  return file.url?.startsWith('/api/research/') ? (
+    <PrivateFile file={file} label={label} fallback={fallback} t={t} />
+  ) : (
+    <FileLink file={file} label={label} />
+  )
+}
+
+/**
+ * What annotators made of a snippet, read-only, for an admin or a manager.
+ *
+ * An annotator's labels and reasons are their own entry on the server, kept
+ * apart from the shared labels this card edits (see `annotationsOf` in
+ * server/routes/research.js), so they are shown here beside them, attributed,
+ * and never folded in. The current assignee's comes first; anyone the snippet
+ * was assigned to before keeps theirs, marked as earlier. Nothing here is
+ * editable, and the staff's own controls above are unchanged.
+ */
+function AnnotatorWork({ snippet, criteria, lang, t, nameOf }) {
+  const entries = snippet.annotations ?? []
+  const current = entries.find((entry) => entry.annotatorId === snippet.assigneeId) ?? null
+  const ordered = [current, ...entries.filter((entry) => entry !== current)].filter(Boolean)
+  if (!ordered.length && !snippet.assigneeId) return null
+
+  return (
+    <section className="cs-annot" aria-label={t('labelling.annotatorWorkHead')}>
+      <p className="eyebrow cs-annot-head">{t('labelling.annotatorWorkHead')}</p>
+      <p className="cs-hint cs-annot-hint">{t('labelling.annotatorWorkHint')}</p>
+      {snippet.assigneeId && !current ? (
+        <p className="cs-hint">{t('labelling.annotatorWorkNone', { name: nameOf(snippet) })}</p>
+      ) : null}
+      {ordered.map((entry) => (
+        <div key={entry.annotatorId} className="cs-annot-entry" data-current={entry === current}>
+          <p className="cs-annot-who">
+            <strong>
+              {t('labelling.annotatorWorkBy', {
+                name: entry.annotatorName ?? t('labelling.unknownAnnotator'),
+              })}
+            </strong>{' '}
+            <span className="cs-annot-tag">
+              {entry === current ? t('labelling.annotatorWorkCurrent') : t('labelling.annotatorWorkEarlier')}
+            </span>
+            <When iso={entry.labelledAt} lang={lang} />
+          </p>
+          <dl className="cs-annot-list">
+            {criteria.map((criterion) => {
+              const value = entry.labels?.[criterion.id]
+              const note = entry.notes?.[criterion.id]?.trim()
+              return (
+                <div key={criterion.id} className="cs-annot-row">
+                  <dt className="cs-criterion-label">{criterion.label}</dt>
+                  <dd className="cs-annot-value" data-value={value ?? 'none'}>
+                    {value ? t(`labelling.${value}`) : t('labelling.annotatorWorkUnmarked')}
+                  </dd>
+                  {note ? <dd className="cs-annot-note cs-turn-text">{note}</dd> : null}
+                </div>
+              )
+            })}
+          </dl>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/**
  * What the student was working on, above the exchange: the question, and what
  * they handed in for it. A reply that reads as vague can be pointed for this
  * particular answer, and the labeller cannot tell without seeing both.
@@ -72,7 +172,9 @@ function Context({ snippet, lang, t }) {
     <section className="cs-context">
       <div className="cs-tile-top">
         <p className="eyebrow" style={{ margin: 0 }}>
-          {t('labelling.question')} <span className="cs-q-code">{question.code}</span>
+          {t('labelling.question')}{' '}
+          {/* An annotator's copy has no code when the question had none to show. */}
+          {question.code ? <span className="cs-q-code">{question.code}</span> : null}
         </p>
         {question.isOwnQuestion ? (
           <span className="cs-pill" data-tone="draft">
@@ -87,7 +189,14 @@ function Context({ snippet, lang, t }) {
             <MathText text={prompt} />
           </p>
         ) : null}
-        {question.image ? <FileLink file={question.image} label={t('labelling.questionFile')} /> : null}
+        {question.image ? (
+          <ContextFile
+            file={question.image}
+            label={t('labelling.questionFile')}
+            fallback={t('labelling.questionPhotoUnavailable')}
+            t={t}
+          />
+        ) : null}
         {!prompt && !question.image ? <p className="cs-hint">{t('labelling.noPrompt')}</p> : null}
       </div>
 
@@ -99,7 +208,12 @@ function Context({ snippet, lang, t }) {
         <div className="cs-context-body">
           {answer.draft?.trim() ? <p className="cs-context-text cs-turn-text">{answer.draft}</p> : null}
           {board ? (
-            <FileLink file={board} label={t('labelling.answerBoard')} />
+            <ContextFile
+              file={board}
+              label={t('labelling.answerBoard')}
+              fallback={t('labelling.answerFileUnavailable')}
+              t={t}
+            />
           ) : answer.strokeCount ? (
             <p className="cs-hint">
               {t('labelling.answerBoard')} · {t('common.strokes', { count: answer.strokeCount })}
@@ -107,8 +221,15 @@ function Context({ snippet, lang, t }) {
           ) : null}
           {photos.length ? (
             <div className="cs-context-files">
+              {/* An annotator's files have no id, only their own URL. */}
               {photos.map((file) => (
-                <FileLink key={file.id} file={file} label={t('labelling.answerPhoto')} />
+                <ContextFile
+                  key={file.id ?? file.url}
+                  file={file}
+                  label={t('labelling.answerPhoto')}
+                  fallback={t('labelling.answerFileUnavailable')}
+                  t={t}
+                />
               ))}
             </div>
           ) : null}
@@ -145,15 +266,21 @@ function Context({ snippet, lang, t }) {
  *   checkbox per card, "select all shown", and a filter on who has them.
  * - **annotator** — only what has been assigned to them, under /annotate.
  *   They label, they do not keep or drop (the server refuses `included`), so
- *   the decision is shown to them read-only.
+ *   the decision is shown to them read-only. Their `snippet.id` is an opaque
+ *   handle rather than a snippet id, and their snippets carry no `sessionId`
+ *   or `questionId`, so nothing here may build on those for them: a session id
+ *   is what opens a student's session. Everything below keys on `snippet.id`
+ *   alone, which works the same either way.
  */
 export default function Labelling() {
   const { lang, t } = useI18n()
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
-  const sessionId = params.get('session') ?? ''
 
   const isAnnotator = user?.role === 'annotator'
+  // Never sent for an annotator, who has no session ids: the server ignores the
+  // filter for them, and the "one session" note would have nothing to say.
+  const sessionId = isAnnotator ? '' : (params.get('session') ?? '')
   const canAssign = user?.role === 'admin' || user?.role === 'manager'
   const mayLabel = teacherCanLabel(user)
 
@@ -163,12 +290,12 @@ export default function Labelling() {
   /** Client-side, over what was loaded: `all`, `none`, or an annotator's id. */
   const assigneeFilter = params.get('assignee') ?? 'all'
 
+  const fetchList = () =>
+    api.snippets({ sessionId, included: filter === 'all' ? undefined : filter })
+
   // Not requested at all when labelling is off: the answer is known to be a 403.
   const { data, error, loading, setData } = useAsync(
-    () =>
-      mayLabel
-        ? api.snippets({ sessionId, included: filter === 'all' ? undefined : filter })
-        : Promise.resolve(null),
+    () => (mayLabel ? fetchList() : Promise.resolve(null)),
     [sessionId, filter, mayLabel],
   )
 
@@ -194,12 +321,49 @@ export default function Labelling() {
    * labels as they stood before an earlier, still-running save landed.
    */
   const latest = useRef(null)
+  /** The list request as of the last render, for a re-read started from a save. */
+  const fetchLatest = useRef(fetchList)
   useEffect(() => {
     latest.current = data
+    fetchLatest.current = fetchList
   })
 
   /** One chain of saves per snippet, so its writes reach the server in order. */
   const queues = useRef(new Map())
+
+  /** Shown after a save found its snippet gone and the list was re-read. */
+  const [goneNotice, setGoneNotice] = useState(false)
+  /** The re-read in flight, so several saves on a gone snippet start one. */
+  const refreshing = useRef(null)
+
+  /**
+   * An annotator's save answered 404: that handle no longer resolves. The
+   * snippet was taken back from them, its session was withdrawn, or the
+   * server's handle key changed and every handle on the page is stale. Each
+   * of those is fixed by reading the list again, not by retrying.
+   *
+   * Re-read quietly — no loading state, so no card is unmounted and nothing
+   * typed into another card's box is lost — and only once every save already
+   * queued has finished, so the list read back includes them rather than
+   * racing them. Not awaited by the save that called it: that save is one of
+   * the ones being waited for.
+   */
+  const refreshAfterGone = () => {
+    setGoneNotice(true)
+    if (refreshing.current) return
+    refreshing.current = (async () => {
+      await Promise.all([...queues.current.values()])
+      try {
+        const fresh = await fetchLatest.current()
+        latest.current = fresh
+        setData(fresh)
+      } catch {
+        // The notice stands, and the next save will say what went wrong.
+      } finally {
+        refreshing.current = null
+      }
+    })()
+  }
 
   const snippets = data?.snippets ?? []
   const criteria = data?.criteria ?? []
@@ -214,6 +378,33 @@ export default function Labelling() {
       )
     : snippets
   const selectedShown = shown.filter((snippet) => selected.has(snippet.id))
+
+  /**
+   * Assignees on the loaded snippets who are not in the picker's list, which
+   * holds active annotators only — in practice, deactivated ones whose work
+   * is still assigned to them. Offered in the "Assigned to" filter all the
+   * same, marked as deactivated, so that work can be found and handed on.
+   */
+  const stragglers = canAssign
+    ? [
+        ...new Map(
+          snippets
+            .filter(
+              (snippet) =>
+                snippet.assigneeId && !annotatorList.some((entry) => entry.id === snippet.assigneeId),
+            )
+            .map((snippet) => [snippet.assigneeId, snippet]),
+        ).values(),
+      ]
+    : []
+  /** An assignee's name as staff read it, flagged when the account is deactivated. */
+  const assigneeLabel = (snippet) => {
+    const name = snippet.assigneeName ?? t('labelling.unknownAnnotator')
+    // No name means no annotator account at all: "a removed annotator" says that already.
+    return snippet.assigneeActive === false && snippet.assigneeName
+      ? t('labelling.deactivatedName', { name })
+      : name
+  }
   const allShownSelected = shown.length > 0 && selectedShown.length === shown.length
 
   const setParam = (name, value, fallback) => {
@@ -267,6 +458,7 @@ export default function Labelling() {
                     ...row,
                     assigneeId,
                     assigneeName: assignee?.name ?? null,
+                    assigneeActive: assigneeId ? true : null,
                     assignedBy: assigneeId ? user.id : null,
                     assignedAt: assigneeId ? at : null,
                   }
@@ -338,6 +530,7 @@ export default function Labelling() {
           })
         }, SAVED_FOR_MS)
       } catch (failure) {
+        if (isAnnotator && failure.status === 404) refreshAfterGone()
         setStatus((prev) =>
           mine(prev) ? { ...prev, [key]: { state: 'failed', message: failure.message, token } } : prev,
         )
@@ -354,9 +547,12 @@ export default function Labelling() {
         <div>
           <p className="eyebrow">{t('labelling.eyebrow')}</p>
           <h1 className="cs-title">{t('labelling.title')}</h1>
-          <p className="cs-lede">
-            {isAnnotator ? t('labelling.ledeAnnotator') : t('labelling.lede')}
-          </p>
+          {/* No description of work that is switched off; the note below says why. */}
+          {mayLabel ? (
+            <p className="cs-lede">
+              {isAnnotator ? t('labelling.ledeAnnotator') : t('labelling.lede')}
+            </p>
+          ) : null}
         </div>
 
         {mayLabel ? (
@@ -387,6 +583,15 @@ export default function Labelling() {
       {!mayLabel ? (
         <p className="cs-note" data-tone="warn" role="status">
           {t('labelling.turnedOff')}
+        </p>
+      ) : null}
+
+      {goneNotice ? (
+        <p className="cs-note" data-tone="warn" role="status">
+          {t('labelling.listRefreshed')}{' '}
+          <button type="button" className="cs-btn cs-btn-sm" onClick={() => setGoneNotice(false)}>
+            {t('labelling.dismiss')}
+          </button>
         </p>
       ) : null}
 
@@ -425,6 +630,11 @@ export default function Labelling() {
                 {annotatorList.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.name}
+                  </option>
+                ))}
+                {stragglers.map((snippet) => (
+                  <option key={snippet.assigneeId} value={snippet.assigneeId}>
+                    {assigneeLabel(snippet)}
                   </option>
                 ))}
               </select>
@@ -551,9 +761,7 @@ export default function Labelling() {
                     </label>
                     <span className="cs-pill" data-tone={snippet.assigneeId ? 'live' : 'quiet'}>
                       {snippet.assigneeId
-                        ? t('labelling.assignedToName', {
-                            name: snippet.assigneeName ?? t('labelling.unknownAnnotator'),
-                          })
+                        ? t('labelling.assignedToName', { name: assigneeLabel(snippet) })
                         : t('labelling.notAssigned')}
                     </span>
                   </div>
@@ -710,6 +918,16 @@ export default function Labelling() {
                     ) : null}
                   </div>
                 </div>
+
+                {canAssign ? (
+                  <AnnotatorWork
+                    snippet={snippet}
+                    criteria={criteria}
+                    lang={lang}
+                    t={t}
+                    nameOf={assigneeLabel}
+                  />
+                ) : null}
               </article>
             )
           })}

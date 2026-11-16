@@ -176,6 +176,27 @@ export async function removeBytes(upload) {
 }
 
 /**
+ * The bytes behind an upload as a readable stream, whichever backend they went
+ * to — the read counterpart of `removeBytes`, for a caller that has to pass the
+ * file through itself rather than redirect to it (an annotator's copy, see
+ * routes/research.js). `null` when this instance cannot reach them: written to
+ * Spaces by an instance that had the keys, or to a disk that has since gone.
+ * A stream that fails once opened (a file deleted underneath it) reports that
+ * through its own `error` event.
+ */
+export async function readBytes(upload) {
+  const files = storage()
+
+  if (upload.key && files.kind === upload.storage) return files.stream(upload.key)
+  if (upload.storage === 'spaces') return null
+  if (upload.path) {
+    const { createReadStream } = await import('node:fs')
+    return createReadStream(upload.path)
+  }
+  return null
+}
+
+/**
  * Serving the bytes back. Public by id, which is unguessable.
  *
  * On Spaces the object itself is private, so this hands out a short-lived

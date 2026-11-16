@@ -40,6 +40,15 @@ const uploadDir = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'fe-smoke-')
 await fs.mkdir(uploadDir, { recursive: true })
 process.env.UPLOAD_DIR = uploadDir
 process.env.RESEARCH_TOKEN = 'smoke-token'
+/**
+ * Uploads go to the temp disk above, whatever `.env.local` holds. With Spaces
+ * keys there, every photo these assertions upload used to land in the real,
+ * shared bucket — and the ones no withdrawal removes stayed there. Blank (not
+ * unset) because the .env loader only fills keys that are still undefined.
+ * test/unit/spaces-read.test.js covers the Spaces read path against a fake.
+ */
+process.env.SPACES_KEY = ''
+process.env.SPACES_SECRET = ''
 
 // config is read at import time, so it must be imported after the env is set.
 const { config } = await import('./config.js')
@@ -48,6 +57,9 @@ config.researchToken = 'smoke-token'
 // Set explicitly rather than left to fall back to the research token, so a
 // BOOTSTRAP_TOKEN in a local .env cannot change what these assertions mean.
 config.bootstrapToken = 'smoke-token'
+// After config, which it reads its key from. Used to say which handle an
+// annotator should have been given for a snippet the test knows by id.
+const { snippetHandle } = await import('./services/snippets.js')
 
 /**
  * The tutor runs scripted here, whatever `.env.local` has in it.
@@ -2511,11 +2523,15 @@ try {
   )
 
   console.log('\nan annotator labels what is assigned to them')
+  // Annotators are given handles, never snippet ids (services/snippets.js
+  // `snippetHandle`), so their list is compared against the handles the
+  // server should have made for these snippets.
+  const handleOf = (snippet, who = annotator) => snippetHandle(who.id, snippet.id)
   const mineToLabel = await call('GET', '/api/research/snippets', { token: annotatorToken })
   const mineIds = mineToLabel.body.snippets.map((entry) => entry.id).sort()
   check(
-    'an annotator sees exactly their assignments',
-    mineToLabel.status === 200 && mineIds.join() === [nearA.id, nearB.id, farSnippet.id].sort().join(),
+    'an annotator sees exactly their assignments, by handle',
+    mineToLabel.status === 200 && mineIds.join() === [nearA, nearB, farSnippet].map((e) => handleOf(e)).sort().join(),
   )
   check(
     'with the question and answer context a teacher gets',
@@ -2526,41 +2542,109 @@ try {
     mineToLabel.body.snippets.every((entry) => !('source' in entry.tutor) && !('model' in entry.tutor)),
   )
   check(
-    'filtered to one of their sessions',
-    (await call('GET', `/api/research/snippets?sessionId=${farSession.id}`, { token: annotatorToken })).body.count === 1,
+    'nor which session or question it came from',
+    mineToLabel.body.snippets.every((entry) => !('sessionId' in entry) && !('questionId' in entry) && !('assignedBy' in entry)),
   )
   check(
-    'and refused a session with nothing assigned',
-    (await call('GET', `/api/research/snippets?sessionId=${seededForStudent.body.session.id}`, { token: annotatorToken }))
-      .status === 404,
+    'and no session id anywhere in it',
+    ![turnSession.id, farSession.id].some((sessionId) => JSON.stringify(mineToLabel.body).includes(sessionId)),
   )
+  check(
+    'handles differ per annotator',
+    handleOf(nearA) !== handleOf(nearA, secondAnnotator) && !handleOf(nearA).includes(':'),
+  )
+
+  /**
+   * The `sessionId` filter is ignored for an annotator. It used to narrow the
+   * list and 404 a session with nothing of theirs in it, which made it a way to
+   * confirm a guessed session id. Every answer below is the unfiltered one.
+   */
+  const unfiltered = JSON.stringify(mineToLabel.body)
+  for (const [what, sessionId] of [
+    ['one with their work in it', farSession.id],
+    ['one with none of their work', seededForStudent.body.session.id],
+    ['one that does not exist', 'ses_doesnotexist0000000'],
+  ]) {
+    const filtered = await call('GET', `/api/research/snippets?sessionId=${sessionId}`, { token: annotatorToken })
+    check(
+      `?sessionId= is no oracle: ${what} gets the unfiltered list`,
+      filtered.status === 200 && JSON.stringify(filtered.body) === unfiltered,
+      `got ${filtered.status}`,
+    )
+  }
   check(
     'another annotator sees none of it',
     (await call('GET', '/api/research/snippets', { token: secondAnnotatorToken })).body.count === 0,
   )
 
-  const annotatorLabels = await call('PATCH', `/api/research/snippets/${nearA.id}`, {
+  const annotatorLabels = await call('PATCH', `/api/research/snippets/${handleOf(nearA)}`, {
     token: annotatorToken,
     body: { labels: { specific: 'yes', tone: 'partly' }, notes: { tone: 'A bit curt.' }, assigneeId: secondAnnotator.id },
   })
-  check('an annotator labels an assigned snippet', annotatorLabels.status === 200)
+  check('an annotator labels an assigned snippet by its handle', annotatorLabels.status === 200)
   check('attributed to them', annotatorLabels.body.label.labelledBy === annotator.id)
   check('and cannot move the assignment while at it', annotatorLabels.body.label.assigneeId === annotator.id)
   check(
+    'answered with the handle, not the snippet id',
+    annotatorLabels.body.label.id === handleOf(nearA) &&
+      !('snippetId' in annotatorLabels.body.label) &&
+      !JSON.stringify(annotatorLabels.body).includes(turnSession.id),
+  )
+  check(
+    'and it saved',
+    (await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.find(
+      (entry) => entry.id === handleOf(nearA),
+    ).notes.tone === 'A bit curt.',
+  )
+  check(
+    'the real snippet id is refused, even for their own snippet',
+    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  check(
     'but may not keep or drop it',
-    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: annotatorToken, body: { included: true } }))
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearA)}`, { token: annotatorToken, body: { included: true } }))
       .status === 403,
   )
   check(
-    'nor label one not assigned to them',
-    (await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+    'nor label one not assigned to them, by handle or by id',
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearC)}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404 &&
+      (await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+        .status === 404,
+  )
+  check(
+    'nor a made-up handle',
+    (await call('PATCH', '/api/research/snippets/AAAAAAAAAAAAAAAAAAAAAA', { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
       .status === 404,
   )
   check(
-    "nor another annotator's",
-    (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+    "nor another annotator's — neither their own handle for it, nor the other's",
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearA, secondAnnotator)}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404 &&
+      (await call('PATCH', `/api/research/snippets/${nearA.id}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+        .status === 404,
+  )
+  // Given to the second annotator for a moment, so the first can try that
+  // annotator's handle for it, then taken back so nothing below sees it.
+  await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: [nearC.id], assigneeId: secondAnnotator.id },
+  })
+  check(
+    "a handle copied from another annotator is nothing to this one",
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearC, secondAnnotator)}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
       .status === 404,
   )
+  check(
+    'while it works for the annotator it was made for',
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearC, secondAnnotator)}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 200,
+  )
+  await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: [nearC.id], assigneeId: null },
+  })
   const unassigning = await call('POST', '/api/research/snippets/assign', {
     token: managerToken,
     body: { snippetIds: [nearB.id], assigneeId: null },
@@ -2568,19 +2652,617 @@ try {
   check('a manager takes a snippet back', unassigning.status === 200)
   check(
     'and it leaves the annotator’s list',
-    !(await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.some((e) => e.id === nearB.id),
+    !(await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.some((e) => e.id === handleOf(nearB)),
   )
   check(
     'and their reach',
-    (await call('PATCH', `/api/research/snippets/${nearB.id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+    (await call('PATCH', `/api/research/snippets/${handleOf(nearB)}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  /**
+   * Was a check on the shared `notes`. An annotator's labelling is now their
+   * own entry (`annotations` on the record), so staff read it as `annotation`
+   * and the shared notes stay the staff's.
+   */
+  const nearAForAdmin = (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })).body.snippets.find(
+    (entry) => entry.id === nearA.id,
+  )
+  check(
+    'the labels an annotator wrote survive for staff, as theirs',
+    nearAForAdmin.annotation?.annotatorId === annotator.id &&
+      nearAForAdmin.annotation.notes.tone === 'A bit curt.' &&
+      nearAForAdmin.annotation.labels.tone === 'partly' &&
+      nearAForAdmin.notes.tone === undefined &&
+      nearAForAdmin.labels.tone === undefined,
+  )
+
+  /**
+   * An annotator's labels are their own. A teacher labels a snippet, an admin
+   * hands it to an annotator, and the annotator must neither see nor
+   * overwrite the teacher's work; a second annotator after them starts from
+   * their own (here, blank of the first one's), and staff see everyone's.
+   */
+  console.log('\nan annotator’s labels are their own')
+  const teacherNote = 'TEACHER-NOTE-only-the-teacher-wrote-this'
+  const teacherLabelled = await call('PATCH', `/api/research/snippets/${nearC.id}`, {
+    token: teacherToken,
+    body: { labels: { specific: 'no', accurate: 'partly' }, notes: { accurate: teacherNote } },
+  })
+  check(
+    'a teacher labels a snippet, and the answer is the shared record without annotators',
+    teacherLabelled.status === 200 &&
+      teacherLabelled.body.label.labelledBy === teacher.id &&
+      !('annotations' in teacherLabelled.body.label) &&
+      !('annotation' in teacherLabelled.body.label),
+  )
+  await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: [nearC.id], assigneeId: annotator.id },
+  })
+  const nearCForAnnotator = async (who = annotator, token = annotatorToken) =>
+    (await call('GET', '/api/research/snippets', { token })).body.snippets.find((entry) => entry.id === handleOf(nearC, who))
+  const blank = await nearCForAnnotator()
+  const blankJson = JSON.stringify(blank)
+  check(
+    'assigned a labelled snippet, the annotator sees it blank',
+    blank &&
+      Object.keys(blank.labels).length === 0 &&
+      Object.keys(blank.notes).length === 0 &&
+      blank.note === '',
+    blankJson,
+  )
+  check(
+    'with none of the teacher’s label values, note text or id, nor the earlier annotator’s',
+    !blankJson.includes(teacherNote) &&
+      !blankJson.includes('"partly"') &&
+      !blankJson.includes('"no"') &&
+      !blankJson.includes(teacher.id) &&
+      !blankJson.includes(secondAnnotator.id) &&
+      !blankJson.includes('labelledBy'),
+    blankJson,
+  )
+  const annotatorOnC = await call('PATCH', `/api/research/snippets/${handleOf(nearC)}`, {
+    token: annotatorToken,
+    body: { labels: { specific: 'yes', tone: 'yes' }, notes: { specific: 'ANN-NOTE-points-at-x' } },
+  })
+  check(
+    'the annotator labels it, and is answered with their own work only',
+    annotatorOnC.status === 200 &&
+      annotatorOnC.body.label.labels.specific === 'yes' &&
+      annotatorOnC.body.label.labels.accurate === undefined &&
+      annotatorOnC.body.label.notes.specific === 'ANN-NOTE-points-at-x' &&
+      annotatorOnC.body.label.notes.accurate === undefined &&
+      annotatorOnC.body.label.labelledBy === annotator.id &&
+      !JSON.stringify(annotatorOnC.body).includes(teacher.id) &&
+      !JSON.stringify(annotatorOnC.body).includes(teacherNote),
+  )
+  const sharedC = await app.locals.store.snippetLabels.get(nearC.id)
+  check(
+    'the shared record is unchanged: the teacher’s labels, notes and labelledBy',
+    sharedC.labels.specific === 'no' &&
+      sharedC.labels.accurate === 'partly' &&
+      sharedC.labels.tone === undefined &&
+      sharedC.notes.accurate === teacherNote &&
+      sharedC.notes.specific === undefined &&
+      sharedC.labelledBy === teacher.id,
+  )
+  const nearCForTeacher = (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: teacherToken })).body.snippets.find(
+    (entry) => entry.id === nearC.id,
+  )
+  check(
+    'the teacher still sees their own labels, and no annotator’s work at all',
+    nearCForTeacher.labels.specific === 'no' &&
+      nearCForTeacher.notes.accurate === teacherNote &&
+      !('annotation' in nearCForTeacher) &&
+      !('annotations' in nearCForTeacher) &&
+      !JSON.stringify(nearCForTeacher).includes('ANN-NOTE-points-at-x'),
+  )
+  const nearCRow = async (token) =>
+    (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token })).body.snippets.find(
+      (entry) => entry.id === nearC.id,
+    )
+  for (const [who, token] of [['an admin', adminToken], ['a manager', managerToken], ['the research token', 'smoke-token']]) {
+    const row = await nearCRow(token)
+    check(
+      `${who} sees both: the shared labels, and the assignee’s, attributed`,
+      row.labels.specific === 'no' &&
+        row.annotation?.annotatorId === annotator.id &&
+        row.annotation.annotatorName === 'Ann A.' &&
+        row.annotation.labels.specific === 'yes' &&
+        row.annotation.notes.specific === 'ANN-NOTE-points-at-x' &&
+        typeof row.annotation.labelledAt === 'string',
+      JSON.stringify(row.annotation),
+    )
+  }
+  const bothOnC = (await nearCRow(adminToken)).annotations
+  check(
+    'and every annotator’s entry, the earlier one kept',
+    bothOnC.length === 2 &&
+      bothOnC.some((entry) => entry.annotatorId === secondAnnotator.id && entry.labels.tone === 'yes') &&
+      bothOnC.some((entry) => entry.annotatorId === annotator.id),
+  )
+
+  // Reassigned: the second annotator sees only what they wrote themselves.
+  await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: [nearC.id], assigneeId: secondAnnotator.id },
+  })
+  const secondView = await nearCForAnnotator(secondAnnotator, secondAnnotatorToken)
+  const secondJson = JSON.stringify(secondView)
+  check(
+    'reassigned, the next annotator sees their own work and none of the first one’s',
+    secondView &&
+      secondView.labels.tone === 'yes' &&
+      secondView.labels.specific === undefined &&
+      Object.keys(secondView.notes).length === 0 &&
+      !secondJson.includes('ANN-NOTE-points-at-x') &&
+      !secondJson.includes(annotator.id) &&
+      !secondJson.includes(teacherNote),
+    secondJson,
+  )
+  // Two saves at once on different criteria: neither may clobber the other.
+  const [notesOne, notesTwo] = await Promise.all([
+    call('PATCH', `/api/research/snippets/${handleOf(nearC, secondAnnotator)}`, {
+      token: secondAnnotatorToken,
+      body: { notes: { tone: 'SECOND-tone' } },
+    }),
+    call('PATCH', `/api/research/snippets/${handleOf(nearC, secondAnnotator)}`, {
+      token: secondAnnotatorToken,
+      body: { notes: { accurate: 'SECOND-accurate' } },
+    }),
+  ])
+  const secondEntry = (await app.locals.store.snippetLabels.get(nearC.id)).annotations[secondAnnotator.id]
+  check(
+    'two saves at once on one annotator’s entry both land',
+    notesOne.status === 200 &&
+      notesTwo.status === 200 &&
+      secondEntry.notes.tone === 'SECOND-tone' &&
+      secondEntry.notes.accurate === 'SECOND-accurate' &&
+      secondEntry.labels.tone === 'yes',
+  )
+  const afterReassign = await nearCRow(adminToken)
+  check(
+    'staff now see the second as the assignee’s work, with the first one’s kept',
+    afterReassign.annotation?.annotatorId === secondAnnotator.id &&
+      afterReassign.annotations.length === 2 &&
+      afterReassign.annotations.find((entry) => entry.annotatorId === annotator.id)?.notes.specific === 'ANN-NOTE-points-at-x' &&
+      afterReassign.labels.specific === 'no',
+  )
+  check(
+    'and the first annotator no longer reaches it',
+    !(await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.some((entry) => entry.id === handleOf(nearC)),
+  )
+
+  // Kept on the export, appended after the existing columns.
+  await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: adminToken, body: { included: true } })
+  await call('POST', '/api/research/snippets/assign', { token: adminToken, body: { snippetIds: [nearC.id], assigneeId: null } })
+  check(
+    'unassigned, the work stays for staff, with no current annotation',
+    (await nearCRow(adminToken)).annotation === null && (await nearCRow(adminToken)).annotations.length === 2,
+  )
+  const csvAfter = await (
+    await fetch(`${base}/api/research/export?format=csv`, { headers: { authorization: 'Bearer smoke-token' } })
+  ).text()
+  const csvHeader = csvAfter.split('\n')[0].split(',').map((cell) => cell.replaceAll('"', ''))
+  const criterionIds = ['specific', 'actionable', 'no-answer', 'accurate', 'tone']
+  const expectedHeader = [
+    'snippet_id', 'session_id', 'question_id', 'student_text', 'tutor_text', 'tutor_label', 'student_rating', 'note',
+    ...criterionIds.map((id) => `label_${id}`),
+    ...criterionIds.map((id) => `note_${id}`),
+    'annotator_id',
+    ...criterionIds.map((id) => `annotator_label_${id}`),
+    ...criterionIds.map((id) => `annotator_note_${id}`),
+    'annotator_count',
+  ]
+  check('the CSV keeps every existing column where it was and appends the annotator’s', csvHeader.join() === expectedHeader.join(), csvHeader.join())
+  const csvRow = csvAfter.split('\n').find((line) => line.startsWith(`"${nearC.id}"`))
+  check(
+    'a row carries the shared labels and, unassigned, the latest annotator’s',
+    csvRow?.includes(`"${secondAnnotator.id}"`) &&
+      csvRow.includes('"SECOND-tone"') &&
+      csvRow.includes(`"${teacherNote}"`) &&
+      csvRow.endsWith('"2"'),
+    csvRow,
+  )
+  const jsonAfter = (await call('GET', '/api/research/export', { token: 'smoke-token' })).body.snippets.find((entry) => entry.id === nearC.id)
+  check(
+    'the JSON export carries every annotator’s entry',
+    jsonAfter?.annotation === null && jsonAfter.annotations.length === 2 && jsonAfter.labels.specific === 'no',
+  )
+
+  // An annotator deleted: their entry stays, under the name stamped on it.
+  const erstwhile = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'annotator', name: 'Eve Erstwhile', email: 'eve@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  const erstwhileToken = (
+    await call('POST', '/api/auth/login', { body: { email: 'eve@example.com', password: 'correct horse battery' } })
+  ).body.token
+  await call('POST', '/api/research/snippets/assign', { token: adminToken, body: { snippetIds: [nearC.id], assigneeId: erstwhile.id } })
+  await call('PATCH', `/api/research/snippets/${handleOf(nearC, erstwhile)}`, {
+    token: erstwhileToken,
+    body: { labels: { actionable: 'no' } },
+  })
+  await call('DELETE', `/api/users/${erstwhile.id}`, { token: adminToken })
+  const afterAnnotatorDeleted = await nearCRow(adminToken)
+  check(
+    'a deleted annotator’s work is kept, under the name they had',
+    afterAnnotatorDeleted.assigneeId === null &&
+      afterAnnotatorDeleted.annotations.length === 3 &&
+      afterAnnotatorDeleted.annotations.find((entry) => entry.annotatorId === erstwhile.id)?.annotatorName === 'Eve Erstwhile',
+  )
+  // Back out of the export, so nothing below counts it.
+  await call('PATCH', `/api/research/snippets/${nearC.id}`, { token: adminToken, body: { included: null } })
+
+  /**
+   * The whole payload, against a signed-in student's session with everything
+   * a student can hand in: a draft, a photo on the answer, and a photographed
+   * question of their own. Serialised and searched, so a field added later
+   * that carries the session id or the student's id fails here.
+   */
+  console.log('\nan annotator never learns a session id or a student id')
+  // A student of their own: Sam was deactivated further up.
+  const leakStudent = (
+    await call('POST', '/api/users', {
+      token: teacherToken,
+      body: { role: 'student', name: 'Lee Leak', studentNumber: '10000077' },
+    })
+  ).body.user
+  const leakStudentToken = (await call('POST', '/api/auth/student', { body: { studentNumber: '10000077' } })).body.token
+  // Consent given in this sign-in, so the session can be withdrawn again below.
+  await call('POST', '/api/auth/consent', { token: leakStudentToken })
+  const leakStart = await call('POST', '/api/sessions', {
+    token: leakStudentToken,
+    body: { consent: true, activityId: activity.id },
+  })
+  const leakSession = leakStart.body.session
+  check('a signed-in student session to look for', leakStart.status === 201 && leakSession.userId === leakStudent.id)
+  await call('PUT', `/api/sessions/${leakSession.id}/answers/${bareQ.id}`, { body: { draft: 'I think x = 4' } })
+  await call('POST', `/api/sessions/${leakSession.id}/questions/${bareQ.id}/uploads`, {
+    body: { name: 'working.png', dataUrl: PNG },
+  })
+  await call('POST', `/api/sessions/${leakSession.id}/questions/${bareQ.id}/messages`, { body: { text: 'Is this right?' } })
+  const leakOwn = await call('POST', `/api/sessions/${leakSession.id}/own-questions`, {
+    body: { prompt: 'From my worksheet', image: { name: 'sheet.png', dataUrl: PNG } },
+  })
+  await call('POST', `/api/sessions/${leakSession.id}/questions/${leakOwn.body.question.id}/messages`, {
+    body: { text: 'How do I start this one?' },
+  })
+  const leakForAdmin = await call('GET', `/api/research/snippets?sessionId=${leakSession.id}`, { token: adminToken })
+  check(
+    'staff get the context in full: the photos, by URL',
+    leakForAdmin.body.count === 2 &&
+      leakForAdmin.body.snippets.some((entry) => entry.answer?.attachments.length === 1) &&
+      leakForAdmin.body.snippets.some((entry) => entry.question.isOwnQuestion && entry.question.image?.url),
+  )
+  await call('POST', '/api/research/snippets/assign', {
+    token: adminToken,
+    body: { snippetIds: leakForAdmin.body.snippets.map((entry) => entry.id), assigneeId: annotator.id },
+  })
+  const leakForAnnotator = await call('GET', '/api/research/snippets', { token: annotatorToken })
+  const leakJson = JSON.stringify(leakForAnnotator.body)
+  check(
+    'the annotator has them',
+    leakForAdmin.body.snippets.every((entry) => leakForAnnotator.body.snippets.some((mine) => mine.id === handleOf(entry))),
+  )
+  check('no session id anywhere in the annotator’s payload', ![leakSession.id, turnSession.id, farSession.id].some((id) => leakJson.includes(id)))
+  check('nor the student’s user id', !leakJson.includes(leakStudent.id))
+  check(
+    'nor a single snippet id',
+    [...leakForAdmin.body.snippets, nearA, farSnippet].every((entry) => !leakJson.includes(entry.id)),
+  )
+  /**
+   * The student's files reach the annotator through their own file route,
+   * named by handle and index — not by `/api/uploads/<uploadId>`, which on
+   * Spaces redirects to a key with the session id in it. Replaces the check
+   * that they were withheld and counted (`filesWithheld`, `imageWithheld`).
+   */
+  const leakAnswerSnippet = leakForAdmin.body.snippets.find((entry) => entry.answer?.attachments.length === 1)
+  const leakOwnSnippet = leakForAdmin.body.snippets.find((entry) => entry.question.isOwnQuestion)
+  const leakUploadIds = [
+    leakAnswerSnippet.answer.attachments[0].id,
+    leakOwnSnippet.question.image.url.split('/').pop(),
+  ]
+  const mineOf = (entry) => leakForAnnotator.body.snippets.find((mine) => mine.id === handleOf(entry))
+  const answerFiles = mineOf(leakAnswerSnippet).answer.attachments
+  const ownImage = mineOf(leakOwnSnippet).question.image
+  check(
+    'the student’s files come by the annotator file route, not /api/uploads/',
+    !leakJson.includes('/api/uploads/') &&
+      answerFiles.length === 1 &&
+      answerFiles[0].url === `/api/research/snippets/${handleOf(leakAnswerSnippet)}/files/0` &&
+      answerFiles[0].type === 'image/png' &&
+      ownImage?.url === `/api/research/snippets/${handleOf(leakOwnSnippet)}/files/0` &&
+      ownImage.type === 'image/png',
+  )
+  check(
+    'carrying only url and type (and which kind of answer file)',
+    Object.keys(answerFiles[0]).sort().join() === 'source,type,url' &&
+      Object.keys(ownImage).sort().join() === 'type,url' &&
+      !leakJson.includes('filesWithheld') &&
+      !leakJson.includes('imageWithheld'),
+  )
+  check(
+    'nor an upload id, nor the names the student gave the files',
+    leakUploadIds.every((uploadId) => !leakJson.includes(uploadId)) &&
+      !leakJson.includes('working.png') &&
+      !leakJson.includes('sheet.png'),
+  )
+  check(
+    'while the words of the answer stay',
+    leakForAnnotator.body.snippets.some((entry) => entry.answer?.draft === 'I think x = 4'),
+  )
+  const leakHandle = handleOf(leakForAdmin.body.snippets[0])
+  const leakLabel = await call('PATCH', `/api/research/snippets/${leakHandle}`, {
+    token: annotatorToken,
+    body: { notes: { specific: 'Names the step.' } },
+  })
+  check(
+    'a label on it answers with nothing of the session either',
+    leakLabel.status === 200 && ![leakSession.id, leakStudent.id].some((id) => JSON.stringify(leakLabel.body).includes(id)),
+  )
+  const leakErrors = [
+    await call('PATCH', `/api/research/snippets/${leakForAdmin.body.snippets[0].id}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }),
+    await call('PATCH', `/api/research/snippets/${leakHandle}`, { token: annotatorToken, body: { labels: { nope: 'yes' } } }),
+    await call('PATCH', `/api/research/snippets/${leakHandle}`, { token: annotatorToken, body: {} }),
+  ]
+  check(
+    'and neither do its refusals',
+    leakErrors.every((got) => got.status >= 400 && !JSON.stringify(got.body).includes(leakSession.id)),
+  )
+
+  /**
+   * The file route itself: the bytes, streamed, for the annotator the snippet
+   * is assigned to, and nothing that names where they came from.
+   */
+  console.log('\nan annotator opens the student’s files without learning where they live')
+  const raw = async (method, url, { token, headers = {}, body } = {}) => {
+    const res = await fetch(`${base}${url}`, {
+      method,
+      headers: { ...headers, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body,
+    })
+    return { status: res.status, headers: res.headers, bytes: Buffer.from(await res.arrayBuffer()) }
+  }
+  const pngBytes = Buffer.from(PNG.split(',')[1], 'base64')
+  const leaky = [leakSession.id, leakStudent.id, ...leakUploadIds, 'working.png', 'sheet.png']
+  const headersOf = (got) => JSON.stringify([...got.headers.entries()])
+  for (const [what, url] of [
+    ['an answer photo', answerFiles[0].url],
+    ['an own question’s photo', ownImage.url],
+  ]) {
+    const got = await raw('GET', url, { token: annotatorToken })
+    check(`${what}: the bytes themselves`, got.status === 200 && got.bytes.equals(pngBytes), `got ${got.status}`)
+    check(
+      `${what}: as a PNG, private and uncached, under a neutral name`,
+      got.headers.get('content-type')?.startsWith('image/png') &&
+        got.headers.get('cache-control') === 'private, no-store' &&
+        got.headers.get('content-disposition') === 'inline; filename="snippet-file-1.png"',
+      headersOf(got),
+    )
+    check(
+      `${what}: no redirect, and no session, student or upload id in any header`,
+      !got.headers.get('location') && !leaky.some((needle) => headersOf(got).includes(needle)),
+      headersOf(got),
+    )
+  }
+  const fileStatus = async (url, token) => (await raw('GET', url, { token })).status
+  const answerHandle = handleOf(leakAnswerSnippet)
+  check('an index past the end is 404', (await fileStatus(`/api/research/snippets/${answerHandle}/files/1`, annotatorToken)) === 404)
+  check('so is one that is not a number', (await fileStatus(`/api/research/snippets/${answerHandle}/files/x`, annotatorToken)) === 404)
+  check(
+    'a snippet not assigned to them is 404',
+    (await fileStatus(`/api/research/snippets/${handleOf(nearC)}/files/0`, annotatorToken)) === 404,
+  )
+  check(
+    'another annotator gets 404, with their own handle for it or with this one’s',
+    (await fileStatus(`/api/research/snippets/${handleOf(leakAnswerSnippet, secondAnnotator)}/files/0`, secondAnnotatorToken)) === 404 &&
+      (await fileStatus(answerFiles[0].url, secondAnnotatorToken)) === 404,
+  )
+  check(
+    'a real snippet id in place of the handle is 404',
+    (await fileStatus(`/api/research/snippets/${encodeURIComponent(leakAnswerSnippet.id)}/files/0`, annotatorToken)) === 404,
+  )
+  for (const [who, token, expected] of [
+    ['an admin', adminToken, 403],
+    ['a manager', managerToken, 403],
+    ['a teacher', teacherToken, 403],
+    ['the research token', 'smoke-token', 403],
+    ['nobody signed in', undefined, 403],
+  ]) {
+    const got = await fileStatus(answerFiles[0].url, token)
+    check(`${who} is refused the annotator file route (${expected})`, got === expected, `got ${got}`)
+  }
+
+  /**
+   * A PATCH with no JSON body leaves `req.body` undefined in Express 5. Each of
+   * these used to read a field off it and answer 500.
+   */
+  console.log('\na request with no body is a 400, not a 500')
+  for (const [what, method, url, token] of [
+    ['an annotator labelling', 'PATCH', `/api/research/snippets/${answerHandle}`, annotatorToken],
+    ['staff labelling', 'PATCH', `/api/research/snippets/${encodeURIComponent(leakAnswerSnippet.id)}`, adminToken],
+    ['an admin assigning', 'POST', '/api/research/snippets/assign', adminToken],
+    ['an admin editing a user', 'PATCH', `/api/users/${secondAnnotator.id}`, adminToken],
+  ]) {
+    const bare = await raw(method, url, { token })
+    const textual = await raw(method, url, { token, headers: { 'content-type': 'text/plain' }, body: '{"labels":{}}' })
+    check(`${what}: no body → 400, a text body → 400`, bare.status === 400 && textual.status === 400, `got ${bare.status}, ${textual.status}`)
+  }
+
+  console.log('\nstaff and the research token still get real ids')
+  for (const [who, token] of [
+    ['an admin', adminToken],
+    ['a manager', managerToken],
+    ['a teacher', teacherToken],
+    ['the research token', 'smoke-token'],
+  ]) {
+    const got = await call('GET', `/api/research/snippets?sessionId=${leakSession.id}`, { token })
+    check(
+      `${who}: snippet ids, session and question ids as before`,
+      got.status === 200 &&
+        got.body.count === 2 &&
+        got.body.snippets.every(
+          (entry) => entry.id.startsWith(`${leakSession.id}:`) && entry.sessionId === leakSession.id && entry.questionId,
+        ),
+      `got ${got.status}`,
+    )
+  }
+  check(
+    'and a staff PATCH still answers with the snippet id',
+    (
+      await call('PATCH', `/api/research/snippets/${leakForAdmin.body.snippets[0].id}`, {
+        token: adminToken,
+        body: { included: true },
+      })
+    ).body.label.snippetId === leakForAdmin.body.snippets[0].id,
+  )
+  // Withdrawn again, student and all, so the sections below count what they
+  // counted before — and so the withdrawal can be checked from the
+  // annotator's side.
+  check(
+    'before withdrawal, its record holds the annotator’s own entry',
+    (await app.locals.store.snippetLabels.get(leakForAdmin.body.snippets[0].id))?.annotations?.[annotator.id]?.notes
+      ?.specific === 'Names the step.',
+  )
+  check(
+    'and cleared away again',
+    (await call('DELETE', `/api/sessions/${leakSession.id}`, { token: leakStudentToken })).status === 200 &&
+      (await call('DELETE', `/api/users/${leakStudent.id}`, { token: teacherToken })).status === 200,
+  )
+
+  console.log('\na withdrawn session is gone for its annotator too')
+  const afterWithdrawal = await call('GET', '/api/research/snippets', { token: annotatorToken })
+  check(
+    'it leaves the annotator’s list',
+    afterWithdrawal.status === 200 &&
+      !leakForAdmin.body.snippets.some((entry) => afterWithdrawal.body.snippets.some((mine) => mine.id === handleOf(entry))),
+  )
+  check(
+    'a label on it is 404',
+    (await call('PATCH', `/api/research/snippets/${leakHandle}`, { token: annotatorToken, body: { notes: { tone: 'Still here?' } } }))
+      .status === 404,
+  )
+  check('and so are its files', (await fileStatus(answerFiles[0].url, annotatorToken)) === 404)
+  const labelsLeft = await Promise.all(
+    leakForAdmin.body.snippets.map((entry) => app.locals.store.snippetLabels.get(entry.id)),
+  )
+  check('its label records went with it: labels, notes, assignment and annotators’ entries', labelsLeft.every((label) => label === null))
+  check(
+    'while other sessions’ label records stay',
+    (await app.locals.store.snippetLabels.get(nearA.id))?.annotations?.[annotator.id]?.notes?.tone === 'A bit curt.',
+  )
+  /**
+   * A label record that outlived its snippet — written before withdrawal
+   * removed them, say. Assigned and resolvable, but with no messages behind
+   * it, so it must still read as missing to the annotator.
+   */
+  const orphanId = 'ses_orphan0000000000000:q_gone:1'
+  await app.locals.store.snippetLabels.upsert(orphanId, {
+    assigneeId: annotator.id,
+    assignedBy: admin.id,
+    assignedAt: new Date().toISOString(),
+    notes: { tone: 'about words that are gone' },
+  })
+  check(
+    'an orphaned label record still assigned to them is 404 to label',
+    (await call('PATCH', `/api/research/snippets/${handleOf({ id: orphanId })}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
       .status === 404,
   )
   check(
-    'the labels an annotator wrote survive for staff',
+    'and to open a file through',
+    (await fileStatus(`/api/research/snippets/${handleOf({ id: orphanId })}/files/0`, annotatorToken)) === 404,
+  )
+  check(
+    'and is not listed',
+    (await call('GET', '/api/research/snippets', { token: annotatorToken })).body.snippets.every(
+      (mine) => mine.id !== handleOf({ id: orphanId }),
+    ),
+  )
+  check(
+    'nor was it written to',
+    (await app.locals.store.snippetLabels.get(orphanId)).labels === undefined,
+  )
+  await app.locals.store.snippetLabels.upsert(orphanId, { assigneeId: null, assignedBy: null, assignedAt: null })
+
+  /**
+   * Assignments sit on the label records under the annotator's id, so they
+   * have to follow the account: kept and flagged while it is deactivated,
+   * taken back when it is deleted or stops being an annotator.
+   */
+  console.log('\nassignments follow the annotator’s account')
+  const makeAnnotator = async (name, email) =>
+    (
+      await call('POST', '/api/users', {
+        token: adminToken,
+        body: { role: 'annotator', name, email, password: 'correct horse battery' },
+      })
+    ).body.user
+  const nearCFor = async (token) =>
+    (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token })).body.snippets.find(
+      (entry) => entry.id === nearC.id,
+    )
+  const assignNearC = (assigneeId) =>
+    call('POST', '/api/research/snippets/assign', { token: adminToken, body: { snippetIds: [nearC.id], assigneeId } })
+
+  const leaving = await makeAnnotator('Dee Leaving', 'dee@example.com')
+  check('assigned to a new annotator', (await assignNearC(leaving.id)).status === 200)
+  check(
+    'an active assignee is flagged active',
+    (await nearCFor(adminToken)).assigneeActive === true &&
+      (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })).body.snippets.find(
+        (entry) => entry.id === nearB.id,
+      ).assigneeActive === null,
+  )
+  await call('PATCH', `/api/users/${leaving.id}`, { token: adminToken, body: { active: false } })
+  for (const [who, token] of [['an admin', adminToken], ['a manager', managerToken]]) {
+    const row = await nearCFor(token)
+    check(
+      `deactivated, the assignment stays, and ${who} sees whose and that they are inactive`,
+      row.assigneeId === leaving.id && row.assigneeName === 'Dee Leaving' && row.assigneeActive === false,
+      JSON.stringify({ id: row.assigneeId, name: row.assigneeName, active: row.assigneeActive }),
+    )
+  }
+  check(
+    'a teacher is still told neither',
+    !('assigneeActive' in (await nearCFor(teacherToken))) && !('assigneeName' in (await nearCFor(teacherToken))),
+  )
+  check(
+    'and the annotator list for pickers still leaves them out',
+    !(await call('GET', '/api/research/annotators', { token: adminToken })).body.annotators.some((entry) => entry.id === leaving.id),
+  )
+  check(
+    'deleting them takes their snippets back',
+    (await call('DELETE', `/api/users/${leaving.id}`, { token: adminToken })).status === 200 &&
+      (await nearCFor(adminToken)).assigneeId === null &&
+      (await app.locals.store.snippetLabels.get(nearC.id)).assignedBy === null &&
+      (await app.locals.store.snippetLabels.get(nearC.id)).assignedAt === null,
+  )
+
+  const moving = await makeAnnotator('Moe Moving', 'moe@example.com')
+  await assignNearC(moving.id)
+  check('assigned to another', (await nearCFor(adminToken)).assigneeId === moving.id)
+  check(
+    'a rename keeps the assignment',
+    (await call('PATCH', `/api/users/${moving.id}`, { token: adminToken, body: { name: 'Moe M.' } })).status === 200 &&
+      (await nearCFor(adminToken)).assigneeId === moving.id,
+  )
+  const movedAway = await call('PATCH', `/api/users/${moving.id}`, { token: adminToken, body: { role: 'manager' } })
+  check(
+    'a move to another role takes their snippets back',
+    movedAway.status === 200 && movedAway.body.user.role === 'manager' && (await nearCFor(adminToken)).assigneeId === null,
+    `got ${movedAway.status}`,
+  )
+  check(
+    'while an annotator nobody touched keeps theirs',
     (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })).body.snippets.find(
       (entry) => entry.id === nearA.id,
-    ).notes.tone === 'A bit curt.',
+    ).assigneeId === annotator.id,
   )
+  // Gone again, so the user counts further down are what they were.
+  await call('DELETE', `/api/users/${moving.id}`, { token: adminToken })
 
   console.log('\nthe teacher labelling switch')
   check(

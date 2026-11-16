@@ -3,17 +3,19 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { landingFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
 import Navbar from '../components/Navbar'
-import SignInDoors from '../components/SignInDoors'
 import './console.css'
 import '../components/Entry.css'
 
 /**
- * The staff door: email and password, for an admin, a manager, an annotator or
- * a teacher. Students have their own page (`/`, StudentLayout) and sign in with
- * their student number alone — they have no password, and the server answers
- * a student account here exactly as it answers a wrong password. So this page
- * carries no student-number field, and when what was typed is a student
- * number, or the answer is that 401, it says where students go instead.
+ * The staff sign-in page: email and password, for an admin, a manager, an
+ * annotator or a teacher. Students have their own page (`/`, StudentLayout)
+ * and sign in with their student number alone — they have no password, and the
+ * server answers a student account here exactly as it answers a wrong password.
+ *
+ * The two are separate pages, not two tabs of one form: nothing here offers
+ * the student page up front. The one place it is named is inside an error —
+ * when what was typed is a student number, or the answer is that 401 — because
+ * that is the moment a student who came to the wrong page needs telling.
  *
  * There is deliberately **no sign-up**. Accounts are created downwards — an
  * admin creates managers and teachers, a teacher creates their own students —
@@ -77,12 +79,12 @@ export default function SignIn() {
           same reason. Home and the language switch are the useful pair. */}
       <Navbar who={false} />
       <div className="en-card">
-        <SignInDoors current="staff" />
         <p className="eyebrow">{t('signin.eyebrow')}</p>
         <h1 className="en-title">{t('signin.title')}</h1>
         <p className="en-lede">{t('signin.lede')}</p>
 
-        <form className="cs-form" onSubmit={submit} noValidate>
+        {/* en-who-form: the same spacing and labels as the student door. */}
+        <form className="cs-form en-who-form" onSubmit={submit} noValidate>
           <div className="cs-field">
             <label className="cs-label" htmlFor="email">
               {t('signin.email')}
@@ -131,9 +133,8 @@ export default function SignIn() {
         </form>
 
         <p className="cs-hint" style={{ marginTop: 'var(--s-4)' }}>
-          {t('signin.noAccount')} <Link to="/">{t('signin.toStudent')}</Link>
+          {t('signin.staffAccounts')}
         </p>
-        <p className="cs-hint">{t('signin.staffAccounts')}</p>
       </div>
     </main>
   )

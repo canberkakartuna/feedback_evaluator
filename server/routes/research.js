@@ -1,9 +1,17 @@
 import express from 'express'
 import { config } from '../config.js'
-import { DEFAULT_CRITERIA, LABEL_VALUES, attachLabels, buildSnippets } from '../services/snippets.js'
+import {
+  DEFAULT_CRITERIA,
+  LABEL_VALUES,
+  attachLabels,
+  buildSnippets,
+  snippetHandle,
+} from '../services/snippets.js'
 import { activityScope, displayCode } from '../services/activities.js'
 import { scopeOf } from '../services/users.js'
 import { teacherCanLabel } from '../../shared/roles.js'
+import { EXTENSIONS } from '../lib/attachments.js'
+import { readBytes } from './uploads.js'
 import { ApiError, badRequest, forbidden, notFound, now, route, unavailable } from '../lib/http.js'
 
 /**
@@ -29,7 +37,10 @@ import { ApiError, badRequest, forbidden, notFound, now, route, unavailable } fr
  * - an **annotator** reaches the snippets an admin or manager has assigned to
  *   them (`assigneeId` on the label record) and nothing else here — no
  *   session list, no transcripts, no export — and may label those snippets but
- *   not keep or drop them;
+ *   not keep or drop them. They never see a snippet id or a session id: their
+ *   snippets are named by opaque handles (`snippetHandle`), because a session
+ *   id is enough to open the student's session on routes that anonymous
+ *   students need open;
  * - a **teacher whose labelling is switched off** (`canLabel: false`, see
  *   shared/roles.js) is refused the snippet routes, but still reads their
  *   students' sessions and transcripts, which are teaching rather than
@@ -345,7 +356,7 @@ export function researchRoutes(store) {
    * sessions, and only those sessions' messages are read. A snippet whose
    * session has since been withdrawn simply stops appearing.
    */
-  async function assignedSnippets(req, labels, sessionId) {
+  async function assignedSnippets(req, labels) {
     const assigned = new Set(
       [...labels.values()]
         .filter((label) => label.assigneeId === req.user.id)
@@ -353,10 +364,9 @@ export function researchRoutes(store) {
     )
     const sessionIds = new Set([...assigned].map(sessionOfSnippet))
 
-    if (sessionId && !sessionIds.has(sessionId)) throw notFound('No such session')
-
-    const wanted = sessionId ? [sessionId] : [...sessionIds]
-    const messages = (await Promise.all(wanted.map((id) => store.messages.listBySession(id)))).flat()
+    const messages = (
+      await Promise.all([...sessionIds].map((id) => store.messages.listBySession(id)))
+    ).flat()
 
     return buildSnippets(messages).filter((snippet) => assigned.has(snippet.id))
   }
@@ -364,26 +374,229 @@ export function researchRoutes(store) {
   /**
    * Who each snippet is assigned to, by name, for the people who assign — an
    * admin or a manager. One read of the annotators, not one per snippet.
+   *
+   * Deactivated annotators are read too, and `assigneeActive` says which is
+   * which: deactivating someone keeps their assignments (they may come back),
+   * so the staff have to be able to see that work is sitting with an account
+   * that cannot sign in, find it, and hand it on. `null` when unassigned, and
+   * `false` for an id that is no longer an annotator at all.
    */
   async function withAssigneeNames(snippets) {
     const annotators = await store.users.list({ role: 'annotator' })
-    const nameOf = new Map(annotators.map((user) => [user.id, user.name]))
+    const byId = new Map(annotators.map((user) => [user.id, user]))
     return snippets.map((snippet) => ({
       ...snippet,
-      assigneeName: snippet.assigneeId ? (nameOf.get(snippet.assigneeId) ?? null) : null,
+      assigneeName: snippet.assigneeId ? (byId.get(snippet.assigneeId)?.name ?? null) : null,
+      assigneeActive: snippet.assigneeId ? Boolean(byId.get(snippet.assigneeId)?.active) : null,
     }))
   }
 
   /**
-   * What an annotator is shown of a snippet. Who wrote the feedback (`source`,
-   * `model`) is left out of the payload altogether rather than only hidden on
-   * the screen, as it is for teachers: an annotator is there to label blind,
-   * and has no other use for it. Everything else is what a teacher sees.
+   * The files a student handed in for one snippet, in the order an annotator's
+   * file route numbers them: the answer's attachments (photos, the board
+   * export) as the answer holds them now, then the photo of an own question.
+   * Worked out from the snippet with its context (`withContext`) on every
+   * request, by the list route and the file route alike, so an index means the
+   * same file to both and nothing has to be stored to say so.
+   *
+   * A question image a teacher authored is not in it: it lives under the
+   * activity, not the session, and an annotator gets it as anyone else does.
    */
-  const forAnnotator = ({ tutor: { source: _source, model: _model, ...tutor }, ...snippet }) => ({
-    ...snippet,
-    tutor,
+  function studentFiles(snippet) {
+    const files = (snippet.answer?.attachments ?? []).map((file) => ({
+      uploadId: file.id,
+      type: file.type,
+      source: file.source === 'whiteboard' ? 'whiteboard' : 'file',
+    }))
+    const { question } = snippet
+    if (question.isOwnQuestion && question.image) {
+      // `withContext` keeps the URL, not the id; the server wrote that URL as
+      // `/api/uploads/<id>` (routes/uploads.js), so the id is read back off it.
+      const uploadId = /^\/api\/uploads\/([\w-]+)$/.exec(question.image.url ?? '')?.[1]
+      if (uploadId) files.push({ uploadId, type: question.image.type, source: 'question' })
+    }
+    return files
+  }
+
+  /** Where an annotator fetches a snippet's file: by handle and index, nothing else. */
+  const annotatorFileUrl = (handle, index) => `/api/research/snippets/${handle}/files/${index}`
+
+  /**
+   * What an annotator is shown of a snippet: an allow-list, so a field added to
+   * snippets later reaches them only if it is added here too.
+   *
+   * - `id` is the snippet's handle, not its id, and `sessionId` and
+   *   `questionId` are gone — see `snippetHandle`.
+   * - Who wrote the feedback (`source`, `model`) is left out of the payload
+   *   altogether rather than only hidden on the screen, as it is for teachers:
+   *   an annotator is there to label blind, and has no other use for it.
+   * - `assignedBy` is another account's id, and nothing on their screen uses it.
+   * - Files the student handed in — answer photos, a board export, the photo
+   *   of an own question — are named by the annotator file route
+   *   (`GET /snippets/:handle/files/:index`) and carry only `url`, `type` and,
+   *   for an answer file, whether it is the board. Not their `/api/uploads/`
+   *   URL: an upload id is public by itself, and on Spaces that URL redirects
+   *   to a signed URL whose key is `dropshot/<sessionId>/<uploadId>`. Nor their
+   *   names, which a student may have typed their own into. The file route
+   *   streams the bytes instead, see below.
+   *   A question image a teacher authored lives under the activity instead,
+   *   and stays as it is.
+   * - A question's code falls back to the raw question id when neither of the
+   *   session's question lists knows it; an annotator gets no code instead.
+   * - `labels`, `notes` and `note` are this annotator's own entry under the
+   *   record's `annotations`, blank until they write one — never the shared
+   *   record's, which a teacher or another annotator may have written. That is
+   *   also why a snippet reassigned to them starts blank. `included` is the
+   *   staff's decision, shown read-only.
+   */
+  const forAnnotator = (annotatorId, labels) => (snippet) => {
+    const { question, answer } = snippet
+    const handle = snippetHandle(annotatorId, snippet.id)
+    const own = labels.get(snippet.id)?.annotations?.[annotatorId] ?? {}
+    const files = studentFiles(snippet).map((file, index) => ({
+      ...file,
+      url: annotatorFileUrl(handle, index),
+    }))
+    const questionFile = files.find((file) => file.source === 'question')
+
+    return {
+      id: handle,
+      student: { text: snippet.student.text, at: snippet.student.at },
+      tutor: { text: snippet.tutor.text, label: snippet.tutor.label, at: snippet.tutor.at },
+      rating: snippet.rating,
+      turnIndex: snippet.turnIndex,
+      included: snippet.included,
+      // Their own labelling, never the shared record's (see `annotationsOf`).
+      labels: own.labels ?? {},
+      note: own.note ?? '',
+      notes: own.notes ?? {},
+      assigneeId: snippet.assigneeId,
+      assignedAt: snippet.assignedAt,
+      question: {
+        code: question.code === snippet.questionId ? null : question.code,
+        prompt: question.prompt,
+        promptByLang: question.promptByLang,
+        image: questionFile
+          ? { url: questionFile.url, type: questionFile.type }
+          : question.isOwnQuestion
+            ? null
+            : question.image,
+        isOwnQuestion: question.isOwnQuestion,
+      },
+      answer: answer && {
+        mode: answer.mode,
+        draft: answer.draft,
+        strokeCount: answer.strokeCount,
+        attachments: files
+          .filter((file) => file.source !== 'question')
+          .map(({ url, type, source }) => ({ url, type, source })),
+        updatedAt: answer.updatedAt,
+      },
+    }
+  }
+
+  /**
+   * The label record a PATCH answers with, as an annotator may see it: the
+   * shared record's `included` and assignment, and their own entry for
+   * everything they wrote. `labelledBy` is themselves — the shared record's
+   * would name whoever labelled it for the staff.
+   */
+  const labelForAnnotator = (handle, label, own, user) => ({
+    id: handle,
+    included: label.included ?? null,
+    labels: own?.labels ?? {},
+    note: own?.note ?? '',
+    notes: own?.notes ?? {},
+    assigneeId: label.assigneeId ?? null,
+    assignedAt: label.assignedAt ?? null,
+    labelledBy: user.id,
+    labelledByName: user.name ?? null,
+    labelledAt: own?.labelledAt ?? null,
   })
+
+  /**
+   * Every annotator's own labelling of one snippet, from `annotations` on its
+   * label record, oldest first, for the staff who hand the work out.
+   *
+   * Kept per annotator rather than written over the shared `labels`, so an
+   * annotator never sees or overwrites what a teacher or another annotator
+   * decided, and the shared record keeps its `labelledBy`. It is also the
+   * second coder the export's inter-rater columns need. Reassigning a snippet
+   * does not remove the earlier annotator's entry — it is research data — so
+   * there may be more than one; `annotatorId === assigneeId` marks the one
+   * the snippet sits with now.
+   *
+   * The name is the account's current one, or the name stamped when it was
+   * written if the account is no longer an annotator (deleted, or moved to
+   * another role), or `null` if neither is known.
+   */
+  function annotationsOf(label, nameOf) {
+    return Object.entries(label?.annotations ?? {})
+      .map(([annotatorId, entry]) => ({
+        annotatorId,
+        annotatorName: nameOf.get(annotatorId) ?? entry.annotatorName ?? null,
+        labels: entry.labels ?? {},
+        notes: entry.notes ?? {},
+        note: entry.note ?? '',
+        labelledAt: entry.labelledAt ?? null,
+      }))
+      .sort((a, b) => String(a.labelledAt ?? '').localeCompare(String(b.labelledAt ?? '')))
+  }
+
+  /** Annotator id -> name, for `annotationsOf`. One read, not one per snippet. */
+  async function annotatorNames() {
+    const annotators = await store.users.list({ role: 'annotator' })
+    return new Map(annotators.map((user) => [user.id, user.name]))
+  }
+
+  /**
+   * Adds the annotators' work to staff snippets — admin, manager and the
+   * research token, never a teacher, whose payload stays as it was. Additive:
+   * `annotation` is the current assignee's entry (`null` when unassigned or
+   * when they have not written anything yet) and `annotations` is every entry,
+   * the current assignee's included.
+   */
+  function withAnnotations(snippets, labels, nameOf) {
+    return snippets.map((snippet) => {
+      const annotations = annotationsOf(labels.get(snippet.id), nameOf)
+      return {
+        ...snippet,
+        annotation: snippet.assigneeId
+          ? (annotations.find((entry) => entry.annotatorId === snippet.assigneeId) ?? null)
+          : null,
+        annotations,
+      }
+    })
+  }
+
+  /** Admin, manager, or the research token with no account: who sees `annotation`. */
+  const seesAnnotations = (req) =>
+    req.user?.role === 'admin' || req.user?.role === 'manager' || (!req.user && isResearcher(req))
+
+  /**
+   * The label record behind an annotator's handle, or `null`.
+   *
+   * Recomputed over their own assignments and nothing else — read by assignee,
+   * not by loading every record — so a handle resolves only to a snippet
+   * assigned to this annotator, and a real snippet id, which is never a
+   * handle, resolves to nothing at all. Every miss is the same miss, so
+   * probing with ids learns nothing. The record itself comes back so the
+   * caller need not read it a second time.
+   */
+  async function resolveHandle(req, handle) {
+    const mine = await store.snippetLabels.listByAssignee(req.user.id)
+    return mine.find((label) => snippetHandle(req.user.id, label.snippetId) === handle) ?? null
+  }
+
+  /**
+   * The snippet with this id, built from the messages that are really there,
+   * or `null`. A label record outlives nothing on its own: once the session's
+   * messages are gone (withdrawn), so is the snippet, whatever the labels say.
+   */
+  async function findSnippet(snippetId) {
+    const messages = await store.messages.listBySession(sessionOfSnippet(snippetId))
+    return buildSnippets(messages).find((snippet) => snippet.id === snippetId) ?? null
+  }
 
   router.get(
     '/snippets',
@@ -395,7 +608,10 @@ export function researchRoutes(store) {
       let snippets
 
       if (isAnnotator(req)) {
-        snippets = attachLabels(await assignedSnippets(req, labels, sessionId), labels)
+        // `sessionId` is ignored for them, not refused or checked: an answer
+        // that changed with it would confirm whether a guessed session id has
+        // anything of theirs in it. They have no session ids to filter by.
+        snippets = attachLabels(await assignedSnippets(req, labels), labels)
       } else {
         const scope = await sessionScope(req)
 
@@ -419,10 +635,11 @@ export function researchRoutes(store) {
       // After the filter, so only the sessions still on the page are read.
       snippets = await withContext(snippets)
 
-      if (isAnnotator(req)) snippets = snippets.map(forAnnotator)
+      if (isAnnotator(req)) snippets = snippets.map(forAnnotator(req.user.id, labels))
       else if (req.user?.role === 'admin' || req.user?.role === 'manager') {
         snippets = await withAssigneeNames(snippets)
       }
+      if (seesAnnotations(req)) snippets = withAnnotations(snippets, labels, await annotatorNames())
 
       res.json({ criteria: DEFAULT_CRITERIA, count: snippets.length, snippets })
     }),
@@ -528,35 +745,48 @@ export function researchRoutes(store) {
       // be able to write a label onto another class's data.
       assertMayLabel(req)
 
+      /** The real snippet id. For an annotator the path carries a handle instead. */
+      let snippetId = req.params.snippetId
+      /** An annotator's label record, read once while resolving their handle. */
+      let assigned = null
+
       if (isAnnotator(req)) {
-        // Only what has been assigned to them. Anything else — another
-        // annotator's, an unassigned one, an id that does not exist — reads as
-        // missing, so an annotator learns nothing about the rest of the dataset.
-        const current = await store.snippetLabels.get(req.params.snippetId)
-        if (current?.assigneeId !== req.user.id) throw notFound('No such snippet')
+        // Only what has been assigned to them, and only by handle. Anything
+        // else — another annotator's handle, an unassigned snippet, a real
+        // snippet id, something made up — reads as missing, so an annotator
+        // learns nothing about the rest of the dataset.
+        assigned = await resolveHandle(req, req.params.snippetId)
+        // And only while the snippet is still there. The label record survives
+        // nothing on its own account, but a session withdrawn before this
+        // check existed, or between an assignment and this save, must not
+        // keep taking labels and reasons about words that are gone.
+        if (!assigned || !(await findSnippet(assigned.snippetId))) {
+          throw notFound('No such snippet')
+        }
+        snippetId = assigned.snippetId
 
         // Keeping or dropping a snippet decides what the dataset is made of,
         // and stays with the staff who own it. An annotator labels.
-        if (req.body.included !== undefined) {
+        if (req.body?.included !== undefined) {
           throw forbidden('Annotators label snippets; keeping or dropping one is for staff')
         }
       } else {
         const scope = await sessionScope(req)
-        if (!canRead(scope, sessionOfSnippet(req.params.snippetId))) {
+        if (!canRead(scope, sessionOfSnippet(snippetId))) {
           throw notFound('No such snippet')
         }
       }
 
       const patch = {}
 
-      if (req.body.included !== undefined) {
+      if (req.body?.included !== undefined) {
         if (typeof req.body.included !== 'boolean' && req.body.included !== null) {
           throw badRequest('"included" must be true, false or null')
         }
         patch.included = req.body.included
       }
 
-      if (req.body.labels !== undefined) {
+      if (req.body?.labels !== undefined) {
         const labels = req.body.labels
         if (typeof labels !== 'object' || labels === null || Array.isArray(labels)) {
           throw badRequest('"labels" must be an object of criterionId -> value')
@@ -572,12 +802,12 @@ export function researchRoutes(store) {
         patch.labels = labels
       }
 
-      if (req.body.note !== undefined) {
+      if (req.body?.note !== undefined) {
         if (typeof req.body.note !== 'string') throw badRequest('"note" must be a string')
         patch.note = req.body.note.slice(0, 4000)
       }
 
-      if (req.body.notes !== undefined) {
+      if (req.body?.notes !== undefined) {
         const notes = req.body.notes
         if (typeof notes !== 'object' || notes === null || Array.isArray(notes)) {
           throw badRequest('"notes" must be an object of criterionId -> text')
@@ -591,25 +821,47 @@ export function researchRoutes(store) {
           }
         }
 
-        /**
-         * Merged here rather than replaced, unlike `labels`. The store's upsert
-         * is a shallow merge, so a body carrying only the criterion whose box
-         * was just left would otherwise wipe the reasons written for the other
-         * four. The client sends one criterion at a time for exactly that
-         * reason: it cannot hold a stale copy of the others.
-         */
-        const current = await store.snippetLabels.get(req.params.snippetId)
-        patch.notes = {
-          ...(current?.notes ?? {}),
-          ...Object.fromEntries(
-            Object.entries(notes).map(([criterionId, text]) => [criterionId, text.slice(0, 4000)]),
-          ),
+        const given = Object.fromEntries(
+          Object.entries(notes).map(([criterionId, text]) => [criterionId, text.slice(0, 4000)]),
+        )
+
+        if (isAnnotator(req)) {
+          // Per criterion by the store itself (`annotate`), into their own entry.
+          patch.notes = given
+        } else {
+          /**
+           * Merged here rather than replaced, unlike `labels`. The store's upsert
+           * is a shallow merge, so a body carrying only the criterion whose box
+           * was just left would otherwise wipe the reasons written for the other
+           * four. The client sends one criterion at a time for exactly that
+           * reason: it cannot hold a stale copy of the others.
+           */
+          const current = await store.snippetLabels.get(snippetId)
+          patch.notes = { ...(current?.notes ?? {}), ...given }
         }
       }
 
       // Checked before attribution is stamped on, or every request would carry
       // a change and "nothing to update" could never be true.
       if (!Object.keys(patch).length) throw badRequest('Nothing to update')
+
+      /**
+       * An annotator writes into their own entry only (`annotations` on the
+       * record, see `annotationsOf`), never the shared `labels`, `notes`,
+       * `note` or `labelledBy`: those are the staff's labelling, and
+       * overwriting them would both show the annotator someone else's
+       * decisions and lose whose they were. Attribution is the entry's key —
+       * their account id — so it is still taken from the token, not the body.
+       */
+      if (isAnnotator(req)) {
+        const own = await store.snippetLabels.annotate(snippetId, req.user.id, {
+          ...patch,
+          annotatorName: req.user.name ?? null,
+          labelledAt: new Date().toISOString(),
+        })
+        res.json({ label: labelForAnnotator(req.params.snippetId, assigned, own, req.user) })
+        return
+      }
 
       /**
        * Who labelled it is taken from the token, not the body.
@@ -622,20 +874,100 @@ export function researchRoutes(store) {
       if (req.user) {
         patch.labelledBy = req.user.id
         patch.labelledByName = req.user.name
-      } else if (typeof req.body.labelledBy === 'string') {
+      } else if (typeof req.body?.labelledBy === 'string') {
         patch.labelledBy = req.body.labelledBy.slice(0, 200)
       }
 
       patch.labelledAt = new Date().toISOString()
 
-      const label = await store.snippetLabels.upsert(req.params.snippetId, patch)
+      // The annotators' entries are left out of the answer, which stays the
+      // shared record it always was: a teacher is not shown them at all.
+      const { annotations: _annotations, ...label } = await store.snippetLabels.upsert(
+        snippetId,
+        patch,
+      )
       res.json({ label })
     }),
   )
 
   /**
+   * One of the files a student handed in for a snippet, for the annotator it
+   * is assigned to — the bytes themselves, streamed through the API.
+   *
+   * Not a redirect, unlike `/api/uploads/:id`: on Spaces that redirect is to a
+   * signed URL whose key is `dropshot/<sessionId>/<uploadId>`, which is exactly
+   * what an annotator must not learn (see `snippetHandle`). So nothing the
+   * response carries names the session, the upload or the student — no key, no
+   * id, and a neutral file name rather than whatever the student called it.
+   * `private, no-store`, because it is a student's work behind a login.
+   *
+   * `:index` counts into `studentFiles` for that snippet, recomputed here. An
+   * annotator only: staff and the research token have `/api/uploads/:id`, and
+   * this route answers as if it were not there for anyone else's handle, an
+   * unassigned or withdrawn snippet, or an index past the end.
+   */
+  router.get(
+    '/snippets/:handle/files/:index',
+    route(async (req, res) => {
+      if (!isAnnotator(req)) {
+        throw forbidden('This is an annotator\'s view of a file; staff open it by its upload')
+      }
+
+      const assigned = await resolveHandle(req, req.params.handle)
+      const snippet = assigned ? await findSnippet(assigned.snippetId) : null
+      if (!snippet) throw notFound('No such file')
+
+      const index = /^\d{1,3}$/.test(req.params.index) ? Number(req.params.index) : -1
+      const [inContext] = await withContext([snippet])
+      const file = studentFiles(inContext)[index]
+      if (!file) throw notFound('No such file')
+
+      // Checked against the session too, so a file list that somehow named
+      // another session's upload still could not hand it over.
+      const upload = await store.uploads.findById(file.uploadId)
+      if (!upload || upload.sessionId !== snippet.sessionId) throw notFound('No such file')
+
+      let body
+      try {
+        body = await readBytes(upload)
+      } catch {
+        body = null // Spaces said no (gone, or unreachable): the same answer as below.
+      }
+      if (!body) throw notFound('That file is no longer available')
+
+      const extension = EXTENSIONS[upload.type] ?? 'bin'
+      res.status(200)
+      res.type(upload.type)
+      res.setHeader('Content-Disposition', `inline; filename="snippet-file-${index + 1}.${extension}"`)
+      res.setHeader('Cache-Control', 'private, no-store')
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+
+      body.once('error', () => {
+        // A file deleted underneath an open stream. Before anything was sent
+        // that is an honest 404; after, the connection is all there is to end.
+        if (res.headersSent) {
+          res.destroy()
+          return
+        }
+        res.removeHeader('Content-Disposition')
+        res.status(404).json({ error: { message: 'That file is no longer available' } })
+      })
+      // A reader who goes away mid-file: `pipe` alone would leave the source
+      // open — on Spaces, a socket held out of the S3 client's pool until it
+      // times out; on disk, a file descriptor. A finished read is already
+      // destroyed, so this only ever cuts one short.
+      res.once('close', () => {
+        if (!body.destroyed) body.destroy()
+      })
+      body.pipe(res)
+    }),
+  )
+
+  /**
    * Dataset export. JSON keeps the nesting; CSV is one row per snippet, which
-   * is what a coding tool or a stats package wants.
+   * is what a coding tool or a stats package wants. Both carry the annotators'
+   * labelling beside the shared record's: JSON as `annotation` and
+   * `annotations` (see `withAnnotations`), CSV as columns appended at the end.
    */
   router.get(
     '/export',
@@ -645,8 +977,12 @@ export function researchRoutes(store) {
       requireResearcher(req)
 
       const labels = await store.snippetLabels.map()
-      const snippets = attachLabels(buildSnippets(await store.messages.listAll()), labels).filter(
-        (snippet) => snippet.included === true,
+      const snippets = withAnnotations(
+        attachLabels(buildSnippets(await store.messages.listAll()), labels).filter(
+          (snippet) => snippet.included === true,
+        ),
+        labels,
+        await annotatorNames(),
       )
 
       if (req.query.format === 'csv') {
@@ -663,20 +999,45 @@ export function researchRoutes(store) {
           // Appended rather than placed beside `note`, so no existing column
           // moves for a script that reads them by position.
           ...DEFAULT_CRITERIA.map((criterion) => `note_${criterion.id}`),
+          /*
+           * The annotator's labelling, appended after everything above for the
+           * same reason. The columns above are the shared record — the staff
+           * coder — and these are the second coder the inter-rater score is
+           * computed against. One row per snippet still, so one annotator per
+           * row: the current assignee's entry if they have written one,
+           * otherwise the latest entry anyone wrote (a snippet unassigned or
+           * reassigned after the work was done keeps its work in the export).
+           * `annotator_count` says when there are more; the JSON export
+           * carries every entry under `annotations`.
+           */
+          'annotator_id',
+          ...DEFAULT_CRITERIA.map((criterion) => `annotator_label_${criterion.id}`),
+          ...DEFAULT_CRITERIA.map((criterion) => `annotator_note_${criterion.id}`),
+          'annotator_count',
         ]
 
-        const rows = snippets.map((snippet) => [
-          snippet.id,
-          snippet.sessionId,
-          snippet.questionId,
-          snippet.student.text,
-          snippet.tutor.text,
-          snippet.tutor.label ?? '',
-          snippet.rating ?? '',
-          snippet.note ?? '',
-          ...DEFAULT_CRITERIA.map((criterion) => snippet.labels[criterion.id] ?? ''),
-          ...DEFAULT_CRITERIA.map((criterion) => snippet.notes[criterion.id] ?? ''),
-        ])
+        /** The annotator entry a CSV row carries, by the rule above. */
+        const rowAnnotation = (snippet) => snippet.annotation ?? snippet.annotations.at(-1) ?? null
+
+        const rows = snippets.map((snippet) => {
+          const annotation = rowAnnotation(snippet)
+          return [
+            snippet.id,
+            snippet.sessionId,
+            snippet.questionId,
+            snippet.student.text,
+            snippet.tutor.text,
+            snippet.tutor.label ?? '',
+            snippet.rating ?? '',
+            snippet.note ?? '',
+            ...DEFAULT_CRITERIA.map((criterion) => snippet.labels[criterion.id] ?? ''),
+            ...DEFAULT_CRITERIA.map((criterion) => snippet.notes[criterion.id] ?? ''),
+            annotation?.annotatorId ?? '',
+            ...DEFAULT_CRITERIA.map((criterion) => annotation?.labels[criterion.id] ?? ''),
+            ...DEFAULT_CRITERIA.map((criterion) => annotation?.notes[criterion.id] ?? ''),
+            snippet.annotations.length,
+          ]
+        })
 
         res.type('text/csv').send(
           [columns, ...rows]

@@ -892,6 +892,85 @@
   border-bottom: 1px solid var(--rule);
 }
 
+/* ── an annotator's labels on a staff card (admin, manager) ─── */
+
+/* Spans both columns under the card's own labelling, set apart as someone
+   else's work: a sunk panel with a pen rule down its edge, read-only. */
+.cs-annot {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: var(--paper-sunk);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--pen);
+  border-radius: var(--r-2);
+}
+
+.cs-annot-head,
+.cs-annot-hint {
+  margin: 0;
+}
+
+.cs-annot-entry {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.cs-annot-entry + .cs-annot-entry {
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--rule);
+}
+
+.cs-annot-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--t-13);
+  color: var(--ink);
+}
+
+.cs-annot-tag {
+  font-size: var(--t-12);
+  color: var(--graphite);
+}
+
+.cs-annot-entry[data-current='true'] .cs-annot-tag {
+  color: var(--pen-deep);
+  font-weight: 650;
+}
+
+.cs-annot-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+}
+
+.cs-annot-row {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+.cs-annot-value,
+.cs-annot-note {
+  margin: 0;
+  font-size: var(--t-13);
+  color: var(--ink);
+}
+
+.cs-annot-value {
+  font-weight: 650;
+}
+
+.cs-annot-value[data-value='none'] {
+  font-weight: 400;
+  color: var(--graphite);
+}
+
 /* ── a teacher's labelling switch (People, Teachers) ─────────── */
 
 .cs-switch {

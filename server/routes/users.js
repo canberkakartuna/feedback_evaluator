@@ -274,14 +274,14 @@ export function userRoutes(store) {
 
       const patch = {}
 
-      if (req.body.name !== undefined) patch.name = requireName(req.body)
-      if (req.body.email !== undefined) {
+      if (req.body?.name !== undefined) patch.name = requireName(req.body)
+      if (req.body?.email !== undefined) {
         // Their address is derived from the number and is what signs them in.
         if (target.studentNumber) throw badRequest('A class-list student has no email to change')
         patch.email = requireEmail(req.body)
       }
 
-      if (req.body.active !== undefined) {
+      if (req.body?.active !== undefined) {
         if (typeof req.body.active !== 'boolean') throw badRequest('"active" must be a boolean')
         if (isSelf) throw badRequest('You cannot change your own account status')
         if (!req.body.active) await assertNotLastAdmin(store, target)
@@ -291,7 +291,7 @@ export function userRoutes(store) {
       // A role change moves a user between layers, so the parent pointer has to
       // be re-decided with it — which is why the parent handling below reads the
       // incoming `role` rather than the stored one.
-      const role = req.body.role === undefined ? target.role : requireRoleValue(req.body)
+      const role = req.body?.role === undefined ? target.role : requireRoleValue(req.body)
 
       if (role !== target.role) {
         if (req.user.role !== 'admin') throw forbidden('Only an admin can change a role')
@@ -311,7 +311,7 @@ export function userRoutes(store) {
        * already limited it to an admin or the teacher's own manager, and the
        * teacher never sets it for themselves.
        */
-      if (req.body.canLabel !== undefined) {
+      if (req.body?.canLabel !== undefined) {
         if (typeof req.body.canLabel !== 'boolean') throw badRequest('"canLabel" must be a boolean')
         if (isSelf) throw forbidden('You cannot change your own labelling access')
         if (role !== 'teacher') throw badRequest('Only a teacher has a labelling switch')
@@ -319,7 +319,7 @@ export function userRoutes(store) {
       }
 
       const field = parentField(role)
-      const requested = field ? req.body[field] : (req.body.teacherId ?? req.body.managerId)
+      const requested = field ? req.body?.[field] : (req.body?.teacherId ?? req.body?.managerId)
 
       if (requested !== undefined || role !== target.role) {
         if (isSelf) throw badRequest('You cannot reassign your own place in the hierarchy')
@@ -345,6 +345,18 @@ export function userRoutes(store) {
 
       // A deactivated account must stop working now, not when its token expires.
       if (patch.active === false) await store.authTokens.removeByUser(target.id)
+
+      /**
+       * An annotator moved to another role leaves their labelling work behind
+       * for someone else: the snippets assigned to them are taken back, so they
+       * show as unassigned to the staff who hand work out, rather than sitting
+       * with an account that can no longer open them. The labels they wrote
+       * stay. Deactivation keeps the assignments — the account may come back —
+       * and `GET /api/research/snippets` flags them (`assigneeActive`) instead.
+       */
+      if (target.role === 'annotator' && patch.role && patch.role !== 'annotator') {
+        await store.snippetLabels.clearAssignee(target.id)
+      }
 
       res.json({ user: publicUser(updated) })
     }),
@@ -429,6 +441,9 @@ export function userRoutes(store) {
 
       await store.authTokens.removeByUser(target.id)
       await store.users.remove(target.id)
+      // Their assignments with them, as for a role change in the PATCH above:
+      // otherwise those snippets would stay assigned to an id that names nobody.
+      if (target.role === 'annotator') await store.snippetLabels.clearAssignee(target.id)
 
       res.json({ deleted: true, userId: target.id })
     }),

@@ -2,7 +2,14 @@ import { removeBytes } from '../routes/uploads.js'
 
 /**
  * Everything one session left behind, removed: answers, tutor thread, events,
- * own questions, the session itself, and the bytes of every file it uploaded.
+ * own questions, the session itself, the bytes of every file it uploaded, and
+ * the label records on its snippets.
+ *
+ * The label records go too because they are about the student's words: the
+ * keep-or-drop decision, the criteria and the free-text reasons a labeller
+ * wrote about one particular reply to them. Left behind, they would outlive
+ * the transcript they describe, and an assignment on one would keep naming a
+ * snippet nobody can open any more.
  *
  * Used by `DELETE /api/sessions/:id`. Withdrawing consent from the profile
  * (`POST /api/auth/consent/withdraw`) no longer calls this: withdrawing from
@@ -15,6 +22,7 @@ export async function removeSessionData(store, session) {
     store.messages.removeBySession(session.id),
     store.events.removeBySession(session.id),
     store.ownQuestions.removeBySession(session.id),
+    store.snippetLabels.removeBySession(session.id),
     store.sessions.remove(session.id),
   ])
 

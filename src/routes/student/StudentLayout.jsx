@@ -5,7 +5,6 @@ import { isStaff } from '../../../shared/roles'
 import { homeFor, useAuth } from '../../lib/auth'
 import { useT } from '../../lib/i18n'
 import Navbar from '../../components/Navbar'
-import SignInDoors from '../../components/SignInDoors'
 import '../../components/Entry.css'
 import '../console.css'
 
@@ -135,8 +134,9 @@ export default function StudentLayout() {
     return (
       <main className="en-page">
         <Navbar />
+        {/* Students only. Staff reach /signin from the navbar's sign-in link,
+            and from nothing in the page itself: the two are separate pages. */}
         <div className="en-card">
-          <SignInDoors current="student" />
           <p className="eyebrow">
             {t('entry.step', { current: stepOf('who'), total: steps.length })}
           </p>

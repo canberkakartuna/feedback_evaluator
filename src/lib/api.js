@@ -289,5 +289,21 @@ export const api = {
     call('POST', '/api/research/snippets/assign', { snippetIds, assigneeId }),
   /** The active annotators work can be assigned to: `{ annotators: [{ id, name }] }`. */
   annotators: () => call('GET', '/api/research/annotators'),
+  /**
+   * A file behind a login, as a Blob — an annotator's view of a student's
+   * file (`/api/research/snippets/:handle/files/:index`). An `<img src>`
+   * cannot send the bearer token, and the token never goes in a URL, so the
+   * screen fetches it here and shows it through an object URL.
+   */
+  privateFile: async (path) => {
+    const response = await fetch(`${BASE}${path}`, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    })
+    if (!response.ok) {
+      if (response.status === 401 && token) setToken(null)
+      throw new ApiError(response.status, `Request failed with ${response.status}`)
+    }
+    return response.blob()
+  },
   exportUrl: (format = 'json') => `${BASE}/api/research/export?format=${format}`,
 }

@@ -93,7 +93,6 @@ const en = {
     password: 'Password',
     submit: 'Sign in',
     busy: 'Signing in…',
-    noAccount: 'Students do not use a password: they sign in with their username, their 8-digit student number.',
     staffAccounts: 'Staff accounts are created by an administrator. There is no sign-up.',
     toStudent: 'Go to student sign-in →',
     looksLikeNumber: 'That looks like a student number. Students sign in on the student page, with no password.',
@@ -147,12 +146,6 @@ const en = {
       go: 'Continue',
       busy: 'Checking…',
       notListed: 'That username is not on a class list. Check it, or ask your teacher to add it.',
-    },
-
-    doors: {
-      label: 'Who is signing in',
-      student: 'Student sign-in',
-      staff: 'Staff sign-in',
     },
 
     pick: {
@@ -629,6 +622,9 @@ const en = {
     noAnswer: 'No answer submitted for this question.',
     answerBoard: 'Whiteboard',
     answerPhoto: 'Uploaded photo',
+    answerFileUnavailable: 'The student handed in a file here, but it could not be loaded.',
+    questionPhotoUnavailable: 'The student photographed this question, but the photo could not be loaded.',
+    loadingFile: 'Loading the file…',
     decisionKept: '✓ Kept for the dataset',
     decisionDropped: 'Dropped — not in the dataset',
     decisionNone: 'Not decided yet',
@@ -668,6 +664,16 @@ const en = {
     assignedToName: 'Assigned to {name}',
     notAssigned: 'Unassigned',
     unknownAnnotator: 'a removed annotator',
+    deactivatedName: '{name} (deactivated)',
+    listRefreshed: 'One snippet you were labelling is no longer available to you: it was taken back from you, or the student withdrew it. Your list has been refreshed. What you saved on other snippets is kept.',
+    dismiss: 'Dismiss',
+    annotatorWorkHead: 'Annotator’s labels',
+    annotatorWorkHint: 'Read-only. What the annotator chose and why, kept apart from the staff labels on this card.',
+    annotatorWorkBy: 'By {name}',
+    annotatorWorkCurrent: 'assigned now',
+    annotatorWorkEarlier: 'assigned earlier',
+    annotatorWorkNone: '{name} has not labelled this snippet yet.',
+    annotatorWorkUnmarked: 'Not marked',
   },
 
   prompt: {
@@ -816,7 +822,6 @@ const tr = {
     password: 'Şifre',
     submit: 'Giriş yap',
     busy: 'Giriş yapılıyor…',
-    noAccount: 'Öğrenciler şifre kullanmaz: kullanıcı adlarıyla, yani 8 haneli öğrenci numaralarıyla giriş yaparlar.',
     staffAccounts: 'Personel hesaplarını yönetici oluşturur. Kayıt olma seçeneği yoktur.',
     toStudent: 'Öğrenci girişine git →',
     looksLikeNumber: 'Bu bir öğrenci numarasına benziyor. Öğrenciler şifresiz olarak öğrenci sayfasından giriş yapar.',
@@ -868,12 +873,6 @@ const tr = {
       go: 'Devam et',
       busy: 'Kontrol ediliyor…',
       notListed: 'Bu kullanıcı adı bir sınıf listesinde yok. Kontrol et ya da öğretmeninden eklemesini iste.',
-    },
-
-    doors: {
-      label: 'Kim giriş yapıyor',
-      student: 'Öğrenci girişi',
-      staff: 'Personel girişi',
     },
 
     pick: {
@@ -1335,6 +1334,9 @@ const tr = {
     noAnswer: 'Bu soru için cevap gönderilmedi.',
     answerBoard: 'Beyaz tahta',
     answerPhoto: 'Yüklenen fotoğraf',
+    answerFileUnavailable: 'Öğrenci burada bir dosya teslim etti, ancak dosya yüklenemedi.',
+    questionPhotoUnavailable: 'Öğrenci bu sorunun fotoğrafını çekti, ancak fotoğraf yüklenemedi.',
+    loadingFile: 'Dosya yükleniyor…',
     decisionKept: '✓ Veri kümesinde tutuldu',
     decisionDropped: 'Çıkarıldı — veri kümesinde yok',
     decisionNone: 'Henüz karar verilmedi',
@@ -1374,6 +1376,16 @@ const tr = {
     assignedToName: '{name} kişisine atandı',
     notAssigned: 'Atanmamış',
     unknownAnnotator: 'kaldırılmış bir etiketleyici',
+    deactivatedName: '{name} (devre dışı)',
+    listRefreshed: 'Etiketlediğiniz bir kesite artık erişiminiz yok: sizden geri alındı ya da öğrenci onu geri çekti. Listeniz yenilendi. Diğer kesitlerde kaydettikleriniz korunuyor.',
+    dismiss: 'Kapat',
+    annotatorWorkHead: 'Etiketleyicinin etiketleri',
+    annotatorWorkHint: 'Salt okunur. Etiketleyicinin seçtikleri ve gerekçeleri, bu karttaki personel etiketlerinden ayrı tutulur.',
+    annotatorWorkBy: '{name} tarafından',
+    annotatorWorkCurrent: 'şu an atanmış',
+    annotatorWorkEarlier: 'daha önce atanmış',
+    annotatorWorkNone: '{name} bu kesiti henüz etiketlemedi.',
+    annotatorWorkUnmarked: 'İşaretlenmedi',
   },
 
   prompt: {

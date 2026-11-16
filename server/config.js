@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { createHmac, randomBytes } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { loadEnvFile } from './lib/env.js'
@@ -133,6 +134,20 @@ function openaiConfig() {
   }
 }
 
+/**
+ * See `snippetHandleKey` below. Hashed with a label of its own rather than used
+ * as it stands, so the handle key is never the research token or the database
+ * password itself, only something derived from them for this one purpose.
+ */
+function snippetHandleKey() {
+  const material =
+    process.env.SNIPPET_HANDLE_SECRET?.trim() ||
+    process.env.RESEARCH_TOKEN?.trim() ||
+    process.env.MONGODB_URI?.trim()
+  if (!material) return randomBytes(32)
+  return createHmac('sha256', material).update('dropshot:snippet-handles').digest()
+}
+
 export const config = {
   serverless,
   port: Number(process.env.PORT ?? 4000),
@@ -197,6 +212,25 @@ export const config = {
    * until a token is set. There is deliberately no default.
    */
   researchToken: process.env.RESEARCH_TOKEN ?? null,
+
+  /**
+   * The key behind the opaque handles an annotator is given in place of
+   * snippet ids (`snippetHandle` in services/snippets.js). A snippet id starts
+   * with its session id, and a session id is all it takes to read or write a
+   * student's session (routes/sessions.js stays open for anonymous students),
+   * so an annotator is never shown one.
+   *
+   * SNIPPET_HANDLE_SECRET sets it. Unset, it is derived from a secret this
+   * deployment already has — RESEARCH_TOKEN, then MONGODB_URI, which carries
+   * the database password — and with neither it is made up at start-up. That
+   * last case is the in-memory store with no research token, where every
+   * snippet is gone on a restart anyway — but that also means a key per
+   * instance, so set SNIPPET_HANDLE_SECRET wherever more than one runs.
+   * Changing the key changes every handle at once: no label is lost, but an
+   * annotator's open page holds stale handles, so its next save is a 404 and
+   * the page reloads its list (routes/teacher/Labelling.jsx).
+   */
+  snippetHandleKey: snippetHandleKey(),
 
   consentVersion: process.env.CONSENT_VERSION ?? '2026-07-29.placeholder',
 

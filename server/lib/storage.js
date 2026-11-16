@@ -150,8 +150,16 @@ function spacesBackend() {
       )
     },
 
-    stream() {
-      throw new Error('Spaces reads go through a signed URL, not a stream')
+    /**
+     * The object's bytes, read through this server rather than handed out as a
+     * signed URL. Browsers normally get the signed URL (routes/uploads.js), but
+     * that URL carries the object key, and the key names the session — so the
+     * one reader who must not learn it, an annotator, is streamed the bytes
+     * instead (routes/research.js). A Node Readable, like the disk backend's.
+     */
+    async stream(key) {
+      const { Body } = await client.send(new GetObjectCommand({ Bucket, Key: key }))
+      return Body
     },
 
     async check() {

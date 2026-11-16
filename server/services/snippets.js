@@ -1,3 +1,6 @@
+import { createHmac } from 'node:crypto'
+import { config } from '../config.js'
+
 /**
  * A snippet is one student turn and the feedback that answered it — the unit
  * the doc names as what gets read, kept or dropped, and then labelled.
@@ -93,4 +96,27 @@ export function attachLabels(snippets, labels) {
     assignedBy: labels.get(snippet.id)?.assignedBy ?? null,
     assignedAt: labels.get(snippet.id)?.assignedAt ?? null,
   }))
+}
+
+/**
+ * What an annotator calls a snippet, in place of its id.
+ *
+ * A snippet id is `sessionId:questionId:seq`, and a session id is all the
+ * session routes ask for — they have to be open to anonymous students — so an
+ * id in an annotator's hands is the student's whole session. This is a keyed
+ * hash of the id instead: it says nothing about the session, cannot be turned
+ * back into it without the server's key, and is different for every annotator
+ * (the annotator's id is hashed in), so one annotator's handle is nothing to
+ * another. It is deterministic, which is what lets the server resolve one by
+ * recomputing it over that annotator's assignments: no lookup table to store,
+ * the same on both stores.
+ *
+ * 22 base64url characters is 132 bits of the HMAC — far past guessing, and
+ * short enough to sit in a URL.
+ */
+export function snippetHandle(annotatorId, snippetId) {
+  return createHmac('sha256', config.snippetHandleKey)
+    .update(`${annotatorId}|${snippetId}`)
+    .digest('base64url')
+    .slice(0, 22)
 }

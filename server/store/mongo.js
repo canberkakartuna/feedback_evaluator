@@ -93,6 +93,9 @@ const INDEXES = {
   // version its session was stamped with, not on whatever is active now.
   prompts: [{ active: 1, _id: -1 }, { versionId: 1 }],
   support: [{ userId: 1, createdAt: -1 }, { teacherId: 1, createdAt: -1 }, { category: 1, createdAt: -1 }],
+  // An annotator's handles are resolved over their own assignments on every
+  // label they save, so that read is by index rather than over every record.
+  snippetLabels: [{ assigneeId: 1 }],
 }
 
 /** Every read strips `_id`, so documents match the memory store's exactly. */
@@ -608,6 +611,61 @@ export function createMongoStore({ uri, dbName } = {}) {
       async map() {
         const docs = await (await col('snippetLabels')).find({}, BARE).toArray()
         return new Map(docs.map((doc) => [doc.snippetId, doc]))
+      },
+      /** The records assigned to one annotator: what their handles resolve over. */
+      async listByAssignee(assigneeId) {
+        return (await col('snippetLabels')).find({ assigneeId }, BARE).toArray()
+      },
+      /** See memory.js: the assignment goes, the labels stay. */
+      async clearAssignee(assigneeId) {
+        const { modifiedCount } = await (await col('snippetLabels')).updateMany(
+          { assigneeId },
+          { $set: { assigneeId: null, assignedBy: null, assignedAt: null } },
+        )
+        return modifiedCount
+      },
+      /**
+       * A withdrawn session's records. `_id` is the snippet id,
+       * `sessionId:questionId:seq`, so an anchored prefix match on it is a
+       * range scan of the primary key rather than a collection scan.
+       */
+      async removeBySession(sessionId) {
+        const escaped = String(sessionId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        const { deletedCount } = await (await col('snippetLabels')).deleteMany({
+          _id: { $regex: `^${escaped}:` },
+        })
+        return deletedCount
+      },
+      /**
+       * See memory.js. One dotted `$set` per field, so two annotators saving
+       * the same snippet at once, or one annotator's two criteria, cannot
+       * overwrite each other's entries the way a read-modify-write of the
+       * whole `annotations` map would, and the shared labels are not touched.
+       * The annotator id and criterion ids become path segments: ids are
+       * `usr_<hex>` and criteria are checked against DEFAULT_CRITERIA before
+       * this is called, and anything that could break a path is refused here.
+       */
+      async annotate(id, annotatorId, { labels, notes, note, annotatorName, labelledAt }) {
+        const safe = (segment) => /^[\w-]+$/.test(String(segment))
+        if (!safe(annotatorId)) throw new Error(`Unusable annotator id "${annotatorId}"`)
+
+        const base = `annotations.${annotatorId}`
+        const set = {}
+        if (labels !== undefined) set[`${base}.labels`] = labels
+        if (note !== undefined) set[`${base}.note`] = note
+        for (const [criterionId, text] of Object.entries(notes ?? {})) {
+          if (!safe(criterionId)) throw new Error(`Unusable criterion id "${criterionId}"`)
+          set[`${base}.notes.${criterionId}`] = text
+        }
+        if (annotatorName !== undefined) set[`${base}.annotatorName`] = annotatorName
+        if (labelledAt !== undefined) set[`${base}.labelledAt`] = labelledAt
+
+        const doc = await (await col('snippetLabels')).findOneAndUpdate(
+          { _id: id },
+          { $set: set, $setOnInsert: { snippetId: id } },
+          { ...BARE, upsert: true, returnDocument: 'after' },
+        )
+        return doc?.annotations?.[annotatorId] ?? null
       },
     },
   }

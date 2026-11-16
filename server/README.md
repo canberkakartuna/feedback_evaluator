@@ -365,15 +365,73 @@ them (`included` is 403), and get no sessions, transcripts or export. Anything
 not assigned to them reads as 404. Their snippet payload leaves out
 `tutor.source` and `tutor.model`, so they label blind.
 
+An annotator never sees a snippet id or a session id. A snippet id is
+`sessionId:questionId:seq`, and a session id is enough to read, write into or
+delete that session on `/api/sessions/*`, which stays open to anonymous
+students. So for an annotator, `id` is an opaque **handle** —
+`HMAC-SHA256(key, annotatorId | snippetId)`, base64url, 22 characters — and
+`PATCH /api/research/snippets/:id` takes that handle, resolved by recomputing
+it over their own assignments (a real snippet id from them is 404). The key is
+`SNIPPET_HANDLE_SECRET`, or derived from `RESEARCH_TOKEN`, then `MONGODB_URI`,
+or random per process with neither (see `config.js`; set it explicitly where
+more than one instance runs). Their payload is an allow-list: no `sessionId`,
+`questionId` or `assignedBy`. The student's files (answer photos, the board
+export, an own question's photo) come as `{ url, type }` (answer files also
+`source: file|whiteboard`), where `url` is
+`/api/research/snippets/:handle/files/:index`, never `/api/uploads/:id`: those
+files are stored under the session id and the Spaces redirect names it. That
+route streams the bytes through the API with a neutral file name and
+`Cache-Control: private, no-store`, for the annotator the snippet is assigned
+to only (403 for anyone else, 404 for any other handle or index). The client
+fetches it with the bearer token into a blob URL. `?sessionId=` is ignored for
+them. The PATCH answer is `{ label: { id: handle, … } }` with no `snippetId`. A
+handle whose snippet is gone (its session withdrawn) is 404, as is one that
+no longer resolves (unassigned, or a changed key); the screen then reloads its
+list and says so.
+
+**An annotator's labels are their own.** What they write — `labels`, `notes`
+(per criterion, merged as for staff) and the legacy `note` — goes into their
+own entry on the snippet's label record, `annotations.<annotatorId>` =
+`{ labels, notes, note?, annotatorName, labelledAt }`, written field by field
+(a dotted `$set` on Mongo, the same in memory), never into the shared
+`labels` / `notes` / `note` / `labelledBy`, which stay the staff's. So an
+annotator is never sent, and cannot overwrite, what a teacher or another
+annotator decided: their `GET` carries only their own entry (blank until they
+write one) and no other person's labels, notes, `labelledBy` or name, and their
+PATCH answers with their own entry (`labelledBy` is themselves). A snippet
+reassigned to a different annotator starts blank for them; the earlier
+annotator's entry is kept. Unassigning keeps it too, and so does deleting the
+annotator, under the name stamped on the entry when it was written. Withdrawal
+removes the whole record, entries included.
+
+Admin, manager and the research token (never a teacher) see the annotators'
+work additively on each snippet: `annotation` — the current assignee's entry,
+`{ annotatorId, annotatorName, labels, notes, note, labelledAt }`, or `null`
+when unassigned or not yet written — and `annotations`, every entry (current
+one included), oldest first. A staff PATCH answers with the shared record as
+before, without `annotations`.
+
+Records written before this have any annotator's labels in the shared fields
+(`labelledBy` = the annotator). They are left as they are and read as staff
+labels; the annotator sees those snippets blank until they label them again.
+
+Assignments follow the annotator's account: deleting an annotator, or moving
+them to another role, takes their snippets back (unassigned, labels kept).
+Deactivating one keeps them, and an admin's or manager's snippet list says so
+with `assigneeActive: false` beside the name, so the work can be found and
+handed on. Withdrawing a session (`DELETE /api/sessions/:id`) removes its
+snippets' label records along with everything else it left.
+
 | Method | Path | Who | Notes |
 | --- | --- | --- | --- |
 | `GET` | `/api/research/sessions` | scoped | Sessions with message/snippet/event counts |
 | `GET` | `/api/research/sessions/:id/transcript` | scoped | Grouped by question, with answers and events |
-| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped, annotator: assigned | **Snippets** = one student turn + the feedback that answered it. Each carries `assigneeId`, `assignedBy`, `assignedAt`; for an admin or manager also `assigneeName` |
-| `PATCH` | `/api/research/snippets/:id` | scoped, annotator: assigned | `{ included, labels: { criterionId: yes\|no\|partly }, note, notes }`. `included` is refused for an annotator |
+| `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped, annotator: assigned | **Snippets** = one student turn + the feedback that answered it. Each carries `assigneeId`, `assignedBy`, `assignedAt`; for an admin or manager also `assigneeName` and `assigneeActive` (`null` when unassigned); for an admin, a manager or the research token also `annotation` and `annotations`. An annotator's `labels`/`notes`/`note` are their own |
+| `PATCH` | `/api/research/snippets/:id` | scoped, annotator: assigned | `{ included, labels: { criterionId: yes\|no\|partly }, note, notes }`. `included` is refused for an annotator, whose labels go to their own entry |
+| `GET` | `/api/research/snippets/:handle/files/:index` | annotator: assigned | A student's file for that snippet, streamed (no redirect). 403 for any other role |
 | `POST` | `/api/research/snippets/assign` | admin, manager | `{ snippetIds: [...], assigneeId: annotatorId \| null }` → `{ assigneeId, count, snippetIds }`. Max 500; all-or-nothing; a manager's ids must be in their branch (404 otherwise); `null` unassigns |
 | `GET` | `/api/research/annotators` | admin, manager | `{ annotators: [{ id, name }] }`, active only — what an assignment picker needs |
-| `GET` | `/api/research/export?format=json\|csv` | **researcher only** | Kept snippets across every class; CSV is one row per snippet |
+| `GET` | `/api/research/export?format=json\|csv` | **researcher only** | Kept snippets across every class; CSV is one row per snippet. JSON adds `annotation` and `annotations`; CSV appends `annotator_id`, `annotator_label_<criterion>`, `annotator_note_<criterion>` and `annotator_count` after the existing columns — the current assignee's entry, or the latest one when the current assignee has none |
 
 Snippets are **derived** from transcripts, not stored, so they stay correct as a
 thread grows. Only the decision about each one is persisted.
@@ -435,6 +493,11 @@ backends behind one interface, the same shape as the store: set `SPACES_KEY` and
 go to local disk. Disk on a serverless host is data loss — the temp directory is
 per-instance and cleared — so `/api/health` warns while that combination is
 live. `npm run setup:spaces` creates the bucket and proves a round trip works.
+`npm run test:api` always uses the temp disk, whatever `.env.local` holds (it
+blanks `SPACES_KEY`/`SPACES_SECRET`); the Spaces read path that annotators'
+files go through (`stream`, GetObject) is covered by
+`test/unit/spaces-read.test.js` against a fake S3 server on 127.0.0.1, never the
+real bucket.
 
 **Objects are private.** These are photographs of student work collected under a
 consent notice, so the bucket is created private, every object is written

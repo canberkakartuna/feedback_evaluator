@@ -480,6 +480,60 @@ export function createMemoryStore() {
       async map() {
         return new Map([...snippetLabels].map(([id, value]) => [id, clone(value)]))
       },
+      /** The records assigned to one annotator: what their handles resolve over. */
+      async listByAssignee(assigneeId) {
+        return [...snippetLabels.values()]
+          .filter((label) => label.assigneeId === assigneeId)
+          .map(clone)
+      },
+      /**
+       * Takes every snippet back from one annotator — deleted, or no longer an
+       * annotator. The labels on those records stay; only the assignment goes.
+       */
+      async clearAssignee(assigneeId) {
+        let cleared = 0
+        for (const [id, value] of snippetLabels) {
+          if (value.assigneeId === assigneeId) {
+            snippetLabels.set(id, { ...value, assigneeId: null, assignedBy: null, assignedAt: null })
+            cleared += 1
+          }
+        }
+        return cleared
+      },
+      /** A withdrawn session's records. Snippet ids start with `${sessionId}:`. */
+      async removeBySession(sessionId) {
+        let removed = 0
+        for (const id of [...snippetLabels.keys()]) {
+          if (id.startsWith(`${sessionId}:`)) {
+            snippetLabels.delete(id)
+            removed += 1
+          }
+        }
+        return removed
+      },
+      /**
+       * One annotator's own labelling of a snippet, kept apart from the shared
+       * record's `labels` / `notes` under `annotations[annotatorId]`. Only the
+       * parts given are written: `labels` and `note` replace that annotator's
+       * own, each entry of `notes` replaces that one criterion's reason, and
+       * `annotatorName` / `labelledAt` are stamped. Nothing else on the record
+       * — the shared labels, other annotators' entries — is read or rewritten,
+       * which is what store/mongo.js gets from a dotted `$set`. Answers with
+       * this annotator's entry alone.
+       */
+      async annotate(id, annotatorId, { labels, notes, note, annotatorName, labelledAt }) {
+        const record = snippetLabels.get(id) ?? { snippetId: id }
+        const annotations = { ...(record.annotations ?? {}) }
+        const own = { ...(annotations[annotatorId] ?? {}) }
+        if (labels !== undefined) own.labels = { ...labels }
+        if (note !== undefined) own.note = note
+        if (notes !== undefined) own.notes = { ...(own.notes ?? {}), ...notes }
+        if (annotatorName !== undefined) own.annotatorName = annotatorName
+        if (labelledAt !== undefined) own.labelledAt = labelledAt
+        annotations[annotatorId] = own
+        snippetLabels.set(id, { ...record, annotations })
+        return clone(own)
+      },
     },
   }
 }
