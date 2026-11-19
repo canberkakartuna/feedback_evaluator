@@ -271,7 +271,7 @@ server/          the API — see server/README.md
   routes/          HTTP surface
   services/        the rules, in one place each
   store/           memory + mongo, identical interfaces
-  lib/storage.js   uploads: local disk or DigitalOcean Spaces
+  lib/storage.js   uploads: local disk or S3-compatible storage (AWS S3 in production)
   lib/openai.js    the tutor's model, over plain fetch
 src/
   routes/          one folder per audience: student, teacher, admin
@@ -282,8 +282,17 @@ src/
 
 ## Deploying
 
-Vercel runs Express natively, so the whole API is one function. The `.env` /
-`.env.local` merge is development-only: a deployment reads neither file and is
-configured entirely in Vercel → Project → Settings → Environment Variables. See
-[Deploying to Vercel](server/README.md#deploying-to-vercel) for what has to be
-set there.
+Production runs on AWS: the [Dockerfile](Dockerfile) image on a Lightsail
+container service, MongoDB on a Lightsail instance, and uploads in S3. To ship
+the current commit:
+
+```bash
+npm run deploy:aws
+```
+
+The `.env` / `.env.local` merge is development-only. The image contains
+neither file (see `.dockerignore`), so a deployment is configured entirely
+through the Lightsail container service's environment variables, which the
+deploy script carries over from one release to the next. See
+[Deploying to AWS](server/README.md#deploying-to-aws) for the setup and
+first-time requirements.

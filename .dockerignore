@@ -4,7 +4,6 @@ dist
 .github
 .vscode
 .claude
-.vercel
 *.log
 .DS_Store
 

@@ -39,11 +39,10 @@ The split is the important part:
 - **`.env.local` is gitignored** (by the `*.local` rule) and overrides `.env`.
   This is where credentials — `OPENAI_API_KEY`, `MONGODB_URI` — go when working
   locally.
-- **A deployment reads neither file.** `server/config.js` skips both when
-  `VERCEL` is set, so in production every value — credentials and knobs alike —
-  comes from the host's own environment settings (Vercel: Project → Settings →
-  Environment Variables). Set everything the deployment needs there before
-  deploying.
+- **A deployment reads neither file.** `.dockerignore` keeps every `.env*` file
+  out of the image, so in production every value — credentials and knobs alike —
+  comes from the host's environment settings (the Lightsail container service's
+  deployment). Set everything the deployment needs there before deploying.
 
 Vite applies the same two files in the same order to `VITE_`-prefixed keys, so
 the client and the API never disagree about which value won.
@@ -68,7 +67,7 @@ the client and the API never disagree about which value won.
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
 | `MONGODB_DB` | `dropshot` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
-| `SPACES_KEY` / `SPACES_SECRET` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Both set means the Spaces backend; either missing means local disk. |
+| `SPACES_KEY` / `SPACES_SECRET` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Both set means the object-storage backend; either missing means local disk. The `SPACES_*` names date from DigitalOcean Spaces, but any S3-compatible store works: production points them at AWS S3 (`SPACES_ENDPOINT=https://s3.us-east-1.amazonaws.com`, `SPACES_REGION=us-east-1`). |
 | `SPACES_BUCKET` | `dropshot` | Just a name. |
 | `SPACES_REGION` | `sfo3` | Used for request signing; the endpoint does the routing. |
 | `SPACES_ENDPOINT` | `https://$SPACES_REGION.digitaloceanspaces.com` | |
@@ -457,30 +456,49 @@ The last two are account events rather than session telemetry, so they carry
 
 Server time is authoritative; a client-supplied `at` is kept as `clientAt`.
 
-## Deploying to Vercel
+## Deploying to AWS
 
-Vercel runs Express natively on the Node.js runtime, so the whole API is one
-function. `api/[...path].js` default-exports the app; the catch-all filename
-means every `/api/*` request arrives with its original URL, so Express routes
-normally and no rewrite is needed. `vercel.json` sets the Vite build and caps
-the function at 60s.
+Production is one AWS account (region `us-east-1`, AWS CLI profile `dropshot`):
+
+| Piece | Where |
+| --- | --- |
+| Site + API | Lightsail container service `dropshot` (Nano), running the root `Dockerfile` image. Port 4000, health check `GET /api/health`. |
+| Database | MongoDB 8 on the Lightsail instance `dropshot-db`, database `feedback_evaluator`. Port 27017 is open only to Lightsail's private network, and the app connects over the instance's private IP. Daily automatic snapshots. |
+| Uploads | Private S3 bucket `dropshot-uploads-753600204106` (versioned, encrypted), reached through the `SPACES_*` variables with the keys of the IAM user `dropshot-app`, which can only reach that bucket. |
+
+To ship the current commit:
 
 ```bash
-vercel            # preview
-vercel --prod
+npm run deploy:aws                    # tests + build, then deploy
+npm run deploy:aws -- --skip-tests
+npm run deploy:aws -- --allow-dirty   # deploy uncommitted changes
 ```
 
-The deployment reads no `.env` file at all, so set **everything it needs** in
-project settings (Vercel → Project → Settings → Environment Variables) — at
-minimum `RESEARCH_TOKEN`, `MONGODB_URI`, `MONGODB_DB`,
-`SPACES_KEY`/`SPACES_SECRET`, `OPENAI_API_KEY` and `CONSENT_VERSION`; see
-[Environment](#environment). Then create the first admin with
-`POST /api/auth/bootstrap`; `GET /api/health` reports `ready: false` while no user
-exists.
+`scripts/deploy-aws.sh` checks that the AWS profile points at the right
+account, runs `npm test` and `npm run build`, builds the image for
+`linux/amd64` (Lightsail runs x86, while Apple Silicon builds arm64 by default),
+pushes it, and creates a deployment that **keeps the current environment
+variables and only swaps the image**. If the new version fails its health
+check, Lightsail keeps serving the previous one. It needs the AWS CLI v2,
+Docker (OrbStack is fine) and `lightsailctl` (`brew install aws/tap/lightsailctl`).
 
-The function is capped at 60s and a tutor turn takes a few seconds, so nothing
-here needs a longer budget — but `OPENAI_TIMEOUT_MS` has to stay well under that
-cap, or a slow model becomes a platform timeout with no reply and no fallback.
+**Changing a setting** (an env var) isn't a code deploy. In the Lightsail
+console, open Containers → `dropshot` → Deployments → Modify your deployment,
+change the variable, then Save and deploy. The next `npm run deploy:aws` keeps
+whatever is set there.
+
+The deployment reads no `.env` file at all, so a new environment needs
+**everything** set in the deployment — at minimum `RESEARCH_TOKEN`,
+`MONGODB_URI`, `MONGODB_DB`, the `SPACES_*` values, `OPENAI_API_KEY` and
+`CONSENT_VERSION`; see [Environment](#environment). On an empty database, create
+the first admin with `POST /api/auth/bootstrap`; `GET /api/health` reports
+`ready: false` while no user exists.
+
+**Database access:** SSH to the instance's static IP as `ubuntu` with the
+account's default Lightsail key, then connect to `127.0.0.1:27017` (a GUI
+client such as NoSQLBooster can do this through its SSH-tunnel option). The
+MongoDB users and passwords are in `/root/mongo-credentials.txt` on the
+instance.
 
 ### One thing still assumes a single long-lived process
 
@@ -489,8 +507,8 @@ The store was one of them and no longer is. What remains:
 
 **Uploads need object storage, and now have it.** `lib/storage.js` has two
 backends behind one interface, the same shape as the store: set `SPACES_KEY` and
-`SPACES_SECRET` and files go to DigitalOcean Spaces, leave them unset and they
-go to local disk. Disk on a serverless host is data loss — the temp directory is
+`SPACES_SECRET` and files go to S3-compatible object storage (AWS S3 in
+production), leave them unset and they go to local disk. Disk on a serverless host is data loss — the temp directory is
 per-instance and cleared — so `/api/health` warns while that combination is
 live. `npm run setup:spaces` creates the bucket and proves a round trip works.
 `npm run test:api` always uses the temp disk, whatever `.env.local` holds (it

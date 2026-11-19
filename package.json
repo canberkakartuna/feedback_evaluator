@@ -18,6 +18,7 @@
     "seed:functions": "node server/seed-functions.mjs",
     "seed:class-list": "node server/seed-class-list.mjs",
     "build": "vite build",
+    "deploy:aws": "bash scripts/deploy-aws.sh",
     "lint": "oxlint",
     "preview": "vite preview",
     "prepare": "node scripts/install-hooks.mjs"

@@ -21,7 +21,7 @@ COPY server ./server
 COPY shared ./shared
 COPY --from=build /app/dist ./dist
 USER node
-# Render and most hosts set PORT; 4000 is the app's own default.
+# Most hosts set PORT; 4000 is the app's own default (and what Lightsail uses).
 ENV PORT=4000
 EXPOSE 4000
 CMD ["node", "server/index.js"]
