@@ -466,7 +466,14 @@ Production is one AWS account (region `us-east-1`, AWS CLI profile `dropshot`):
 | Database | MongoDB 8 on the Lightsail instance `dropshot-db`, database `feedback_evaluator`. Port 27017 is open only to Lightsail's private network, and the app connects over the instance's private IP. Daily automatic snapshots. |
 | Uploads | Private S3 bucket `dropshot-uploads-753600204106` (versioned, encrypted), reached through the `SPACES_*` variables with the keys of the IAM user `dropshot-app`, which can only reach that bucket. |
 
-To ship the current commit:
+**Every push to `main` deploys automatically:** the `deploy` job in
+`.github/workflows/ci.yml` runs after lint, tests and build pass, and runs the
+same script. It gets AWS access through GitHub OIDC (the IAM role
+`dropshot-github-deploy`, which only `main` of this repository can assume and
+which can only deploy to Lightsail), so no AWS key is stored in GitHub. Pull
+requests run the checks but never deploy.
+
+To ship by hand instead (for example, to redeploy without a new commit):
 
 ```bash
 npm run deploy:aws                    # tests + build, then deploy

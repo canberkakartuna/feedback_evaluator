@@ -26,7 +26,11 @@
 
 set -euo pipefail
 
-export AWS_PROFILE="${AWS_PROFILE:-dropshot}"
+# Locally, use the `dropshot` CLI profile. In GitHub Actions the credentials
+# arrive as environment variables (OIDC) and there is no profile to name.
+if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+  export AWS_PROFILE="${AWS_PROFILE:-dropshot}"
+fi
 export AWS_REGION="${AWS_REGION:-us-east-1}"
 SERVICE="${LIGHTSAIL_SERVICE:-dropshot}"
 EXPECTED_ACCOUNT="${EXPECTED_ACCOUNT:-753600204106}"
@@ -60,10 +64,10 @@ for tool in aws docker lightsailctl node; do
 done
 docker info >/dev/null 2>&1 || fail "Docker is not running (open OrbStack)"
 account="$(aws sts get-caller-identity --query Account --output text)" \
-  || fail "AWS CLI profile '$AWS_PROFILE' is not configured"
+  || fail "no working AWS credentials (profile '${AWS_PROFILE:-none}')"
 [ "$account" = "$EXPECTED_ACCOUNT" ] \
-  || fail "profile '$AWS_PROFILE' is account $account, expected $EXPECTED_ACCOUNT"
-echo "account $account, profile $AWS_PROFILE, region $AWS_REGION, service $SERVICE"
+  || fail "credentials are for account $account, expected $EXPECTED_ACCOUNT"
+echo "account $account, profile ${AWS_PROFILE:-<env credentials>}, region $AWS_REGION, service $SERVICE"
 
 if [ -n "$(git status --porcelain)" ] && [ "$allow_dirty" = 0 ]; then
   fail "uncommitted changes; commit them or pass --allow-dirty"

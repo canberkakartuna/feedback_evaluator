@@ -283,8 +283,9 @@ src/
 ## Deploying
 
 Production runs on AWS: the [Dockerfile](Dockerfile) image on a Lightsail
-container service, MongoDB on a Lightsail instance, and uploads in S3. To ship
-the current commit:
+container service, MongoDB on a Lightsail instance, and uploads in S3. **Every
+push to `main` deploys automatically** once CI passes (GitHub Actions, see
+`.github/workflows/ci.yml`). To ship by hand:
 
 ```bash
 npm run deploy:aws

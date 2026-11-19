@@ -61,10 +61,11 @@ behaviour first, then change it, so the diff shows what changed on purpose.
 2. **No end-to-end test of a student's path.** One Playwright test of sign in →
    consent → answer with a photo → withdraw would cover what the smoke test
    cannot: that the screens call the API correctly.
-3. **Deploys are gated only locally.** `npm run deploy:aws` runs `npm test`
-   and `npm run build` before shipping, but `--skip-tests` bypasses that, and the
-   deploy doesn't check CI. Protecting `main` so only green PRs merge would close
-   the gap.
+3. **Deploys are gated on CI, but `main` isn't protected.** A push to `main`
+   deploys only after the test job passes, and a manual `npm run deploy:aws`
+   runs the tests first unless given `--skip-tests`. A red push to `main` still
+   lands on `main` (it just doesn't deploy); protecting `main` so only green PRs
+   merge would close that gap.
 4. **Mongo smoke is manual.** It could run in CI with a `mongo` service
    container.
 5. **Lint warnings never fail anything.** There are 9 `only-export-components`

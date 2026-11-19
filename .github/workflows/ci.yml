@@ -2,6 +2,7 @@ name: CI
 
 # The same checks as `npm run lint && npm test && npm run build`, on every pull
 # request and every push to main. See TESTING.md for what each layer covers.
+# A push to main that passes them is then deployed to AWS (the deploy job).
 on:
   pull_request:
   push:
@@ -34,3 +35,35 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Ships main to the Lightsail container service once the checks above pass.
+  # AWS access is OIDC: the role dropshot-github-deploy trusts only pushes to
+  # main of this repository and can only deploy to Lightsail, so no AWS key is
+  # stored in GitHub. Environment variables stay in Lightsail and are carried
+  # over by scripts/deploy-aws.sh. See "Deploying to AWS" in server/README.md.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::753600204106:role/dropshot-github-deploy
+          aws-region: us-east-1
+
+      - name: Install lightsailctl
+        run: |
+          sudo curl -fsSL https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl -o /usr/local/bin/lightsailctl
+          sudo chmod +x /usr/local/bin/lightsailctl
+
+      - name: Deploy
+        # Tests and build already passed in the test job.
+        run: bash scripts/deploy-aws.sh --skip-tests
