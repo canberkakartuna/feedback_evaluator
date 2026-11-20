@@ -25,3 +25,9 @@ dist-ssr
 
 # Uploads never land in the repo. Spaces when configured, the system temp
 # directory otherwise — see server/config.js `uploadDir`.
+
+# Browser e2e (Playwright): the client build, results, traces and the HTML report.
+e2e/.build
+e2e/.results
+e2e/.report
+node_modules/.vite-e2e
