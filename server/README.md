@@ -66,7 +66,7 @@ the client and the API never disagree about which value won.
 | `OPENAI_TEMPERATURE` | omitted on a reasoning model, `0.6` otherwise | Empty sends nothing, which is what a reasoning model requires; `config.js` picks the right default for the model family. |
 | `VITE_API_BASE` | empty | Client-side. Empty means same-origin `/api`. |
 | `MONGODB_URI` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Set means the MongoDB store, unset means in-memory. |
-| `MONGODB_DB` | `dropshot` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
+| `MONGODB_DB` | `feedback_evaluator` | Just a name, so `.env` is fine. Atlas's copy-paste URI names no database and the driver would silently use `test`. |
 | `SPACES_KEY` / `SPACES_SECRET` | *unset* | **A credential — `.env.local` or the host, never `.env`.** Both set means the object-storage backend; either missing means local disk. The `SPACES_*` names date from DigitalOcean Spaces, but any S3-compatible store works: production points them at AWS S3 (`SPACES_ENDPOINT=https://s3.us-east-1.amazonaws.com`, `SPACES_REGION=us-east-1`). |
 | `SPACES_BUCKET` | `dropshot` | Just a name. |
 | `SPACES_REGION` | `sfo3` | Used for request signing; the endpoint does the routing. |

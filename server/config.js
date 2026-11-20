@@ -168,7 +168,7 @@ export const config = {
    * environments: somewhere to land while developing or running tests, never
    * somewhere to keep anything. Real uploads go to Spaces.
    */
-  uploadDir: process.env.UPLOAD_DIR ?? path.join(os.tmpdir(), 'dropshot-uploads'),
+  uploadDir: process.env.UPLOAD_DIR ?? path.join(os.tmpdir(), 'feedback-evaluator-uploads'),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 10 * 1024 * 1024),
 
   /**

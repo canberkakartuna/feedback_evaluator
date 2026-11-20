@@ -17,7 +17,9 @@
  */
 
 const BASE = import.meta.env.VITE_API_BASE ?? ''
-const TOKEN_KEY = 'dropshot.token'
+const TOKEN_KEY = 'feedback-evaluator.token'
+/** The key from when the app was called Dropshot; read once so nobody is signed out by the rename. */
+const LEGACY_TOKEN_KEY = 'dropshot.token'
 
 export class ApiError extends Error {
   constructor(status, message, details) {
@@ -30,6 +32,11 @@ export class ApiError extends Error {
 let token = null
 try {
   token = localStorage.getItem(TOKEN_KEY)
+  if (!token) {
+    token = localStorage.getItem(LEGACY_TOKEN_KEY)
+    if (token) localStorage.setItem(TOKEN_KEY, token)
+  }
+  localStorage.removeItem(LEGACY_TOKEN_KEY)
 } catch {
   // Private browsing, or storage disabled. Sign-in still works for this tab;
   // it just will not survive a refresh, which is better than not loading.

@@ -23,7 +23,7 @@ export default function Navbar(props) {
   return (
     <header className="nb-bar">
       <Link className="nb-brand" to={brandHref}>
-        <span className="nb-brand-name">Dropshot</span>
+        <span className="nb-brand-name">Feedback Evaluator</span>
       </Link>
       <TopBar layout="nav" {...props} />
     </header>

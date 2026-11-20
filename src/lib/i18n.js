@@ -18,7 +18,9 @@ import { DICTIONARIES } from './strings.js'
  * that file exports only a component and Fast Refresh can hot-swap it.
  */
 
-export const STORAGE_KEY = 'dropshot.lang'
+export const STORAGE_KEY = 'feedback-evaluator.lang'
+/** The key from when the app was called Dropshot, still read so a saved choice survives the rename. */
+const LEGACY_STORAGE_KEY = 'dropshot.lang'
 
 export const LANGUAGES = [
   { id: 'en', label: 'English', short: 'EN' },
@@ -52,7 +54,7 @@ const FLAT = Object.fromEntries(
  */
 export function initialLanguage() {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    const stored = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY)
     if (isLanguage(stored)) return stored
   } catch {
     // Private browsing. Fall through to the browser's preference.

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { isStaff } from '../../shared/roles'
 import { homeFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -17,7 +17,8 @@ import './Chrome.css'
  *
  * What appears depends only on who is signed in:
  *
- *   nobody          Home · Class code · Sign in
+ *   nobody          Home · Class code · Staff sign-in
+ *                   (on /signin itself: Student sign-in, which goes to `/`)
  *   a student       Home · Class code · Profile · Sign out
  *   staff           My console · Profile · Sign out
  *
@@ -40,6 +41,7 @@ export default function TopBar({
   const t = useT()
   const { user, ready, signOut, supportUnread } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [busy, setBusy] = useState(false)
 
   const consoleHref = user ? homeFor(user) : '/'
@@ -56,7 +58,9 @@ export default function TopBar({
    * Waited on `ready` rather than guessed: showing it and then taking it away a
    * moment later moves everything beside it under whoever was aiming at it.
    */
-  const hasHome = home && ready && !isStaff(user?.role)
+  const onStaffSignIn = location.pathname === '/signin'
+  // On /signin "Student sign-in" already goes to `/`, so Home would duplicate it.
+  const hasHome = home && ready && !isStaff(user?.role) && !(onStaffSignIn && !user)
 
   const leave = async () => {
     setBusy(true)
@@ -120,10 +124,18 @@ export default function TopBar({
         </button>
       ) : null}
 
+      {/* The sign-in button points at the other door: on the staff sign-in
+          page it offers the student one (`/`), everywhere else the staff one. */}
       {ready && !user ? (
-        <Link className="ch-btn" to="/signin">
-          {t('nav.signIn')}
-        </Link>
+        onStaffSignIn ? (
+          <Link className="ch-btn" to="/">
+            {t('nav.studentSignIn')}
+          </Link>
+        ) : (
+          <Link className="ch-btn" to="/signin">
+            {t('nav.signIn')}
+          </Link>
+        )
       ) : null}
 
       <LanguageToggle />
