@@ -1046,3 +1046,127 @@
 .cs-card[data-archived] {
   opacity: 0.75;
 }
+
+/* ── labelling one snippet at a time ──────────────────────────── */
+
+.cs-progress {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.cs-progress-head {
+  margin: 0;
+}
+
+.cs-progress-summary {
+  margin: 0;
+  font-size: var(--t-13);
+}
+
+.cs-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.cs-progress-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 44px;
+  min-height: 32px;
+  padding: 2px var(--s-2);
+  font-family: var(--f-mono);
+  font-size: var(--t-12);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-2);
+  cursor: pointer;
+}
+
+.cs-progress-item[data-status='complete'] {
+  background: var(--pen-soft);
+  border-color: var(--pen);
+}
+
+.cs-progress-item[data-status='incomplete'] {
+  background: var(--stamp-soft);
+  border-color: var(--stamp);
+}
+
+.cs-progress-item[data-skipped] {
+  background: var(--margin-soft);
+  border-color: var(--margin);
+  border-style: dashed;
+}
+
+.cs-progress-item[aria-current='step'] {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  font-weight: 700;
+}
+
+.cs-progress-mark {
+  font-size: var(--t-11);
+}
+
+.cs-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+}
+
+.cs-step-title {
+  margin: 0;
+  font-size: var(--t-18);
+}
+
+.cs-step-head .cs-hint {
+  flex-basis: 100%;
+}
+
+.cs-step-status[data-status='complete'] {
+  background: var(--pen-soft);
+  color: var(--pen-deep);
+  border-color: var(--pen);
+}
+
+.cs-step-status[data-status='incomplete'] {
+  background: var(--stamp-soft);
+  color: var(--stamp);
+  border-color: var(--stamp);
+}
+
+.cs-step-status[data-status='notStarted'] {
+  background: var(--paper-sunk);
+  color: var(--graphite);
+  border-color: var(--edge);
+}
+
+.cs-step-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.cs-step-nav .cs-btn-primary {
+  margin-left: auto;
+}
+
+.cs-step-end {
+  display: grid;
+  gap: var(--s-3);
+}
+
+.cs-step-remaining {
+  margin: 0;
+  padding-left: var(--s-4);
+  display: grid;
+  gap: var(--s-2);
+}

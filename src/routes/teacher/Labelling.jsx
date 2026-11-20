@@ -6,6 +6,15 @@ import { promptFor } from '../../../shared/activity'
 import { teacherCanLabel } from '../../../shared/roles'
 import { api } from '../../lib/api'
 import { datasetName, pickLabellingDataset, pickTarget, recallTarget, rememberTarget } from '../../lib/datasets'
+import { isSkipped, labelStatus, nextIncompleteIndex, resumeIndex, summarizeStatuses } from '../../../shared/labelling'
+import {
+  SAMPLE_PARAM,
+  paramForSample,
+  recallVisited,
+  rememberVisited,
+  sampleFromParam,
+  visitedKey,
+} from '../../lib/labelling'
 import { useAuth } from '../../lib/auth'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
@@ -45,6 +54,111 @@ function SaveState({ entry, t }) {
             ? t('labelling.saveFailed', { message: entry.message })
             : ''}
     </span>
+  )
+}
+
+/** Each status in words, by literal key so check:strings can see them. */
+const STATUS_KEYS = {
+  complete: 'labelling.statusComplete',
+  incomplete: 'labelling.statusIncomplete',
+  notStarted: 'labelling.statusNotStarted',
+}
+
+/** A status as a shape too, beside the words — never colour alone. */
+const STATUS_MARK = { complete: '✓', incomplete: '◐', notStarted: '○' }
+
+/** "Incomplete" or "Not started, skipped": what a sample's state reads as. */
+function statusText(status, skipped, t) {
+  const words = t(STATUS_KEYS[status])
+  return skipped ? t('labelling.withSkipped', { status: words }) : words
+}
+
+/**
+ * Every sample in the set, numbered, with its state, and a jump to any of
+ * them: the labeller's overview of what is done and what was passed over.
+ * The numbers are real buttons; each one's accessible name says the state,
+ * and the shape beside the number says it again for the eye.
+ */
+function ProgressOverview({ statuses, skipped, position, onJump, t }) {
+  const counts = summarizeStatuses(statuses)
+  const skippedCount = skipped.filter(Boolean).length
+
+  return (
+    <section className="cs-card cs-progress" aria-labelledby="labelling-progress-head">
+      <h2 id="labelling-progress-head" className="eyebrow cs-progress-head">
+        {t('labelling.progressHead')}
+      </h2>
+      <p className="cs-progress-summary" aria-live="polite">
+        {t('labelling.progressSummary', counts)}
+        {skippedCount ? ` · ${t('labelling.progressSkipped', { count: skippedCount })}` : ''}
+      </p>
+      <ol className="cs-progress-list">
+        {statuses.map((status, index) => {
+          const label = t('labelling.jumpTo', {
+            n: index + 1,
+            status: statusText(status, skipped[index], t),
+          })
+          return (
+            <li key={index}>
+              <button
+                type="button"
+                className="cs-progress-item"
+                data-status={status}
+                data-skipped={skipped[index] || undefined}
+                aria-current={position === index ? 'step' : undefined}
+                aria-label={label}
+                title={label}
+                onClick={() => onJump(index)}
+              >
+                <span>{index + 1}</span>
+                <span aria-hidden="true" className="cs-progress-mark">
+                  {skipped[index] ? '!' : STATUS_MARK[status]}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+      <p className="cs-hint cs-progress-legend">{t('labelling.progressLegend')}</p>
+    </section>
+  )
+}
+
+/**
+ * Past the last sample: either "all complete", or the ones still open, each a
+ * link back to it — never a bare "done" with work left behind.
+ */
+function EndSummary({ statuses, skipped, onJump, onBack, headingRef, t }) {
+  const open = statuses.map((status, index) => ({ status, index })).filter((entry) => entry.status !== 'complete')
+
+  return (
+    <section className="cs-card cs-step-end" aria-labelledby="labelling-step-head">
+      <h2 id="labelling-step-head" className="cs-step-title" tabIndex={-1} ref={headingRef}>
+        {t('labelling.endHead')}
+      </h2>
+      {open.length === 0 ? (
+        <p>{t('labelling.endAllDone', { count: statuses.length })}</p>
+      ) : (
+        <>
+          <p>{t('labelling.endRemaining', { count: open.length })}</p>
+          <ul className="cs-step-remaining">
+            {open.map(({ status, index }) => (
+              <li key={index}>
+                <button type="button" className="cs-btn cs-btn-sm" onClick={() => onJump(index)}>
+                  {t('labelling.openSample', { n: index + 1 })}
+                </button>{' '}
+                <span>{statusText(status, skipped[index], t)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <div className="cs-actions">
+        <button type="button" className="cs-btn cs-btn-sm" onClick={onBack}>
+          {t('labelling.backToLast')}
+        </button>
+      </div>
+    </section>
   )
 }
 
@@ -485,8 +599,100 @@ export default function Labelling() {
   }
   const allShownSelected = shown.length > 0 && selectedShown.length === shown.length
 
+  /**
+   * One sample at a time: inside a dataset, and for an annotator's directly
+   * assigned list too. Staff's "all dialogs" stays a list — it is where
+   * dialogs are picked, and reading down it is the point there.
+   */
+  const stepMode = mayLabel && datasetsReady && !nothingAssigned && (Boolean(datasetId) || isAnnotator)
+  /** Each shown sample's state, from this person's own labels (shared/labelling.js). */
+  const statuses = stepMode && data ? shown.map((snippet) => labelStatus(snippet, criteria)) : []
+  const fromUrl = sampleFromParam(params.get(SAMPLE_PARAM), shown.length)
+  /** 0-based index of the sample on screen, `'end'` for the end summary, -1 for none. */
+  const position = !stepMode || !shown.length ? -1 : (fromUrl ?? resumeIndex(statuses))
+  const current = typeof position === 'number' && position >= 0 ? shown[position] : null
+
+  /**
+   * The samples this person has opened in this set, remembered in this
+   * browser: one opened and left while not complete reads as skipped.
+   */
+  const visitKey = visitedKey(user?.id, datasetId || INDIVIDUAL)
+  const [visited, setVisited] = useState(() => ({ key: null, ids: new Set() }))
+  const visitedIds = visited.key === visitKey ? visited.ids : recallVisited(visitKey)
+  const skipped = statuses.map((status, index) =>
+    isSkipped(status, { visited: visitedIds.has(shown[index].id), current: index === position }),
+  )
+  const currentId = current?.id ?? null
+  useEffect(() => {
+    if (!currentId) return
+    setVisited((prev) => {
+      const base = prev.key === visitKey ? prev.ids : recallVisited(visitKey)
+      if (base.has(currentId)) return prev.key === visitKey ? prev : { key: visitKey, ids: base }
+      const ids = new Set(base).add(currentId)
+      rememberVisited(visitKey, ids)
+      return { key: visitKey, ids }
+    })
+  }, [currentId, visitKey])
+
+  // Opening a set with no sample in the URL (or one that is out of range):
+  // the first one not complete, written into the URL so reload keeps it.
+  const needsResume = stepMode && !loading && Boolean(data) && shown.length > 0 && fromUrl === null
+  useEffect(() => {
+    if (!needsResume) return
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set(SAMPLE_PARAM, paramForSample(position))
+        // The set the position belongs to, pinned too: the dataset opened by
+        // default can change when another is assigned.
+        if (!next.get('dataset')) next.set('dataset', datasetId || INDIVIDUAL)
+        return next
+      },
+      { replace: true },
+    )
+  }, [needsResume, position, setParams, datasetId])
+
+  /** Moving between samples is a history entry, so back and forward work. */
+  const goTo = (target) => {
+    const next = new URLSearchParams(params)
+    next.set(SAMPLE_PARAM, paramForSample(target))
+    setParams(next)
+  }
+
+  // Focus follows a move to another sample (Next, Previous, a jump, back or
+  // forward), onto its heading — but not on first opening the screen.
+  const stepHeading = useRef(null)
+  const lastPosition = useRef(null)
+  useEffect(() => {
+    if (position === -1) return
+    if (lastPosition.current !== null && lastPosition.current !== position) stepHeading.current?.focus()
+    lastPosition.current = position
+  }, [position])
+
+  const nextOpen = typeof position === 'number' && position >= 0 ? nextIncompleteIndex(statuses, position) : -1
+
+  /**
+   * Saves that failed on a sample no longer on screen. Saving is per press
+   * and per blur, so moving on never drops input — but a failure on the
+   * sample just left would otherwise be out of sight.
+   */
+  const failedElsewhere = stepMode
+    ? [
+        ...new Set(
+          Object.entries(status)
+            .filter(([, entry]) => entry?.state === 'failed')
+            .map(([key]) => key.slice(0, key.lastIndexOf('|')))
+            .filter((snippetId) => snippetId !== currentId),
+        ),
+      ]
+        .map((snippetId) => shown.findIndex((snippet) => snippet.id === snippetId))
+        .filter((index) => index >= 0)
+    : []
+
   const setParam = (name, value, fallback) => {
     const next = new URLSearchParams(params)
+    // Another dataset or another filter is another set: start it afresh.
+    next.delete(SAMPLE_PARAM)
     if (value === fallback) next.delete(name)
     else next.set(name, value)
     setParams(next, { replace: true })
@@ -872,13 +1078,64 @@ export default function Labelling() {
         </p>
       ) : (
         <div style={{ display: 'grid', gap: 'var(--s-5)', marginTop: 'var(--s-4)' }}>
-          {shown.map((snippet) => {
+          {stepMode ? (
+            <ProgressOverview
+              statuses={statuses}
+              skipped={skipped}
+              position={position}
+              onJump={goTo}
+              t={t}
+            />
+          ) : null}
+
+          {failedElsewhere.length ? (
+            <div className="cs-note" data-tone="bad" role="alert">
+              {failedElsewhere.map((index) => (
+                <p key={index} style={{ margin: 0 }}>
+                  {t('labelling.failedElsewhere', { n: index + 1 })}{' '}
+                  <button type="button" className="cs-btn cs-btn-sm" onClick={() => goTo(index)}>
+                    {t('labelling.openSample', { n: index + 1 })}
+                  </button>
+                </p>
+              ))}
+            </div>
+          ) : null}
+
+          {stepMode && position === 'end' ? (
+            <EndSummary
+              statuses={statuses}
+              skipped={skipped}
+              onJump={goTo}
+              onBack={() => goTo(shown.length - 1)}
+              headingRef={stepHeading}
+              t={t}
+            />
+          ) : null}
+
+          {stepMode && current ? (
+            <div className="cs-step-head">
+              <h2 id="labelling-step-head" className="cs-step-title" tabIndex={-1} ref={stepHeading}>
+                {t('labelling.stepHeading', { n: position + 1, total: shown.length })}
+              </h2>
+              <span className="cs-pill cs-step-status" data-status={statuses[position]} aria-live="polite">
+                <span aria-hidden="true">{STATUS_MARK[statuses[position]]} </span>
+                {t(STATUS_KEYS[statuses[position]])}
+              </span>
+              <span className="cs-hint">{t('labelling.stepSaves')}</span>
+            </div>
+          ) : null}
+
+          {(stepMode ? (current ? [current] : []) : shown).map((snippet) => {
             const decision =
               snippet.included === true ? 'kept' : snippet.included === false ? 'dropped' : 'none'
             const decisionStatus = status[`${snippet.id}|included`]
 
             return (
-              <article key={snippet.id} className="cs-snip">
+              <article
+                key={snippet.id}
+                className="cs-snip"
+                aria-labelledby={stepMode ? 'labelling-step-head' : undefined}
+              >
                 {canAssign ? (
                   <div className="cs-snip-assign">
                     <label className="cs-check">
@@ -1067,6 +1324,34 @@ export default function Labelling() {
               </article>
             )
           })}
+
+          {stepMode && current ? (
+            <nav className="cs-step-nav" aria-label={t('labelling.stepNav')}>
+              <button
+                type="button"
+                className="cs-btn"
+                disabled={position === 0}
+                onClick={() => goTo(position - 1)}
+              >
+                {t('labelling.previous')}
+              </button>
+              <button
+                type="button"
+                className="cs-btn"
+                disabled={nextOpen === -1}
+                onClick={() => goTo(nextOpen)}
+              >
+                {t('labelling.nextIncomplete')}
+              </button>
+              <button
+                type="button"
+                className="cs-btn cs-btn-primary"
+                onClick={() => goTo(position === shown.length - 1 ? 'end' : position + 1)}
+              >
+                {position === shown.length - 1 ? t('labelling.finish') : t('labelling.next')}
+              </button>
+            </nav>
+          ) : null}
         </div>
       )}
     </>
