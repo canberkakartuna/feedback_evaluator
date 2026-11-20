@@ -1460,6 +1460,14 @@ try {
    * were ever dropped.
    */
   console.log('\nthe teacher labelling loop')
+  // A teacher labels only in a dataset assigned to them (see "datasets" below).
+  // Kept snippets are in the default dataset, so assigning that one keeps this
+  // loop exactly as it was.
+  check(
+    'an admin assigns the default dataset to the teacher',
+    (await call('POST', '/api/research/datasets/ds_default/members', { token: adminToken, body: { userId: teacher.id } }))
+      .status === 200,
+  )
   const teacherSessions = await call('GET', '/api/research/sessions', { token: teacherToken })
   check('a teacher may now read transcripts', teacherSessions.status === 200)
 
@@ -2766,6 +2774,8 @@ try {
    */
   console.log('\nan annotator’s labels are their own')
   const teacherNote = 'TEACHER-NOTE-only-the-teacher-wrote-this'
+  // In a dataset of theirs first: a teacher labels nothing else.
+  await call('POST', '/api/research/datasets/ds_default/snippets', { token: adminToken, body: { snippetIds: [nearC.id] } })
   const teacherLabelled = await call('PATCH', `/api/research/snippets/${nearC.id}`, {
     token: teacherToken,
     body: { labels: { specific: 'no', accurate: 'partly' }, notes: { accurate: teacherNote } },
@@ -3557,6 +3567,438 @@ try {
 
   const finalHealth = await call('GET', '/api/health')
   check('health counts users', finalHealth.body.users === 15)
+
+  /* ================================================================= datasets */
+
+  /**
+   * Datasets: an admin makes several and assigns each to teachers and
+   * annotators; staff pick dialogs into one; a labeller sees only their own.
+   * After the health count above on purpose — this makes accounts of its own.
+   */
+  console.log('\ndatasets: the default one holds what was kept before')
+  // The password section above signed these two out; sign them back in.
+  annotatorToken = (await call('POST', '/api/auth/login', { body: { email: 'ann@example.com', password: 'admin reset this one' } })).body.token
+  const freshOtherManagerToken = (
+    await call('POST', '/api/auth/login', { body: { email: 'max@example.com', password: 'admin reset this one' } })
+  ).body.token
+  const dsList = async (token) => call('GET', '/api/research/datasets', { token })
+  const adminDatasets = await dsList(adminToken)
+  const defaultRow = adminDatasets.body.datasets?.find((entry) => entry.id === 'ds_default')
+  check('there is a default dataset, made on first use', adminDatasets.status === 200 && defaultRow?.isDefault === true)
+  check('it holds the snippets kept before datasets existed', defaultRow.count >= 1)
+  check('the admin sees who it is assigned to', defaultRow.members.some((m) => m.id === teacher.id && m.role === 'teacher'))
+  const { defaultDatasetDoc } = await import('./services/datasets.js')
+  await call('PATCH', '/api/research/datasets/ds_default', { token: adminToken, body: { name: 'Kept before datasets' } })
+  await app.locals.store.datasets.ensure(defaultDatasetDoc())
+  await app.locals.store.datasets.ensure(defaultDatasetDoc())
+  const afterEnsure = (await dsList(adminToken)).body.datasets.filter((entry) => entry.isDefault)
+  check(
+    'making sure of it again, twice, changes nothing — not even a rename',
+    afterEnsure.length === 1 && afterEnsure[0].name === 'Kept before datasets' && afterEnsure[0].memberIds.includes(teacher.id),
+  )
+
+  console.log('\ndatasets: an admin makes them')
+  const makeDataset = (token, body) => call('POST', '/api/research/datasets', { token, body })
+  const pilotA = await makeDataset(adminToken, { name: 'Pilot A', description: 'First round' })
+  check('an admin creates a dataset', pilotA.status === 201 && pilotA.body.dataset.name === 'Pilot A' && pilotA.body.dataset.count === 0)
+  const dsA = pilotA.body.dataset.id
+  const pilotB = await makeDataset(adminToken, { name: 'Pilot B' })
+  const dsB = pilotB.body.dataset.id
+  check('and another', pilotB.status === 201 && dsB !== dsA && pilotB.body.dataset.description === '')
+  check('a name is required', (await makeDataset(adminToken, { description: 'x' })).status === 400)
+  check('a blank name is refused', (await makeDataset(adminToken, { name: '   ' })).status === 400)
+  check('a long name is refused', (await makeDataset(adminToken, { name: 'x'.repeat(121) })).status === 400)
+  check('two datasets cannot share a name', (await makeDataset(adminToken, { name: ' pilot a ' })).status === 409)
+  check(
+    'renaming',
+    (await call('PATCH', `/api/research/datasets/${dsB}`, { token: adminToken, body: { name: 'Pilot B (geometry)', description: 'Second' } }))
+      .body.dataset?.name === 'Pilot B (geometry)',
+  )
+  check(
+    'not onto another’s name',
+    (await call('PATCH', `/api/research/datasets/${dsB}`, { token: adminToken, body: { name: 'PILOT A' } })).status === 409,
+  )
+  check(
+    'and not with nothing to change',
+    (await call('PATCH', `/api/research/datasets/${dsB}`, { token: adminToken, body: {} })).status === 400,
+  )
+
+  // A student with an account and some work of their own, for the selection screens.
+  const dsStudentToken = (await call('POST', '/api/auth/student', { body: { studentNumber: '20230001' } })).body.token
+  const dsActivity = (await call('POST', '/api/activities', { token: teacherToken, body: { title: 'Dataset work' } })).body.activity
+  const dsQuestion = (
+    await call('POST', `/api/activities/${dsActivity.id}/questions`, { token: teacherToken, body: BARE_QUESTION })
+  ).body.question
+  await call('PATCH', `/api/activities/${dsActivity.id}`, { token: teacherToken, body: { status: 'published' } })
+  const dsSession = (
+    await call('POST', '/api/sessions', { token: dsStudentToken, body: { consent: true, activityId: dsActivity.id } })
+  ).body.session
+  await call('POST', `/api/sessions/${dsSession.id}/questions/${dsQuestion.id}/messages`, { token: dsStudentToken, body: { text: 'Where do I start?' } })
+  await call('POST', `/api/sessions/${dsSession.id}/questions/${dsQuestion.id}/messages`, { token: dsStudentToken, body: { text: 'And then?' } })
+  await call('PUT', `/api/sessions/${dsSession.id}/answers/${dsQuestion.id}`, {
+    token: dsStudentToken,
+    body: { mode: 'write', draft: 'My working so far.' },
+  })
+  const dsSnippets = (await call('GET', `/api/research/snippets?sessionId=${dsSession.id}`, { token: adminToken })).body.snippets
+  check('the student has two dialogs to pick from', dsSnippets?.length === 2)
+  const [dsX, dsY] = dsSnippets
+  const fresh = (await call('GET', `/api/research/snippets?sessionId=${turnSession.id}`, { token: adminToken })).body.snippets.filter(
+    (entry) => entry.assigneeId === null && entry.included === null,
+  )
+  const dsZ = fresh[0]
+  check('and there is undecided anonymous work too', Boolean(dsZ))
+
+  console.log('\ndatasets: assigning them')
+  const assignTo = (datasetId, userId, token = adminToken) =>
+    call('POST', `/api/research/datasets/${datasetId}/members`, { token, body: { userId } })
+  const toAnnotator = await assignTo(dsA, annotator.id)
+  check('an admin assigns Pilot A to an annotator', toAnnotator.status === 200 && toAnnotator.body.dataset.memberIds.includes(annotator.id))
+  check('and Pilot B to a teacher', (await assignTo(dsB, teacher.id)).body.dataset?.members.some((m) => m.id === teacher.id))
+  check('assigning twice is harmless', (await assignTo(dsB, teacher.id)).body.dataset?.memberIds.filter((id) => id === teacher.id).length === 1)
+  const studentUser = (await call('GET', '/api/auth/me', { token: dsStudentToken })).body.user
+  check(
+    'only teachers and annotators can be assigned',
+    (await assignTo(dsA, studentUser.id)).status === 400 &&
+      (await assignTo(dsA, otherManager.id)).status === 400 &&
+      (await assignTo(dsA, 'usr_nobody')).status === 400 &&
+      (await call('POST', `/api/research/datasets/${dsA}/members`, { token: adminToken, body: {} })).status === 400,
+  )
+  check('to a dataset that exists', (await assignTo('ds_missing', annotator.id)).status === 404)
+  check(
+    'and only by an admin',
+    (await assignTo(dsA, secondAnnotator.id, managerToken)).status === 403 &&
+      (await assignTo(dsA, secondAnnotator.id, teacherToken)).status === 403 &&
+      (await assignTo(dsA, secondAnnotator.id, annotatorToken)).status === 403 &&
+      (await assignTo(dsA, secondAnnotator.id, 'smoke-token')).status === 403,
+  )
+
+  console.log('\ndatasets: picking dialogs into one')
+  const addTo = (datasetId, snippetIds, token) =>
+    call('POST', `/api/research/datasets/${datasetId}/snippets`, { token, body: { snippetIds } })
+  const removeFrom = (datasetId, snippetIds, token) =>
+    call('POST', `/api/research/datasets/${datasetId}/snippets/remove`, { token, body: { snippetIds } })
+  const teacherAdds = await addTo(dsA, [dsX.id], teacherToken)
+  check(
+    'a teacher adds their student’s dialog to any active dataset',
+    teacherAdds.status === 200 &&
+      teacherAdds.body.memberships[dsX.id].datasetIds.join() === dsA &&
+      teacherAdds.body.memberships[dsX.id].included === true,
+  )
+  check('the dataset says it has it', (await dsList(adminToken)).body.datasets.find((d) => d.id === dsA).count === 1)
+  const adminAdds = await addTo(dsB, [dsY.id, dsX.id], adminToken)
+  check(
+    'one dialog can be in two datasets',
+    adminAdds.status === 200 && [...adminAdds.body.memberships[dsX.id].datasetIds].sort().join() === [dsA, dsB].sort().join(),
+  )
+  check(
+    'and reads back with both, for staff',
+    (await call('GET', `/api/research/snippets?sessionId=${dsSession.id}`, { token: teacherToken })).body.snippets
+      .find((entry) => entry.id === dsX.id)
+      ?.datasetIds.length === 2,
+  )
+  check('adding again is harmless', (await addTo(dsA, [dsX.id], teacherToken)).body.memberships[dsX.id].datasetIds.length === 2)
+  check('nothing out of scope', (await addTo(dsA, [farSnippet.id], teacherToken)).status === 404)
+  const mixedAdd = await addTo(dsA, [dsZ.id, `${turnSession.id}:nope:999`], teacherToken)
+  check(
+    'and all or nothing',
+    mixedAdd.status === 404 &&
+      mixedAdd.body.error.details.snippetIds.length === 1 &&
+      (await app.locals.store.snippetLabels.get(dsZ.id))?.datasetIds === undefined,
+  )
+  check(
+    'into a dataset that exists',
+    (await addTo('ds_missing', [dsX.id], teacherToken)).status === 404,
+  )
+  check(
+    'with snippet ids',
+    (await addTo(dsA, [], teacherToken)).status === 400 &&
+      (await call('POST', `/api/research/datasets/${dsA}/snippets`, { token: teacherToken, body: {} })).status === 400 &&
+      (await addTo(dsA, [42], teacherToken)).status === 400,
+  )
+  check(
+    'never by an annotator, a student or nobody',
+    (await addTo(dsA, [dsX.id], annotatorToken)).status === 403 &&
+      (await addTo(dsA, [dsX.id], dsStudentToken)).status === 403 &&
+      (await addTo(dsA, [dsX.id])).status === 403,
+  )
+  check('a manager picks within their branch', (await addTo(dsA, [dsZ.id], managerToken)).status === 200)
+  check('not outside it', (await addTo(dsA, [farSnippet.id], managerToken)).status === 404)
+  check(
+    'taking one out keeps it in the other',
+    (await removeFrom(dsB, [dsX.id], adminToken)).body.memberships[dsX.id].datasetIds.join() === dsA,
+  )
+  check('and back in', (await addTo(dsB, [dsX.id], adminToken)).status === 200)
+
+  console.log('\ndatasets: an annotator sees only theirs')
+  const annDatasets = await dsList(annotatorToken)
+  check(
+    'their list is the dataset assigned to them, and nothing else',
+    annDatasets.status === 200 && annDatasets.body.datasets.map((d) => d.id).join() === dsA && annDatasets.body.datasets[0].assigned === true,
+    JSON.stringify(annDatasets.body),
+  )
+  check('with how much is assigned to them one by one', typeof annDatasets.body.individualCount === 'number')
+  check('without who else it is assigned to', !('members' in annDatasets.body.datasets[0]))
+  check(
+    'an annotator with none assigned sees an empty list',
+    (await dsList(secondAnnotatorToken)).body.datasets.length === 0,
+  )
+  const annA = await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: annotatorToken })
+  check(
+    'they read their dataset, as handles',
+    annA.status === 200 &&
+      annA.body.snippets.some((entry) => entry.id === handleOf(dsX)) &&
+      annA.body.snippets.some((entry) => entry.id === handleOf(dsZ)),
+  )
+  check(
+    'with no session id, no student id, no dataset ids',
+    !JSON.stringify(annA.body).includes(dsSession.id) &&
+      !JSON.stringify(annA.body).includes(studentUser.id) &&
+      annA.body.snippets.every((entry) => !('sessionId' in entry) && !('datasetIds' in entry)),
+  )
+  check('another dataset is refused', (await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: annotatorToken })).status === 403)
+  check('the default one too', (await call('GET', '/api/research/snippets?datasetId=ds_default', { token: annotatorToken })).status === 403)
+  check('one that is not there is 404', (await call('GET', '/api/research/snippets?datasetId=ds_missing', { token: annotatorToken })).status === 404)
+  const annLabels = await call('PATCH', `/api/research/snippets/${handleOf(dsX)}`, {
+    token: annotatorToken,
+    body: { labels: { tone: 'yes' }, notes: { tone: 'DS-ANN-NOTE' } },
+  })
+  check('they label a dialog in their dataset', annLabels.status === 200 && annLabels.body.label.labels.tone === 'yes')
+  check(
+    'but not one only in a dataset that is not theirs',
+    (await call('PATCH', `/api/research/snippets/${handleOf(dsY)}`, { token: annotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+  check(
+    'and the second annotator, with none, labels none of it',
+    (await call('PATCH', `/api/research/snippets/${handleOf(dsX, secondAnnotator)}`, { token: secondAnnotatorToken, body: { labels: { tone: 'yes' } } }))
+      .status === 404,
+  )
+
+  console.log('\ndatasets: a teacher sees only theirs')
+  const teacherDatasets = (await dsList(teacherToken)).body.datasets
+  check(
+    'a teacher is shown every active dataset to pick into, marked with the ones they label',
+    teacherDatasets.find((d) => d.id === dsB)?.assigned === true &&
+      teacherDatasets.find((d) => d.id === dsA)?.assigned === false &&
+      teacherDatasets.find((d) => d.id === 'ds_default')?.assigned === true,
+  )
+  check('and reads only the ones assigned', (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: teacherToken })).status === 403)
+  const teacherB = await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: teacherToken })
+  check(
+    'theirs, with real ids and datasets',
+    teacherB.status === 200 &&
+      teacherB.body.snippets.map((entry) => entry.id).sort().join() === [dsX.id, dsY.id].sort().join() &&
+      teacherB.body.snippets.every((entry) => entry.datasetIds.includes(dsB)),
+  )
+  check(
+    'a teacher labels a dialog in their dataset',
+    (await call('PATCH', `/api/research/snippets/${dsY.id}`, { token: teacherToken, body: { labels: { specific: 'yes' } } })).status === 200,
+  )
+  check(
+    'but not one in no dataset of theirs',
+    (await call('PATCH', `/api/research/snippets/${dsZ.id}`, { token: teacherToken, body: { labels: { specific: 'yes' } } }))
+      .status === 403 &&
+      (await call('PATCH', `/api/research/snippets/${dsZ.id}`, { token: teacherToken, body: { notes: { specific: 'x' } } }))
+        .status === 403,
+  )
+  check(
+    'while keeping or dropping stays theirs to do',
+    (await call('PATCH', `/api/research/snippets/${dsZ.id}`, { token: teacherToken, body: { included: true } })).body.label
+      ?.datasetIds.join() === dsA,
+  )
+  check(
+    'another teacher reads none of it',
+    (await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: otherTeacherToken })).status === 403,
+  )
+  check(
+    'a manager reads any active dataset, within their branch',
+    (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: managerToken })).body.snippets?.some((e) => e.id === dsX.id) &&
+      (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: freshOtherManagerToken })).body.snippets?.length === 0,
+  )
+  check(
+    'an admin and the research token read everything in it',
+    (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: adminToken })).body.snippets?.length === 2 &&
+      (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: 'smoke-token' })).body.snippets?.length === 2,
+  )
+
+  console.log('\ndatasets: browsing dialogs by student')
+  const teacherStudents = await call('GET', '/api/research/students', { token: teacherToken })
+  const signedInRow = teacherStudents.body.students?.find((row) => row.key === `u:${studentUser.id}`)
+  check(
+    'a teacher lists their students, by name where they have one',
+    teacherStudents.status === 200 && signedInRow?.kind === 'account' && signedInRow.name === studentUser.name,
+  )
+  check(
+    'with how many dialogs, and how many are in a dataset',
+    signedInRow.dialogCount >= 2 && signedInRow.inDatasetCount >= 2 && signedInRow.questionCount >= 1,
+  )
+  const anonRowDs = teacherStudents.body.students.find((row) => row.key === `s:${turnSession.id}`)
+  check('an anonymous session is a student of its own', anonRowDs?.kind === 'anonymous' && anonRowDs.name === null && Boolean(anonRowDs.code))
+  check('nobody from another branch', !teacherStudents.body.students.some((row) => row.key === `s:${farSession.id}`))
+  check(
+    'a manager sees their branch, the other manager theirs',
+    (await call('GET', '/api/research/students', { token: managerToken })).body.students.some((row) => row.key === `s:${turnSession.id}`) &&
+      (await call('GET', '/api/research/students', { token: freshOtherManagerToken })).body.students.some((row) => row.key === `s:${farSession.id}`) &&
+      !(await call('GET', '/api/research/students', { token: freshOtherManagerToken })).body.students.some((row) => row.key === `s:${turnSession.id}`),
+  )
+  const studentDialogs = await call('GET', `/api/research/students/${encodeURIComponent(`u:${studentUser.id}`)}/dialogs`, { token: teacherToken })
+  const dsGroup = studentDialogs.body.questions?.find((group) => group.questionId === dsQuestion.id)
+  check(
+    'one student’s dialogs, grouped by question',
+    studentDialogs.status === 200 && dsGroup?.dialogs.length === 2 && dsGroup.question?.code === 'Q1',
+  )
+  check('with what they handed in', dsGroup.answer?.draft === 'My working so far.')
+  check(
+    'each with both turns, their times, and its datasets',
+    dsGroup.dialogs.every((d) => d.student.text && d.student.at && d.tutor.text && d.tutor.at && Array.isArray(d.datasetIds)) &&
+      dsGroup.dialogs.find((d) => d.id === dsX.id).datasetIds.length === 2,
+  )
+  check('and not who wrote the reply', dsGroup.dialogs.every((d) => !('source' in d.tutor) && !('model' in d.tutor)))
+  check(
+    'a student out of scope is 404',
+    (await call('GET', `/api/research/students/${encodeURIComponent(`s:${farSession.id}`)}/dialogs`, { token: teacherToken })).status === 404 &&
+      (await call('GET', '/api/research/students/u:usr_nobody/dialogs', { token: teacherToken })).status === 404,
+  )
+  check(
+    'never for an annotator, a student or nobody',
+    (await call('GET', '/api/research/students', { token: annotatorToken })).status === 403 &&
+      (await call('GET', '/api/research/students', { token: dsStudentToken })).status === 403 &&
+      (await call('GET', '/api/research/students')).status === 403 &&
+      (await call('GET', `/api/research/students/s:${turnSession.id}/dialogs`, { token: annotatorToken })).status === 403,
+  )
+
+  console.log('\ndatasets: archiving, deleting')
+  const archived = await call('PATCH', `/api/research/datasets/${dsA}`, { token: adminToken, body: { archived: true } })
+  check('an admin archives a dataset', archived.status === 200 && archived.body.dataset.archived === true && Boolean(archived.body.dataset.archivedAt))
+  check('it leaves the annotator’s list', (await dsList(annotatorToken)).body.datasets.length === 0)
+  check('and their reading of it', (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: annotatorToken })).status === 404)
+  check(
+    'and their labelling of it',
+    (await call('PATCH', `/api/research/snippets/${handleOf(dsX)}`, { token: annotatorToken, body: { labels: { tone: 'no' } } })).status === 404,
+  )
+  check('nothing is picked into it', (await addTo(dsA, [dsY.id], adminToken)).status === 409 && (await addTo(dsA, [dsY.id], teacherToken)).status === 404)
+  check('staff other than the admin no longer see it', !(await dsList(teacherToken)).body.datasets.some((d) => d.id === dsA))
+  check('the admin still reads it whole', (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: adminToken })).body.snippets?.length === 2)
+  check('and brings it back', (await call('PATCH', `/api/research/datasets/${dsA}`, { token: adminToken, body: { archived: false } })).body.dataset?.archived === false)
+  check('the annotator has it again', (await dsList(annotatorToken)).body.datasets.length === 1)
+  check(
+    'the default dataset is never archived',
+    (await call('PATCH', '/api/research/datasets/ds_default', { token: adminToken, body: { archived: true } })).status === 400,
+  )
+  check('"archived" is a boolean', (await call('PATCH', `/api/research/datasets/${dsA}`, { token: adminToken, body: { archived: 'yes' } })).status === 400)
+  const refusedDelete = await call('DELETE', `/api/research/datasets/${dsA}`, { token: adminToken })
+  check('a dataset with dialogs in it is not deleted', refusedDelete.status === 409 && refusedDelete.body.error.details.count === 2)
+  check('nor the default one', (await call('DELETE', '/api/research/datasets/ds_default', { token: adminToken })).status === 409)
+  const emptyDataset = (await makeDataset(adminToken, { name: 'Empty one' })).body.dataset
+  check('an empty one is', (await call('DELETE', `/api/research/datasets/${emptyDataset.id}`, { token: adminToken })).body.deleted === true)
+  check('and then it is gone', (await call('DELETE', `/api/research/datasets/${emptyDataset.id}`, { token: adminToken })).status === 404)
+  check('only by an admin', (await call('DELETE', `/api/research/datasets/${dsA}`, { token: managerToken })).status === 403)
+
+  console.log('\ndatasets: unassigning keeps the labels')
+  const unassignedDs = await call('DELETE', `/api/research/datasets/${dsA}/members/${annotator.id}`, { token: adminToken })
+  check('an admin takes a dataset back from an annotator', unassignedDs.status === 200 && !unassignedDs.body.dataset.memberIds.includes(annotator.id))
+  check('they can no longer read it', (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: annotatorToken })).status === 403)
+  check(
+    'nor label in it',
+    (await call('PATCH', `/api/research/snippets/${handleOf(dsX)}`, { token: annotatorToken, body: { labels: { tone: 'no' } } })).status === 404,
+  )
+  const dsXForAdmin = (await call('GET', `/api/research/snippets?datasetId=${dsA}`, { token: adminToken })).body.snippets.find((e) => e.id === dsX.id)
+  check(
+    'and what they labelled stays, as theirs',
+    dsXForAdmin?.annotations.some((entry) => entry.annotatorId === annotator.id && entry.notes.tone === 'DS-ANN-NOTE'),
+  )
+  await call('DELETE', `/api/research/datasets/${dsB}/members/${teacher.id}`, { token: adminToken })
+  check('a teacher taken off reads it no more', (await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: teacherToken })).status === 403)
+  check(
+    'and their labels stay on the dialog',
+    (await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: adminToken })).body.snippets.find((e) => e.id === dsY.id)?.labels
+      .specific === 'yes',
+  )
+  check('unassigning only by an admin', (await call('DELETE', `/api/research/datasets/${dsB}/members/${teacher.id}`, { token: managerToken })).status === 403)
+
+  console.log('\ndatasets: old records and old clients')
+  // A record written before datasets existed: kept, with no `datasetIds`.
+  const noRecordYet = []
+  for (const entry of fresh) if (!(await app.locals.store.snippetLabels.get(entry.id))) noRecordYet.push(entry)
+  const legacyRecord = noRecordYet[0]
+  check('there is a dialog nobody has decided anything about', Boolean(legacyRecord))
+  await app.locals.store.snippetLabels.upsert(legacyRecord.id, { included: true })
+  check(
+    'a kept record with no datasets reads as in the default dataset',
+    (await call('GET', '/api/research/snippets?datasetId=ds_default', { token: adminToken })).body.snippets.some((e) => e.id === legacyRecord.id),
+  )
+  check(
+    'and adding it to another keeps it in the default one',
+    [...(await addTo(dsB, [legacyRecord.id], adminToken)).body.memberships[legacyRecord.id].datasetIds].sort().join() === ['ds_default', dsB].sort().join(),
+  )
+  const droppedDialog = await call('PATCH', `/api/research/snippets/${legacyRecord.id}`, { token: adminToken, body: { included: false } })
+  check('dropping a dialog takes it out of every dataset', droppedDialog.body.label.included === false && droppedDialog.body.label.datasetIds.length === 0)
+  const keptDialog = await call('PATCH', `/api/research/snippets/${legacyRecord.id}`, { token: adminToken, body: { included: true } })
+  check('keeping it, with no dataset named, puts it in the default one', keptDialog.body.label.datasetIds.join() === 'ds_default')
+  const outOfLast = await removeFrom('ds_default', [legacyRecord.id], adminToken)
+  check('taken out of its last dataset, it is undecided again', outOfLast.body.memberships[legacyRecord.id].included === null)
+
+  console.log('\ndatasets: export by dataset')
+  const exportB = await call('GET', `/api/research/export?datasetId=${dsB}`, { token: 'smoke-token' })
+  check(
+    'the export takes one dataset',
+    exportB.status === 200 &&
+      exportB.body.snippets.map((e) => e.id).sort().join() === [dsX.id, dsY.id].sort().join() &&
+      exportB.body.snippets.every((e) => e.datasetIds.includes(dsB)),
+  )
+  check('not one that is not there', (await call('GET', '/api/research/export?datasetId=ds_missing', { token: 'smoke-token' })).status === 404)
+
+  console.log('\ndatasets: who may do what')
+  const dsMatrix = [
+    // [what, method, url, body, { anonymous, student, annotator, teacher, manager, admin }]
+    ['list datasets', 'GET', '/api/research/datasets', undefined, { anonymous: 403, student: 403, annotator: 200, teacher: 200, manager: 200, admin: 200 }],
+    ['create a dataset', 'POST', '/api/research/datasets', { name: 'Matrix' }, { anonymous: 403, student: 403, annotator: 403, teacher: 403, manager: 403, admin: 201 }],
+    ['rename one', 'PATCH', `/api/research/datasets/${dsB}`, { description: 'Matrix' }, { anonymous: 403, student: 403, annotator: 403, teacher: 403, manager: 403, admin: 200 }],
+    ['assign one', 'POST', `/api/research/datasets/${dsB}/members`, { userId: secondAnnotator.id }, { anonymous: 403, student: 403, annotator: 403, teacher: 403, manager: 403, admin: 200 }],
+    ['pick into one', 'POST', `/api/research/datasets/${dsB}/snippets`, { snippetIds: [dsY.id] }, { anonymous: 403, student: 403, annotator: 403, teacher: 200, manager: 200, admin: 200 }],
+    ['list students', 'GET', '/api/research/students', undefined, { anonymous: 403, student: 403, annotator: 403, teacher: 200, manager: 200, admin: 200 }],
+    ['read a dataset', 'GET', `/api/research/snippets?datasetId=${dsB}`, undefined, { anonymous: 403, student: 403, annotator: 403, teacher: 403, manager: 200, admin: 200 }],
+  ]
+  const dsTokens = {
+    anonymous: undefined,
+    student: dsStudentToken,
+    annotator: annotatorToken,
+    teacher: teacherToken,
+    manager: managerToken,
+    admin: adminToken,
+  }
+  for (const [what, method, url, body, expected] of dsMatrix) {
+    const got = {}
+    for (const [who, token] of Object.entries(dsTokens)) got[who] = (await call(method, url, { token, body })).status
+    check(`${what}: ${Object.entries(expected).map(([who, status]) => `${who} ${status}`).join(', ')}`, JSON.stringify(got) === JSON.stringify(expected), JSON.stringify(got))
+  }
+  check('a second annotator assigned reads it', (await call('GET', `/api/research/snippets?datasetId=${dsB}`, { token: secondAnnotatorToken })).status === 200)
+
+  console.log('\ndatasets: assignments follow the account')
+  const passing = (
+    await call('POST', '/api/users', {
+      token: adminToken,
+      body: { role: 'annotator', name: 'Pat Passing', email: 'pat-ds@example.com', password: 'correct horse battery' },
+    })
+  ).body.user
+  await assignTo(dsB, passing.id)
+  check('a deactivated account cannot be assigned', await (async () => {
+    await call('PATCH', `/api/users/${passing.id}`, { token: adminToken, body: { active: false } })
+    const refused = (await assignTo(dsA, passing.id)).status === 400
+    await call('PATCH', `/api/users/${passing.id}`, { token: adminToken, body: { active: true } })
+    return refused
+  })())
+  await call('DELETE', `/api/users/${passing.id}`, { token: adminToken })
+  check(
+    'a deleted account is taken off every dataset',
+    !(await dsList(adminToken)).body.datasets.some((d) => d.memberIds.includes(passing.id)),
+  )
+  await assignTo(dsB, secondAnnotator.id)
+  await call('PATCH', `/api/users/${secondAnnotator.id}`, { token: adminToken, body: { role: 'manager' } })
+  check(
+    'and so is one moved to a role that does not label by assignment',
+    !(await dsList(adminToken)).body.datasets.some((d) => d.memberIds.includes(secondAnnotator.id)),
+  )
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })

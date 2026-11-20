@@ -25,11 +25,14 @@ import ClassList from "./routes/teacher/ClassList";
 import PreviewActivity from "./routes/teacher/PreviewActivity";
 import StudentWork from "./routes/teacher/StudentWork";
 import Labelling from "./routes/teacher/Labelling";
+import Selection from "./routes/teacher/Selection";
+import SelectionStudent from "./routes/teacher/SelectionStudent";
 import SupportInbox from "./routes/teacher/SupportInbox";
 import Teachers from "./routes/teacher/Teachers";
 import AnnotatorLayout from "./routes/annotator/AnnotatorLayout";
 import AdminLayout from "./routes/admin/AdminLayout";
 import People from "./routes/admin/People";
+import Datasets from "./routes/admin/Datasets";
 
 /**
  * test
@@ -156,6 +159,12 @@ export default function App() {
               <Route path="class-list" element={<ClassList />} />
               <Route path="students/:sessionId" element={<StudentWork />} />
               <Route path="labelling" element={<Labelling />} />
+              {/* Picking dialogs into a dataset, student by student. */}
+              <Route path="selection" element={<Selection />} />
+              <Route
+                path="selection/:studentKey"
+                element={<SelectionStudent />}
+              />
               <Route path="support" element={<SupportInbox />} />
               {/* A manager's or admin's teachers, with the labelling switch and
                   the password reset. Teachers are sent back by the page. */}
@@ -189,6 +198,7 @@ export default function App() {
                   which is where the brief puts it and where an admin can still
                   reach it from the sidebar. */}
               <Route index element={<People />} />
+              <Route path="datasets" element={<Datasets />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -997,3 +997,52 @@
   color: var(--pen-deep);
   font-weight: 650;
 }
+
+/* ── datasets: which ones a dialog is in, and adding it to one ── */
+
+.cs-ds-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+
+.cs-ds-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+/* One exchange on the selection screen: both turns, then where it is kept. */
+.cs-ds-dialog {
+  display: grid;
+  gap: var(--s-2);
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--rule);
+}
+
+.cs-ds-dialog:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* The people a dataset is assigned to, on the admin's Datasets page. */
+.cs-ds-members {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  list-style: none;
+}
+
+.cs-ds-members li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.cs-card[data-archived] {
+  opacity: 0.75;
+}

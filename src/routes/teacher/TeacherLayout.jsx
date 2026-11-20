@@ -15,6 +15,7 @@ const LINKS = [
   { to: '/teacher/students', key: 'teacher.studentWork' },
   { to: '/teacher/class-list', key: 'teacher.classList' },
   /** Hidden for a teacher whose labelling an admin or manager switched off. */
+  { to: '/teacher/selection', key: 'teacher.selection', shown: teacherCanLabel },
   { to: '/teacher/labelling', key: 'teacher.labelling', shown: teacherCanLabel },
   { to: '/teacher/support', key: 'teacher.support' },
   /**

@@ -11,10 +11,11 @@
  * process does.
  *
  * Collections: users, authTokens, activities, questions, sessions, answers,
- * messages, events, ownQuestions, uploads, prompts, snippetLabels.
+ * messages, events, ownQuestions, uploads, prompts, snippetLabels, datasets.
  */
 
 import { DuplicateEmailError } from './errors.js'
+import { changeMembership, inAnyDataset } from '../../shared/datasets.js'
 
 const clone = (value) => (value == null ? value : structuredClone(value))
 
@@ -47,6 +48,7 @@ export function createMemoryStore() {
   const uploads = collection() // id -> upload metadata
   const prompts = []
   const snippetLabels = collection() // snippetId -> label
+  const datasets = collection() // id -> dataset
   const support = collection() // id -> support / suggestion message
   const seqs = collection() // sessionId -> last seq handed out
 
@@ -500,6 +502,26 @@ export function createMemoryStore() {
         }
         return cleared
       },
+      /**
+       * The records in any of these datasets, reading a record from before
+       * datasets existed as shared/datasets.js `datasetIdsOf` does.
+       */
+      async listByDatasets(datasetIds) {
+        return [...snippetLabels.values()]
+          .filter((label) => inAnyDataset(label, datasetIds))
+          .map(clone)
+      },
+      /**
+       * Adds a snippet to some datasets and takes it out of others, keeping
+       * `included` in step (shared/datasets.js `changeMembership`). Creates
+       * the record if there is none. Answers with the whole record.
+       */
+      async changeDatasets(id, { add = [], remove = [] } = {}) {
+        const record = snippetLabels.get(id) ?? { snippetId: id }
+        const next = { ...record, ...changeMembership(record, { add, remove }) }
+        snippetLabels.set(id, next)
+        return clone(next)
+      },
       /** A withdrawn session's records. Snippet ids start with `${sessionId}:`. */
       async removeBySession(sessionId) {
         let removed = 0
@@ -533,6 +555,68 @@ export function createMemoryStore() {
         annotations[annotatorId] = own
         snippetLabels.set(id, { ...record, annotations })
         return clone(own)
+      },
+    },
+
+    /**
+     * Named sets of snippets — see shared/datasets.js. Membership lives on the
+     * snippet's label record (`datasetIds`); who labels a dataset lives here,
+     * as `memberIds`.
+     */
+    datasets: {
+      /** Inserts the document unless one with its id exists. Safe to repeat. */
+      async ensure(doc) {
+        if (!datasets.has(doc.id)) datasets.set(doc.id, doc)
+        return clone(datasets.get(doc.id))
+      },
+      async create(doc) {
+        datasets.set(doc.id, doc)
+        return clone(doc)
+      },
+      async findById(id) {
+        return clone(datasets.get(id) ?? null)
+      },
+      /** Oldest first, so the default dataset leads. */
+      async list() {
+        return [...datasets.values()]
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+          .map(clone)
+      },
+      async update(id, patch) {
+        const current = datasets.get(id)
+        if (!current) return null
+        const next = { ...current, ...patch }
+        datasets.set(id, next)
+        return clone(next)
+      },
+      async remove(id) {
+        return datasets.delete(id)
+      },
+      async addMember(id, userId) {
+        const current = datasets.get(id)
+        if (!current) return null
+        const memberIds = [...new Set([...(current.memberIds ?? []), userId])]
+        const next = { ...current, memberIds }
+        datasets.set(id, next)
+        return clone(next)
+      },
+      async removeMember(id, userId) {
+        const current = datasets.get(id)
+        if (!current) return null
+        const next = { ...current, memberIds: (current.memberIds ?? []).filter((entry) => entry !== userId) }
+        datasets.set(id, next)
+        return clone(next)
+      },
+      /** An account deleted, or moved to a role that does not label: off every dataset. */
+      async removeMemberEverywhere(userId) {
+        let changed = 0
+        for (const [id, value] of datasets) {
+          if ((value.memberIds ?? []).includes(userId)) {
+            datasets.set(id, { ...value, memberIds: value.memberIds.filter((entry) => entry !== userId) })
+            changed += 1
+          }
+        }
+        return changed
       },
     },
   }

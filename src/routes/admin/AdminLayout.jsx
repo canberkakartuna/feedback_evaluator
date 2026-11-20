@@ -35,6 +35,11 @@ export default function AdminLayout() {
               </NavLink>
             </li>
             <li>
+              <NavLink className="cs-link" to="/admin/datasets">
+                {t('admin.datasets')}
+              </NavLink>
+            </li>
+            <li>
               <NavLink className="cs-link" to="/teacher">
                 {t('admin.teacherConsole')}
               </NavLink>

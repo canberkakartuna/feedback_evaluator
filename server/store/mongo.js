@@ -1,5 +1,6 @@
 import { MongoClient } from 'mongodb'
 import { DuplicateEmailError } from './errors.js'
+import { DEFAULT_DATASET_ID } from '../../shared/datasets.js'
 
 /**
  * MongoDB-backed store.
@@ -95,7 +96,10 @@ const INDEXES = {
   support: [{ userId: 1, createdAt: -1 }, { teacherId: 1, createdAt: -1 }, { category: 1, createdAt: -1 }],
   // An annotator's handles are resolved over their own assignments on every
   // label they save, so that read is by index rather than over every record.
-  snippetLabels: [{ assigneeId: 1 }],
+  // Plus the datasets a record belongs to: a labeller's dataset is read by it.
+  snippetLabels: [{ assigneeId: 1 }, { datasetIds: 1 }],
+  // `memberIds`: an account deleted is taken off every dataset by it.
+  datasets: [{ memberIds: 1 }],
 }
 
 /** Every read strips `_id`, so documents match the memory store's exactly. */
@@ -625,6 +629,59 @@ export function createMongoStore({ uri, dbName } = {}) {
         return modifiedCount
       },
       /**
+       * See memory.js. A record from before datasets existed has no
+       * `datasetIds`, and counts as in the default dataset when it was kept —
+       * shared/datasets.js `datasetIdsOf`, written as a query.
+       */
+      async listByDatasets(datasetIds) {
+        const ids = [...datasetIds]
+        const or = [{ datasetIds: { $in: ids } }]
+        // `null` matches a missing field as well as an explicit null.
+        if (ids.includes(DEFAULT_DATASET_ID)) or.push({ datasetIds: null, included: true })
+        return (await col('snippetLabels')).find({ $or: or }, BARE).toArray()
+      },
+      /**
+       * See memory.js — shared/datasets.js `changeMembership`, as one
+       * pipeline update, so two people adding the same snippet to two
+       * datasets at once both land: there is no read-modify-write in between
+       * to lose one of them. Ids go in as `$literal`, so nothing in one is
+       * read as a field path.
+       */
+      async changeDatasets(id, { add = [], remove = [] } = {}) {
+        const current = {
+          $ifNull: [
+            '$datasetIds',
+            { $cond: [{ $eq: ['$included', true] }, [DEFAULT_DATASET_ID], []] },
+          ],
+        }
+        const next = { $setDifference: [{ $setUnion: [current, { $literal: add }] }, { $literal: remove }] }
+        return (await col('snippetLabels')).findOneAndUpdate(
+          { _id: id },
+          [
+            {
+              $set: {
+                snippetId: { $ifNull: ['$snippetId', id] },
+                _includedBefore: { $ifNull: ['$included', null] },
+                datasetIds: next,
+              },
+            },
+            {
+              $set: {
+                included: {
+                  $cond: [
+                    { $gt: [{ $size: '$datasetIds' }, 0] },
+                    true,
+                    { $cond: [{ $eq: ['$_includedBefore', true] }, null, '$_includedBefore'] },
+                  ],
+                },
+              },
+            },
+            { $unset: '_includedBefore' },
+          ],
+          { ...BARE, upsert: true, returnDocument: 'after' },
+        )
+      },
+      /**
        * A withdrawn session's records. `_id` is the snippet id,
        * `sessionId:questionId:seq`, so an anchored prefix match on it is a
        * range scan of the primary key rather than a collection scan.
@@ -666,6 +723,67 @@ export function createMongoStore({ uri, dbName } = {}) {
           { ...BARE, upsert: true, returnDocument: 'after' },
         )
         return doc?.annotations?.[annotatorId] ?? null
+      },
+    },
+
+    /** See memory.js. `_id` is the dataset's id. */
+    datasets: {
+      /**
+       * Inserts the document unless one with its id exists — `$setOnInsert`
+       * on an upsert, so it never overwrites a renamed default dataset. Two
+       * instances racing to create it can make one upsert fail on the primary
+       * key; that one lost to an identical insert, which is the same outcome.
+       */
+      async ensure(doc) {
+        try {
+          await (await col('datasets')).updateOne({ _id: doc.id }, { $setOnInsert: doc }, { upsert: true })
+        } catch (error) {
+          if (error?.code !== 11000) throw error
+        }
+        return (await col('datasets')).findOne({ _id: doc.id }, BARE)
+      },
+      async create(doc) {
+        await (await col('datasets')).insertOne({ _id: doc.id, ...doc })
+        return doc
+      },
+      async findById(id) {
+        return (await col('datasets')).findOne({ _id: id }, BARE)
+      },
+      async list() {
+        return (await col('datasets')).find({}, { ...BARE, sort: { createdAt: 1, _id: 1 } }).toArray()
+      },
+      async update(id, patch) {
+        return (await col('datasets')).findOneAndUpdate(
+          { _id: id },
+          { $set: patch },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async remove(id) {
+        const { deletedCount } = await (await col('datasets')).deleteOne({ _id: id })
+        return deletedCount === 1
+      },
+      /** `$addToSet` / `$pull`, so two admins assigning at once both land. */
+      async addMember(id, userId) {
+        return (await col('datasets')).findOneAndUpdate(
+          { _id: id },
+          { $addToSet: { memberIds: userId } },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async removeMember(id, userId) {
+        return (await col('datasets')).findOneAndUpdate(
+          { _id: id },
+          { $pull: { memberIds: userId } },
+          { ...BARE, returnDocument: 'after' },
+        )
+      },
+      async removeMemberEverywhere(userId) {
+        const { modifiedCount } = await (await col('datasets')).updateMany(
+          { memberIds: userId },
+          { $pull: { memberIds: userId } },
+        )
+        return modifiedCount
       },
     },
   }

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import MathText from '../../components/MathText'
+import DatasetToggle, { DatasetPills, TargetPicker } from '../../components/DatasetToggle'
 import { promptFor } from '../../../shared/activity'
 import { teacherCanLabel } from '../../../shared/roles'
 import { api } from '../../lib/api'
+import { datasetName, pickLabellingDataset, pickTarget, recallTarget, rememberTarget } from '../../lib/datasets'
 import { useAuth } from '../../lib/auth'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
@@ -273,6 +275,22 @@ function Context({ snippet, lang, t }) {
  *   or `questionId`, so nothing here may build on those for them: a session id
  *   is what opens a student's session. Everything below keys on `snippet.id`
  *   alone, which works the same either way.
+ *
+ * And it works **per dataset** (shared/datasets.js), chosen at the top and
+ * kept in the URL as `?dataset=`:
+ *
+ * - a teacher or an annotator is offered the datasets assigned to them and
+ *   nothing else, and is told so when there are none. An annotator with
+ *   snippets assigned one by one also gets those, as "assigned to you
+ *   directly" — the screen as it was before datasets;
+ * - an admin or a manager is offered every dataset, plus "all dialogs", the
+ *   screen as it was, where keeping a snippet now means adding it to the
+ *   dataset picked at the top (and dropping takes it out of all of them).
+ *
+ * Inside a dataset the keep-or-drop buttons are gone — what is in it was
+ * picked already, on the selection screen — and staff see which datasets each
+ * snippet is in. Labels are per snippet, not per dataset: a dialog in two
+ * datasets carries the same labels in both.
  */
 export default function Labelling() {
   const { lang, t } = useI18n()
@@ -285,21 +303,79 @@ export default function Labelling() {
   const sessionId = isAnnotator ? '' : (params.get('session') ?? '')
   const canAssign = user?.role === 'admin' || user?.role === 'manager'
   const mayLabel = teacherCanLabel(user)
+  /** A teacher or an annotator: labels only the datasets assigned to them. */
+  const isAssignedLabeller = isAnnotator || user?.role === 'teacher'
+
+  // The datasets this person can see; asked once, and not at all when off.
+  const datasetsState = useAsync(
+    () => (mayLabel ? api.datasets() : Promise.resolve({ datasets: [] })),
+    [mayLabel],
+  )
+  const allDatasets = datasetsState.data?.datasets ?? []
+  const datasetsReady = !datasetsState.loading && !datasetsState.error
+  /** What the dataset picker offers: a labeller's own; staff everything. */
+  const offered = isAssignedLabeller ? allDatasets.filter((dataset) => dataset.assigned) : allDatasets
+  const individualCount = datasetsState.data?.individualCount ?? 0
+  const wantedDataset = params.get('dataset') ?? ''
+  /** An annotator's "assigned to me directly" list, the screen from before datasets. */
+  const INDIVIDUAL = 'individual'
+
+  /**
+   * The dataset on screen, `''` for none: "all dialogs" for staff, an
+   * annotator's directly assigned snippets, or — for a labeller with no
+   * dataset at all — nothing, said in words.
+   */
+  const datasetId = !datasetsReady
+    ? ''
+    : isAssignedLabeller
+      ? isAnnotator && (wantedDataset === INDIVIDUAL || (!offered.length && individualCount > 0))
+        ? ''
+        : pickLabellingDataset(offered, wantedDataset)
+      : offered.some((dataset) => dataset.id === wantedDataset)
+        ? wantedDataset
+        : ''
+  const currentDataset = offered.find((dataset) => dataset.id === datasetId) ?? null
+  /** A teacher, or an annotator with nothing at all assigned: nothing to show. */
+  const nothingAssigned =
+    datasetsReady && isAssignedLabeller && !datasetId && !(isAnnotator && individualCount > 0)
 
   // An annotator starts from everything assigned: "not yet decided" is the
-  // staff's keep-or-drop queue, which is not theirs to work through.
-  const filter = params.get('show') ?? (isAnnotator ? 'all' : 'undecided')
+  // staff's keep-or-drop queue, which is not theirs to work through. Inside a
+  // dataset everything was picked already, so there is no queue either.
+  const filter = datasetId ? 'all' : (params.get('show') ?? (isAnnotator ? 'all' : 'undecided'))
   /** Client-side, over what was loaded: `all`, `none`, or an annotator's id. */
   const assigneeFilter = params.get('assignee') ?? 'all'
 
   const fetchList = () =>
-    api.snippets({ sessionId, included: filter === 'all' ? undefined : filter })
+    api.snippets({ datasetId, sessionId, included: filter === 'all' ? undefined : filter })
 
-  // Not requested at all when labelling is off: the answer is known to be a 403.
+  // Not requested at all when labelling is off: the answer is known to be a
+  // 403. Nor before the datasets are known, nor when none is assigned.
   const { data, error, loading, setData } = useAsync(
-    () => (mayLabel ? fetchList() : Promise.resolve(null)),
-    [sessionId, filter, mayLabel],
+    () => (mayLabel && datasetsReady && !nothingAssigned ? fetchList() : Promise.resolve(null)),
+    [sessionId, filter, mayLabel, datasetId, datasetsReady, nothingAssigned],
   )
+
+  /**
+   * Where "keep" puts a snippet in the "all dialogs" view: the dataset picked
+   * at the top, remembered in this browser with the selection screens'.
+   */
+  const [chosenTarget, setChosenTarget] = useState(() => recallTarget())
+  const target = pickTarget(allDatasets, chosenTarget)
+  const chooseTarget = (id) => {
+    setChosenTarget(id)
+    rememberTarget(id)
+  }
+  /** Folds a membership change from DatasetToggle into its row. */
+  const applyMembership = (snippetId, membership) => {
+    const apply = (prev) =>
+      prev && {
+        ...prev,
+        snippets: prev.snippets.map((row) => (row.id === snippetId ? { ...row, ...membership } : row)),
+      }
+    latest.current = apply(latest.current)
+    setData(apply)
+  }
 
   // Only the people who assign may list annotators; nobody else asks.
   const annotators = useAsync(
@@ -508,6 +584,7 @@ export default function Labelling() {
         const merge = (row) => ({
           ...row,
           included: label.included ?? row.included,
+          datasetIds: label.datasetIds ?? row.datasetIds,
           labels: label.labels ?? row.labels,
           note: label.note ?? row.note,
           notes: label.notes ?? row.notes,
@@ -557,7 +634,32 @@ export default function Labelling() {
           ) : null}
         </div>
 
-        {mayLabel ? (
+        {mayLabel && (offered.length || (isAnnotator && individualCount > 0) || canAssign) ? (
+          <div className="cs-field">
+            <label className="cs-label" htmlFor="labelling-dataset">
+              {t('datasets.dataset')}
+            </label>
+            <select
+              id="labelling-dataset"
+              className="cs-select"
+              value={isAnnotator && !datasetId ? INDIVIDUAL : datasetId}
+              onChange={(event) => setParam('dataset', event.target.value, '')}
+            >
+              {canAssign ? <option value="">{t('datasets.allDialogs')}</option> : null}
+              {offered.map((dataset) => (
+                <option key={dataset.id} value={dataset.id}>
+                  {dataset.archived ? t('datasets.archivedName', { name: datasetName(dataset, t) }) : datasetName(dataset, t)} (
+                  {dataset.count ?? 0})
+                </option>
+              ))}
+              {isAnnotator && individualCount > 0 ? (
+                <option value={INDIVIDUAL}>{t('datasets.individual', { count: individualCount })}</option>
+              ) : null}
+            </select>
+          </div>
+        ) : null}
+
+        {mayLabel && !datasetId && !nothingAssigned ? (
           <div className="cs-field">
             <label className="cs-label" htmlFor="show">
               {t('labelling.show')}
@@ -586,6 +688,28 @@ export default function Labelling() {
         <p className="cs-note" data-tone="warn" role="status">
           {t('labelling.turnedOff')}
         </p>
+      ) : null}
+
+      {datasetsState.error ? (
+        <p className="cs-note" data-tone="bad">
+          {datasetsState.error.message}
+        </p>
+      ) : null}
+
+      {nothingAssigned ? (
+        <p className="cs-empty" role="status">
+          {t('datasets.noneAssigned')}
+        </p>
+      ) : null}
+
+      {currentDataset?.description ? <p className="cs-note">{currentDataset.description}</p> : null}
+
+      {/* "All dialogs" for staff: keeping a snippet means saying where. */}
+      {mayLabel && canAssign && datasetsReady && !datasetId ? (
+        <section className="cs-card cs-assign" aria-label={t('datasets.target')}>
+          <TargetPicker id="keep-target" datasets={allDatasets} value={target} onChange={chooseTarget} t={t} />
+          <p className="cs-hint">{t('datasets.keepHint')}</p>
+        </section>
       ) : null}
 
       {goneNotice ? (
@@ -728,7 +852,9 @@ export default function Labelling() {
         </section>
       ) : null}
 
-      {!mayLabel ? null : error ? (
+      {!mayLabel || nothingAssigned ? null : !datasetsReady ? (
+        datasetsState.loading ? <p className="cs-note">{t('common.loading')}</p> : null
+      ) : error ? (
         <p className="cs-note" data-tone="bad">
           {error.message}
         </p>
@@ -736,7 +862,9 @@ export default function Labelling() {
         <p className="cs-note">{t('common.loading')}</p>
       ) : shown.length === 0 ? (
         <p className="cs-empty">
-          {isAnnotator && snippets.length === 0 && filter === 'all' && !sessionId
+          {datasetId && snippets.length === 0
+            ? t('datasets.emptyDataset')
+            : isAnnotator && snippets.length === 0 && filter === 'all' && !sessionId
             ? t('labelling.emptyAnnotator')
             : filter === 'undecided' && !isAnnotator && snippets.length === 0
               ? t('labelling.emptyUndecided')
@@ -791,20 +919,26 @@ export default function Labelling() {
                     <p className="cs-turn-text">{snippet.tutor.text}</p>
                   </div>
 
-                  <div className="cs-decision">
-                    {/* Keep-or-drop is staff's: an annotator sees where it stands. */}
-                    {isAnnotator ? null : (
+                  {/* Inside a dataset: which datasets it is in, for staff. Picking
+                      it in or out happens on the selection screen. */}
+                  {datasetId && !isAnnotator ? (
+                    <div className="cs-decision">
+                      <DatasetPills datasetIds={snippet.datasetIds} datasets={allDatasets} t={t} />
+                    </div>
+                  ) : null}
+
+                  <div className="cs-decision" style={datasetId ? { display: 'none' } : undefined}>
+                    {/* Keep-or-drop is staff's: an annotator sees where it stands.
+                        Keeping is adding to the dataset picked at the top. */}
+                    {isAnnotator || datasetId ? null : (
                       <div className="cs-actions">
-                        <button
-                          type="button"
-                          className={`cs-btn cs-btn-sm cs-decide ${snippet.included === true ? 'cs-btn-primary' : ''}`}
-                          data-kind="keep"
-                          aria-pressed={snippet.included === true}
-                          onClick={() => save(snippet.id, 'included', () => ({ included: true }))}
-                        >
-                          {snippet.included === true ? '✓ ' : ''}
-                          {t('labelling.keep')}
-                        </button>
+                        <DatasetToggle
+                          snippet={snippet}
+                          target={target}
+                          datasets={allDatasets}
+                          onChange={applyMembership}
+                          t={t}
+                        />
                         <button
                           type="button"
                           className={`cs-btn cs-btn-sm cs-decide ${snippet.included === false ? 'cs-btn-danger' : ''}`}

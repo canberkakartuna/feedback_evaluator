@@ -9,10 +9,33 @@ import {
 } from '../services/snippets.js'
 import { activityScope, displayCode } from '../services/activities.js'
 import { scopeOf } from '../services/users.js'
+import {
+  dialogsByQuestion,
+  ensureDefaultDataset,
+  groupByStudent,
+  parseDatasetInput,
+  sameName,
+  studentKeyOf,
+} from '../services/datasets.js'
 import { teacherCanLabel } from '../../shared/roles.js'
+import {
+  DATASET_MEMBER_ROLES,
+  assignedDatasets,
+  datasetIdsOf,
+  membershipForIncluded,
+} from '../../shared/datasets.js'
 import { EXTENSIONS } from '../lib/attachments.js'
 import { readBytes } from './uploads.js'
-import { ApiError, badRequest, forbidden, notFound, now, route, unavailable } from '../lib/http.js'
+import {
+  ApiError,
+  badRequest,
+  forbidden,
+  id as newId,
+  notFound,
+  now,
+  route,
+  unavailable,
+} from '../lib/http.js'
 
 /**
  * Reading, keeping and labelling transcripts.
@@ -45,6 +68,17 @@ import { ApiError, badRequest, forbidden, notFound, now, route, unavailable } fr
  *   shared/roles.js) is refused the snippet routes, but still reads their
  *   students' sessions and transcripts, which are teaching rather than
  *   labelling.
+ *
+ * **Datasets** (shared/datasets.js) sit across all of that. An admin makes
+ * them and assigns each to teachers and annotators; staff who may keep a
+ * snippet may add it to any active dataset; and labelling is per dataset:
+ *
+ * - an admin or the research token reads and labels every dataset;
+ * - a manager reads and labels every active dataset, within their branch;
+ * - a teacher reads only the active datasets assigned to them, within their
+ *   own scope, and writes labels only onto snippets in one of those;
+ * - an annotator reads only the active datasets assigned to them, whole, as
+ *   handles — on top of the snippets assigned to them one by one, as before.
  */
 function researchToken(req) {
   const header = req.get('authorization') ?? ''
@@ -99,6 +133,14 @@ function requireAssigner(req) {
 
 /** Snippets per assignment call. A class's worth of transcripts, not the dataset. */
 export const ASSIGN_MAX = 500
+
+/** Creating, editing and assigning datasets: an admin's account, not the research token. */
+function requireDatasetAdmin(req) {
+  if (req.user?.role !== 'admin') throw forbidden('Only an admin can manage datasets')
+}
+
+/** A teacher or an annotator: labelling reaches them through dataset assignment. */
+const isAssignedLabeller = (req) => req.user?.role === 'teacher' || req.user?.role === 'annotator'
 
 export function researchRoutes(store) {
   const router = express.Router()
@@ -584,8 +626,74 @@ export function researchRoutes(store) {
    * caller need not read it a second time.
    */
   async function resolveHandle(req, handle) {
-    const mine = await store.snippetLabels.listByAssignee(req.user.id)
+    const mine = await annotatorReach(req)
     return mine.find((label) => snippetHandle(req.user.id, label.snippetId) === handle) ?? null
+  }
+
+  /* ------------------------------------------------------------- datasets */
+
+  /** Every dataset, the default one created first if it is not there yet. */
+  async function allDatasets() {
+    await ensureDefaultDataset(store)
+    return store.datasets.list()
+  }
+
+  /**
+   * The label records an annotator may label: the ones assigned to them one
+   * by one, and every record in an active dataset assigned to them. What their
+   * handles resolve over, so a snippet in a dataset that is not theirs — or
+   * that was unassigned from them, or archived — reads as missing.
+   */
+  async function annotatorReach(req) {
+    const datasetIds = assignedDatasets(await allDatasets(), req.user.id).map((dataset) => dataset.id)
+    const [assigned, inDatasets] = await Promise.all([
+      store.snippetLabels.listByAssignee(req.user.id),
+      datasetIds.length ? store.snippetLabels.listByDatasets(datasetIds) : [],
+    ])
+    return [...new Map([...assigned, ...inDatasets].map((label) => [label.snippetId, label])).values()]
+  }
+
+  /**
+   * One dataset, for someone about to read or label it, or a refusal.
+   *
+   * Missing is 404. Archived is 404 too for anyone but an admin or the
+   * research token: it has been put away. For a teacher or an annotator a
+   * dataset not assigned to them is 403 — they are told it is not theirs, not
+   * shown it. A manager reads every active dataset, within their branch.
+   */
+  async function datasetForReader(req, datasetId) {
+    await ensureDefaultDataset(store)
+    const dataset = await store.datasets.findById(String(datasetId))
+    if (!dataset) throw notFound('No such dataset')
+    if (dataset.archived && !isResearcher(req)) throw notFound('No such dataset')
+    if (isAssignedLabeller(req) && !(dataset.memberIds ?? []).includes(req.user.id)) {
+      throw forbidden('This dataset is not assigned to you')
+    }
+    return dataset
+  }
+
+  /**
+   * The snippets of one dataset the caller may see: built from the messages
+   * that are really there (a withdrawn session's are gone, so are its
+   * snippets), and for staff other than an admin, only from sessions in their
+   * scope. An annotator's reach is the dataset itself — they never see a
+   * session id, so they are not filtered by one.
+   */
+  async function datasetSnippets(req, dataset, { sessionId } = {}) {
+    const members = await store.snippetLabels.listByDatasets([dataset.id])
+    const memberIds = new Set(members.map((label) => label.snippetId))
+    let sessionIds = [...new Set(members.map((label) => sessionOfSnippet(label.snippetId)))]
+
+    if (!isAnnotator(req)) {
+      const scope = await sessionScope(req)
+      if (sessionId && !canRead(scope, sessionId)) throw notFound('No such session')
+      sessionIds = sessionIds.filter((id) => canRead(scope, id) && (!sessionId || id === sessionId))
+    }
+
+    const messages = (
+      await Promise.all(sessionIds.map((id) => store.messages.listBySession(id)))
+    ).flat()
+    return buildSnippets(messages).filter((snippet) => memberIds.has(snippet.id))
   }
 
   /**
@@ -603,11 +711,19 @@ export function researchRoutes(store) {
     route(async (req, res) => {
       assertMayLabel(req)
 
-      const { sessionId, included } = req.query
+      const { sessionId, included, datasetId } = req.query
       const labels = await store.snippetLabels.map()
       let snippets
 
-      if (isAnnotator(req)) {
+      if (datasetId) {
+        // One dataset, for whoever may read it (see datasetForReader). For an
+        // annotator `sessionId` is ignored here too, for the reason below.
+        const dataset = await datasetForReader(req, datasetId)
+        snippets = attachLabels(
+          await datasetSnippets(req, dataset, { sessionId: isAnnotator(req) ? undefined : sessionId }),
+          labels,
+        )
+      } else if (isAnnotator(req)) {
         // `sessionId` is ignored for them, not refused or checked: an answer
         // that changed with it would confirm whether a guessed session id has
         // anything of theirs in it. They have no session ids to filter by.
@@ -786,6 +902,39 @@ export function researchRoutes(store) {
         patch.included = req.body.included
       }
 
+      /** The record as it stands, for the dataset rules below. Not read for an annotator. */
+      const current = isAnnotator(req) ? null : await store.snippetLabels.get(snippetId)
+
+      /**
+       * Keeping or dropping moves the snippet in or out of datasets
+       * (shared/datasets.js `membershipForIncluded`): keep puts a snippet
+       * that is in no dataset into the default one, drop or undecided takes it
+       * out of all of them. Choosing *which* dataset is
+       * `POST /datasets/:datasetId/snippets`.
+       */
+      if (patch.included !== undefined) {
+        patch.datasetIds = membershipForIncluded(current, patch.included).datasetIds
+      }
+
+      /**
+       * A teacher labels only what is in a dataset assigned to them — keeping
+       * or dropping their own students' snippets is selection, and stays open
+       * to them as before. Checked against the membership this same request
+       * leaves behind, so "keep and label" in one go works when keeping puts
+       * it in a dataset of theirs.
+       */
+      const writesLabels =
+        req.body?.labels !== undefined || req.body?.notes !== undefined || req.body?.note !== undefined
+      if (req.user?.role === 'teacher' && writesLabels) {
+        const theirs = new Set(
+          assignedDatasets(await allDatasets(), req.user.id).map((dataset) => dataset.id),
+        )
+        const after = patch.datasetIds ?? datasetIdsOf(current)
+        if (!after.some((datasetId) => theirs.has(datasetId))) {
+          throw forbidden('This dialog is not in a dataset assigned to you')
+        }
+      }
+
       if (req.body?.labels !== undefined) {
         const labels = req.body.labels
         if (typeof labels !== 'object' || labels === null || Array.isArray(labels)) {
@@ -886,7 +1035,8 @@ export function researchRoutes(store) {
         snippetId,
         patch,
       )
-      res.json({ label })
+      // Read the way every list reads it, for a record from before datasets.
+      res.json({ label: { ...label, datasetIds: datasetIdsOf(label) } })
     }),
   )
 
@@ -963,6 +1113,439 @@ export function researchRoutes(store) {
     }),
   )
 
+  /* ------------------------------------------------------ dataset routes */
+
+  /**
+   * A dataset as its reader sees it. Everyone gets the name, the description,
+   * whether it is the default or archived, whether it is assigned to them, and
+   * how many of its dialogs they can reach. An admin also gets who it is
+   * assigned to and when it was made and changed.
+   */
+  function describeDataset(dataset, { req, count, usersById }) {
+    const row = {
+      id: dataset.id,
+      name: dataset.name,
+      description: dataset.description ?? '',
+      isDefault: Boolean(dataset.isDefault),
+      archived: Boolean(dataset.archived),
+      assigned: Boolean(req.user && (dataset.memberIds ?? []).includes(req.user.id)),
+      count,
+    }
+    if (!usersById) return row
+
+    return {
+      ...row,
+      memberIds: dataset.memberIds ?? [],
+      // An id that names nobody any more (a deleted account) is listed as
+      // such, so it can be taken off; deleting an account normally does that.
+      members: (dataset.memberIds ?? []).map((memberId) => {
+        const user = usersById.get(memberId)
+        return user
+          ? { id: user.id, name: user.name, role: user.role, active: Boolean(user.active) }
+          : { id: memberId, name: null, role: null, active: false }
+      }),
+      createdAt: dataset.createdAt ?? null,
+      createdBy: dataset.createdBy ?? null,
+      updatedAt: dataset.updatedAt ?? null,
+      archivedAt: dataset.archivedAt ?? null,
+    }
+  }
+
+  /**
+   * How many of each dataset's dialogs the caller can reach, from the label
+   * records alone (no messages read): every member for an admin, the research
+   * token and an annotator; the ones from sessions in scope for a teacher or a
+   * manager. A withdrawn session's records go with it, so they are not counted.
+   */
+  async function datasetCounts(req, datasets) {
+    const ids = datasets.map((dataset) => dataset.id)
+    const counts = new Map(ids.map((id) => [id, 0]))
+    if (!ids.length) return counts
+
+    const members = await store.snippetLabels.listByDatasets(ids)
+    const scope = isAnnotator(req) ? { all: true } : await sessionScope(req)
+    const wanted = new Set(ids)
+    for (const label of members) {
+      if (!canRead(scope, sessionOfSnippet(label.snippetId))) continue
+      for (const datasetId of datasetIdsOf(label)) {
+        if (wanted.has(datasetId)) counts.set(datasetId, counts.get(datasetId) + 1)
+      }
+    }
+    return counts
+  }
+
+  /** Every account an admin's dataset rows name, in one read. */
+  async function usersFor(datasets) {
+    const ids = [...new Set(datasets.flatMap((dataset) => dataset.memberIds ?? []))]
+    const users = ids.length ? await store.users.list({ ids, limit: ids.length }) : []
+    return new Map(users.map((user) => [user.id, user]))
+  }
+
+  /** One dataset as an admin reads it, after a change. */
+  async function adminRow(req, dataset) {
+    const counts = await datasetCounts(req, [dataset])
+    return describeDataset(dataset, { req, count: counts.get(dataset.id), usersById: await usersFor([dataset]) })
+  }
+
+  /**
+   * The datasets this caller can see.
+   *
+   * - admin, research token: all of them, archived included, with who each
+   *   is assigned to;
+   * - manager, teacher: the active ones — any of them can be a target when
+   *   picking dialogs — with `assigned` saying which a teacher labels;
+   * - annotator: only the active ones assigned to them, plus `individualCount`,
+   *   how many snippets are assigned to them one by one outside any dataset.
+   */
+  router.get(
+    '/datasets',
+    route(async (req, res) => {
+      assertMayLabel(req)
+      const all = await allDatasets()
+      const admin = isResearcher(req)
+
+      const visible = admin
+        ? all
+        : isAnnotator(req)
+          ? assignedDatasets(all, req.user.id)
+          : all.filter((dataset) => !dataset.archived)
+
+      const [counts, usersById] = await Promise.all([
+        datasetCounts(req, visible),
+        admin ? usersFor(visible) : null,
+      ])
+
+      const body = {
+        datasets: visible.map((dataset) =>
+          describeDataset(dataset, { req, count: counts.get(dataset.id), usersById }),
+        ),
+      }
+      if (isAnnotator(req)) {
+        body.individualCount = (await store.snippetLabels.listByAssignee(req.user.id)).length
+      }
+      res.json(body)
+    }),
+  )
+
+  /** A new dataset. Admin only; the name must not be one another dataset has. */
+  router.post(
+    '/datasets',
+    route(async (req, res) => {
+      requireDatasetAdmin(req)
+      const input = parseDatasetInput(req.body)
+      const all = await allDatasets()
+      if (all.some((dataset) => sameName(dataset.name, input.name))) {
+        throw new ApiError(409, 'A dataset with that name already exists')
+      }
+
+      const at = now()
+      const dataset = await store.datasets.create({
+        id: newId('ds'),
+        name: input.name,
+        description: input.description,
+        isDefault: false,
+        archived: false,
+        archivedAt: null,
+        memberIds: [],
+        createdAt: at,
+        createdBy: req.user.id,
+        updatedAt: at,
+      })
+      res.status(201).json({ dataset: await adminRow(req, dataset) })
+    }),
+  )
+
+  /**
+   * Renaming, describing, archiving or bringing one back. Archiving hides a
+   * dataset from everyone but the admin — no picking into it, no labelling in
+   * it — and keeps everything in it. The default dataset is never archived:
+   * an old client's "keep" still puts snippets there.
+   */
+  router.patch(
+    '/datasets/:datasetId',
+    route(async (req, res) => {
+      requireDatasetAdmin(req)
+      const all = await allDatasets()
+      const dataset = all.find((entry) => entry.id === req.params.datasetId)
+      if (!dataset) throw notFound('No such dataset')
+
+      const patch = parseDatasetInput(req.body, { partial: true })
+      if (req.body?.archived !== undefined) {
+        if (typeof req.body.archived !== 'boolean') throw badRequest('"archived" must be true or false')
+        if (req.body.archived && dataset.isDefault) {
+          throw badRequest('The default dataset cannot be archived')
+        }
+        patch.archived = req.body.archived
+        patch.archivedAt = req.body.archived ? (dataset.archivedAt ?? now()) : null
+      }
+      if (!Object.keys(patch).length) throw badRequest('Nothing to update')
+      if (
+        patch.name &&
+        all.some((entry) => entry.id !== dataset.id && sameName(entry.name, patch.name))
+      ) {
+        throw new ApiError(409, 'A dataset with that name already exists')
+      }
+
+      patch.updatedAt = now()
+      res.json({ dataset: await adminRow(req, await store.datasets.update(dataset.id, patch)) })
+    }),
+  )
+
+  /**
+   * Deleting a dataset — only an empty one. A dataset that has dialogs in it
+   * is research data (and the labels on them were made in it), so it is
+   * refused with 409 and archived instead. The default dataset is never
+   * deleted.
+   */
+  router.delete(
+    '/datasets/:datasetId',
+    route(async (req, res) => {
+      requireDatasetAdmin(req)
+      await ensureDefaultDataset(store)
+      const dataset = await store.datasets.findById(req.params.datasetId)
+      if (!dataset) throw notFound('No such dataset')
+      if (dataset.isDefault) throw new ApiError(409, 'The default dataset cannot be deleted')
+
+      const members = await store.snippetLabels.listByDatasets([dataset.id])
+      if (members.length) {
+        throw new ApiError(
+          409,
+          'This dataset has dialogs in it — archive it instead, or remove them first',
+          { count: members.length },
+        )
+      }
+
+      await store.datasets.remove(dataset.id)
+      res.json({ deleted: true, datasetId: dataset.id })
+    }),
+  )
+
+  /**
+   * Assigning a dataset to a teacher or an annotator, who may then read and
+   * label it. Active accounts only, and not onto an archived dataset.
+   */
+  router.post(
+    '/datasets/:datasetId/members',
+    route(async (req, res) => {
+      requireDatasetAdmin(req)
+      await ensureDefaultDataset(store)
+      const dataset = await store.datasets.findById(req.params.datasetId)
+      if (!dataset) throw notFound('No such dataset')
+      if (dataset.archived) throw new ApiError(409, 'This dataset is archived — bring it back first')
+
+      const userId = req.body?.userId
+      if (typeof userId !== 'string' || !userId) throw badRequest('"userId" is required')
+      const user = await store.users.findById(userId)
+      if (!user || !DATASET_MEMBER_ROLES.includes(user.role)) {
+        throw badRequest('"userId" must be a teacher or an annotator')
+      }
+      if (!user.active) throw badRequest('That account is deactivated')
+
+      res.json({ dataset: await adminRow(req, await store.datasets.addMember(dataset.id, userId)) })
+    }),
+  )
+
+  /**
+   * Taking a dataset back from someone. They stop seeing it at once; every
+   * label they made stays where it is, on the snippets.
+   */
+  router.delete(
+    '/datasets/:datasetId/members/:userId',
+    route(async (req, res) => {
+      requireDatasetAdmin(req)
+      await ensureDefaultDataset(store)
+      const dataset = await store.datasets.findById(req.params.datasetId)
+      if (!dataset) throw notFound('No such dataset')
+
+      res.json({
+        dataset: await adminRow(req, await store.datasets.removeMember(dataset.id, req.params.userId)),
+      })
+    }),
+  )
+
+  /**
+   * Adding dialogs to a dataset, or taking them out (`…/snippets/remove`) —
+   * the "which dataset" half of keeping a snippet.
+   *
+   * The same people as keep-or-drop: a teacher whose labelling is on, a
+   * manager, an admin, the research token; never an annotator. Any active
+   * dataset may be the target — picking is not limited to the datasets a
+   * teacher labels. Every snippet must exist and be in the caller's scope, or
+   * nothing changes (404 with the ids, as for assignment). Taking dialogs out
+   * leaves their labels on the record.
+   */
+  async function changeMembership(req, res, direction) {
+    notForAnnotators(req)
+    assertMayLabel(req)
+
+    const raw = req.body?.snippetIds
+    if (!Array.isArray(raw) || raw.length === 0) throw badRequest('"snippetIds" must be a non-empty array')
+    if (raw.length > ASSIGN_MAX) throw badRequest(`At most ${ASSIGN_MAX} snippets at a time`)
+    if (raw.some((entry) => typeof entry !== 'string' || !entry)) {
+      throw badRequest('"snippetIds" must be snippet ids')
+    }
+    const snippetIds = [...new Set(raw)]
+
+    await ensureDefaultDataset(store)
+    const dataset = await store.datasets.findById(req.params.datasetId)
+    if (!dataset || (dataset.archived && !isResearcher(req))) throw notFound('No such dataset')
+    if (dataset.archived && direction === 'add') {
+      throw new ApiError(409, 'This dataset is archived — nothing can be added to it')
+    }
+
+    const scope = await sessionScope(req)
+    const sessionIds = [...new Set(snippetIds.map(sessionOfSnippet))]
+    if (sessionIds.some((sessionId) => !canRead(scope, sessionId))) throw notFound('No such snippet')
+
+    const existing = new Set(
+      (await Promise.all(sessionIds.map(async (sessionId) => buildSnippets(await store.messages.listBySession(sessionId)))))
+        .flat()
+        .map((snippet) => snippet.id),
+    )
+    const missing = snippetIds.filter((snippetId) => !existing.has(snippetId))
+    if (missing.length) throw new ApiError(404, 'No such snippet', { snippetIds: missing })
+
+    const change = direction === 'add' ? { add: [dataset.id] } : { remove: [dataset.id] }
+    const records = await Promise.all(
+      snippetIds.map((snippetId) => store.snippetLabels.changeDatasets(snippetId, change)),
+    )
+
+    res.json({
+      datasetId: dataset.id,
+      count: snippetIds.length,
+      snippetIds,
+      memberships: Object.fromEntries(
+        records.map((record) => [
+          record.snippetId,
+          { datasetIds: datasetIdsOf(record), included: record.included ?? null },
+        ]),
+      ),
+    })
+  }
+
+  router.post(
+    '/datasets/:datasetId/snippets',
+    route((req, res) => changeMembership(req, res, 'add')),
+  )
+  router.post(
+    '/datasets/:datasetId/snippets/remove',
+    route((req, res) => changeMembership(req, res, 'remove')),
+  )
+
+  /* ------------------------------------------- dialog selection, by student */
+
+  /**
+   * The sessions in the caller's scope — the ones `/sessions` would list —
+   * with a row's worth of counts each. The student list and one student's
+   * page both start here, so the two can never disagree about who is in reach.
+   */
+  async function sessionsInScope(req) {
+    const scope = await sessionScope(req)
+    const all = await store.sessions.list({ limit: 1000 })
+    return scope.all ? all : all.filter((session) => canRead(scope, session.id))
+  }
+
+  /**
+   * A student's name, where the caller may already see it on the roster: an
+   * admin or the research token always; anyone else only for a student in
+   * their own user scope. Otherwise `null`, and the screen says "signed-in
+   * student", as the roster does.
+   */
+  async function studentNames(req, userIds) {
+    if (!userIds.length) return new Map()
+    let ids = userIds
+    if (!isResearcher(req)) {
+      const scope = await scopeOf(store, req.user)
+      ids = scope.all ? userIds : userIds.filter((userId) => scope.ids.has(userId))
+    }
+    if (!ids.length) return new Map()
+    const users = await store.users.list({ ids, limit: ids.length })
+    return new Map(users.map((user) => [user.id, user.name]))
+  }
+
+  /** The student rows for these sessions: counts from their messages and label records. */
+  async function studentRows(req, sessions, labels) {
+    const perSession = new Map(
+      await Promise.all(
+        sessions.map(async (session) => {
+          const messages = await store.messages.listBySession(session.id)
+          const snippets = buildSnippets(messages)
+          return [
+            session.id,
+            {
+              dialogs: snippets.length,
+              inDataset: snippets.filter((snippet) => datasetIdsOf(labels.get(snippet.id)).length).length,
+              questions: [...new Set(snippets.map((snippet) => snippet.questionId))],
+              lastAt: messages.at(-1)?.createdAt ?? null,
+            },
+          ]
+        }),
+      ),
+    )
+    const names = await studentNames(req, [
+      ...new Set(sessions.filter((session) => session.userId && !session.staffPreview).map((session) => session.userId)),
+    ])
+    return groupByStudent(sessions, perSession, (userId) => names.get(userId) ?? null)
+  }
+
+  /**
+   * Dialog selection, step one: the students whose work this caller can see,
+   * with how many dialogs each has and how many of those are in a dataset.
+   * The people who keep or drop snippets; never an annotator.
+   */
+  router.get(
+    '/students',
+    route(async (req, res) => {
+      notForAnnotators(req)
+      assertMayLabel(req)
+      const [sessions, labels] = await Promise.all([sessionsInScope(req), store.snippetLabels.map()])
+      res.json({ students: await studentRows(req, sessions, labels) })
+    }),
+  )
+
+  /**
+   * Step two: one student's dialogs, question by question — the question, what
+   * they handed in, and each exchange with its datasets. `key` is a row's key
+   * from the list (`u:<userId>` or `s:<sessionId>`); one out of scope is 404.
+   */
+  router.get(
+    '/students/:key/dialogs',
+    route(async (req, res) => {
+      notForAnnotators(req)
+      assertMayLabel(req)
+
+      const key = String(req.params.key)
+      const [all, labels] = await Promise.all([sessionsInScope(req), store.snippetLabels.map()])
+      const sessions = all.filter((session) => studentKeyOf(session) === key)
+      if (!sessions.length) throw notFound('No such student')
+
+      const messages = (
+        await Promise.all(sessions.map((session) => store.messages.listBySession(session.id)))
+      ).flat()
+      const snippets = await withContext(attachLabels(buildSnippets(messages), labels))
+
+      const [student] = await studentRows(req, sessions, labels)
+      const questions = dialogsByQuestion(
+        snippets.map((snippet) => ({
+          id: snippet.id,
+          sessionId: snippet.sessionId,
+          questionId: snippet.questionId,
+          question: snippet.question,
+          answer: snippet.answer,
+          // Who wrote the reply is left out, as on the labelling screen.
+          student: snippet.student,
+          tutor: { text: snippet.tutor.text, label: snippet.tutor.label, at: snippet.tutor.at },
+          rating: snippet.rating,
+          turnIndex: snippet.turnIndex,
+          included: snippet.included,
+          datasetIds: snippet.datasetIds,
+        })),
+      )
+
+      res.json({ student, questions })
+    }),
+  )
+
   /**
    * Dataset export. JSON keeps the nesting; CSV is one row per snippet, which
    * is what a coding tool or a stats package wants. Both carry the annotators'
@@ -976,10 +1559,18 @@ export function researchRoutes(store) {
       // every class, which is precisely what a teacher's scope excludes.
       requireResearcher(req)
 
+      // One dataset's snippets, or — as before — every kept one.
+      const datasetId = req.query.datasetId ? String(req.query.datasetId) : null
+      if (datasetId) {
+        await ensureDefaultDataset(store)
+        if (!(await store.datasets.findById(datasetId))) throw notFound('No such dataset')
+      }
+
       const labels = await store.snippetLabels.map()
       const snippets = withAnnotations(
         attachLabels(buildSnippets(await store.messages.listAll()), labels).filter(
-          (snippet) => snippet.included === true,
+          (snippet) =>
+            snippet.included === true && (!datasetId || snippet.datasetIds.includes(datasetId)),
         ),
         labels,
         await annotatorNames(),

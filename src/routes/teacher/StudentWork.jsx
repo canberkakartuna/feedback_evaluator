@@ -75,9 +75,22 @@ export default function StudentWork() {
           <p className="cs-lede">{meta}</p>
         </div>
 
-        <Link className="cs-btn" to={`/teacher/labelling?session=${session.id}`}>
-          {t('transcript.label')}
-        </Link>
+        <div className="cs-actions">
+          {/* Picking this student's dialogs into a dataset. A walkthrough or an
+              anonymous session is its own "student"; an account is one across
+              all its sessions — see studentKeyOf in server/services/datasets.js. */}
+          <Link
+            className="cs-btn"
+            to={`/teacher/selection/${encodeURIComponent(
+              session.userId && !session.staffPreview ? `u:${session.userId}` : `s:${session.id}`,
+            )}`}
+          >
+            {t('transcript.select')}
+          </Link>
+          <Link className="cs-btn" to={`/teacher/labelling?session=${session.id}`}>
+            {t('transcript.label')}
+          </Link>
+        </div>
       </header>
 
       {questions.length === 0 ? (

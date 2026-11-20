@@ -1,5 +1,6 @@
 import express from 'express'
 import { canManageRole, isRole, parentField } from '../../shared/roles.js'
+import { DATASET_MEMBER_ROLES } from '../../shared/datasets.js'
 import { requireAuth } from '../lib/auth.js'
 import { hashPassword } from '../lib/password.js'
 import { ApiError, badRequest, forbidden, id, notFound, now, route } from '../lib/http.js'
@@ -358,6 +359,13 @@ export function userRoutes(store) {
         await store.snippetLabels.clearAssignee(target.id)
       }
 
+      // Likewise the datasets they label, once they are in a role that does
+      // not label by assignment (shared/datasets.js DATASET_MEMBER_ROLES).
+      // The labels stay; only the assignment goes.
+      if (patch.role && patch.role !== target.role && !DATASET_MEMBER_ROLES.includes(patch.role)) {
+        await store.datasets.removeMemberEverywhere(target.id)
+      }
+
       res.json({ user: publicUser(updated) })
     }),
   )
@@ -444,6 +452,8 @@ export function userRoutes(store) {
       // Their assignments with them, as for a role change in the PATCH above:
       // otherwise those snippets would stay assigned to an id that names nobody.
       if (target.role === 'annotator') await store.snippetLabels.clearAssignee(target.id)
+      // And off every dataset they were assigned to label.
+      await store.datasets.removeMemberEverywhere(target.id)
 
       res.json({ deleted: true, userId: target.id })
     }),

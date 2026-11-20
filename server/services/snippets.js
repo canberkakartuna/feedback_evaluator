@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { config } from '../config.js'
+import { datasetIdsOf } from '../../shared/datasets.js'
 
 /**
  * A snippet is one student turn and the feedback that answered it — the unit
@@ -95,6 +96,11 @@ export function attachLabels(snippets, labels) {
     assigneeId: labels.get(snippet.id)?.assigneeId ?? null,
     assignedBy: labels.get(snippet.id)?.assignedBy ?? null,
     assignedAt: labels.get(snippet.id)?.assignedAt ?? null,
+    /**
+     * The datasets this snippet is in (shared/datasets.js). A record from
+     * before datasets existed reads as the default dataset when it was kept.
+     */
+    datasetIds: datasetIdsOf(labels.get(snippet.id)),
   }))
 }
 

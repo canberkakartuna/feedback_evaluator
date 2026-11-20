@@ -299,6 +299,34 @@ export const api = {
     call('POST', '/api/research/snippets/assign', { snippetIds, assigneeId }),
   /** The active annotators work can be assigned to: `{ annotators: [{ id, name }] }`. */
   annotators: () => call('GET', '/api/research/annotators'),
+
+  /* Datasets — server/routes/research.js, shared/datasets.js. */
+
+  /** The datasets this person can see; an admin gets all of them, with who labels each. */
+  datasets: () => call('GET', '/api/research/datasets'),
+  createDataset: ({ name, description }) => call('POST', '/api/research/datasets', { name, description }),
+  /** `{ name?, description?, archived? }`, admin only. */
+  updateDataset: (datasetId, patch) =>
+    call('PATCH', `/api/research/datasets/${encodeURIComponent(datasetId)}`, patch),
+  /** Only an empty dataset; one with dialogs in it is refused with 409 (archive it instead). */
+  deleteDataset: (datasetId) => call('DELETE', `/api/research/datasets/${encodeURIComponent(datasetId)}`),
+  assignDataset: (datasetId, userId) =>
+    call('POST', `/api/research/datasets/${encodeURIComponent(datasetId)}/members`, { userId }),
+  unassignDataset: (datasetId, userId) =>
+    call(
+      'DELETE',
+      `/api/research/datasets/${encodeURIComponent(datasetId)}/members/${encodeURIComponent(userId)}`,
+    ),
+  /** Answers `{ memberships: { [snippetId]: { datasetIds, included } } }`. */
+  addToDataset: (datasetId, snippetIds) =>
+    call('POST', `/api/research/datasets/${encodeURIComponent(datasetId)}/snippets`, { snippetIds }),
+  removeFromDataset: (datasetId, snippetIds) =>
+    call('POST', `/api/research/datasets/${encodeURIComponent(datasetId)}/snippets/remove`, { snippetIds }),
+
+  /** Dialog selection, by student: the list, then one student's dialogs by question. */
+  selectionStudents: () => call('GET', '/api/research/students'),
+  studentDialogs: (studentKey) =>
+    call('GET', `/api/research/students/${encodeURIComponent(studentKey)}/dialogs`),
   /**
    * A file behind a login, as a Blob — an annotator's view of a student's
    * file (`/api/research/snippets/:handle/files/:index`). An `<img src>`
