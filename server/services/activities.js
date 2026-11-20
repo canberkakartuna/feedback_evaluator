@@ -353,6 +353,29 @@ export function parseActivityInput(body, { forCreate } = {}) {
     if (level !== undefined) patch.level = level
   }
 
+  /**
+   * The teacher's own instructions for the AI tutor on this activity's
+   * questions. Added to the system prompt, never in place of it — see
+   * activityPromptBlock in services/tutor.js — and never sent to a student:
+   * publicActivity and publicQuestion are allow-lists that do not name it.
+   *
+   * Optional, like `answer`: `null` and `''` both mean "none", stored as `''`.
+   * Refused rather than cut when too long, because a cut instruction can read
+   * as a different instruction.
+   */
+  const tutorPrompt = body?.tutorPrompt
+  if (tutorPrompt !== undefined) {
+    if (tutorPrompt === null) {
+      patch.tutorPrompt = ''
+    } else if (typeof tutorPrompt !== 'string') {
+      throw badRequest('"tutorPrompt" must be a string')
+    } else if (tutorPrompt.trim().length > LIMITS.tutorPrompt) {
+      throw badRequest(`"tutorPrompt" must be at most ${LIMITS.tutorPrompt} characters`)
+    } else {
+      patch.tutorPrompt = tutorPrompt.trim()
+    }
+  }
+
   if (body?.status !== undefined) {
     if (!isActivityStatus(body.status)) throw badRequest('"status" must be "draft" or "published"')
     patch.status = body.status
@@ -424,7 +447,7 @@ export async function ensureClassCode(store, activity) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', code, ownerId, status = 'draft' }) {
+export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', tutorPrompt = '', code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
@@ -434,6 +457,7 @@ export function newActivity({ title, titleByLang = {}, blurb = '', topic = null,
     blurb,
     topic,
     level,
+    tutorPrompt,
     ownerId,
     status,
     createdAt: at,

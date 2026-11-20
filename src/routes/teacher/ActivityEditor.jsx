@@ -9,6 +9,7 @@ import { useAsync } from '../../lib/useAsync'
 import { initialNames } from '../../lib/wording'
 import QuestionForm from './QuestionForm'
 import ShareActivity from './ShareActivity'
+import TutorGuidance from './TutorGuidance'
 
 /**
  * The activity's name in both languages, with a Save that appears once either
@@ -242,6 +243,13 @@ export default function ActivityEditor() {
           <p className="cs-hint">{t('activities.levelHint')}</p>
         </div>
         </div>
+
+        <TutorGuidance
+          key={activity.tutorPrompt ?? ''}
+          activity={activity}
+          busy={busy}
+          onSave={(patch) => act(() => api.updateActivity(activity.id, patch)).catch(() => {})}
+        />
       </section>
 
       <ShareActivity activity={activity} published={published} />

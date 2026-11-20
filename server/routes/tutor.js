@@ -100,6 +100,14 @@ export function tutorRoutes(store, { resolveQuestion }) {
         text: askText,
         promptVersion: session.promptVersion,
         systemPrompt: prompt?.text ?? null,
+        /**
+         * The activity's own tutor prompt, added under the system prompt
+         * rather than in place of it — see activityPromptBlock in
+         * services/tutor.js. Read live from the activity, unlike the
+         * versioned system prompt above: it is the teacher's guidance for
+         * their own question set, edited like the questions themselves are.
+         */
+        activityPrompt: question.activityTutorPrompt ?? null,
         thread: history,
         // For the question's own uploaded image, which travels to the model —
         // see imageForModel in services/tutor.js.

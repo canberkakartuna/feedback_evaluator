@@ -75,6 +75,13 @@ export async function resolveQuestion(store, session, questionId) {
       activityId: question.activityId,
       activityTitle: activity?.title ?? null,
       activityTitleByLang: activity?.titleByLang ?? {},
+      /**
+       * The teacher's tutor prompt for the whole activity — for the model
+       * only. Like the rubric and the answer on this object it is never sent
+       * to a student; publicActivity and publicQuestion are allow-lists and
+       * do not carry it.
+       */
+      activityTutorPrompt: activity?.tutorPrompt ?? '',
     }
   }
 
@@ -87,6 +94,7 @@ export async function resolveQuestion(store, session, questionId) {
       activityId: null,
       activityTitle: null,
       activityTitleByLang: {},
+      activityTutorPrompt: '',
       isOwnQuestion: true,
     }
   }

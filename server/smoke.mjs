@@ -559,6 +559,74 @@ try {
     body: { topic: 'whole-numbers' },
   })
 
+  /**
+   * The activity's own tutor prompt: staff write it, the model reads it, and
+   * no student payload ever carries it. TUTOR-GUIDANCE-MARKER is a phrase in
+   * no public field, so finding it in anything a student receives — checked
+   * in every leak section below — means it leaked.
+   */
+  console.log("\nan activity's own tutor prompt")
+  check('a new activity starts with none', activity.tutorPrompt === '')
+  const withGuidance = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { tutorPrompt: '  TUTOR-GUIDANCE-MARKER: only ask questions back.  ' },
+  })
+  check('a teacher can set it', withGuidance.status === 200)
+  check('it is trimmed', withGuidance.body.activity.tutorPrompt === 'TUTOR-GUIDANCE-MARKER: only ask questions back.')
+  const authorView = await call('GET', `/api/activities/${activity.id}`, { token: teacherToken })
+  check('the author reads it back', authorView.body.activity.tutorPrompt === 'TUTOR-GUIDANCE-MARKER: only ask questions back.')
+  check(
+    'a non-string tutor prompt is refused',
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: teacherToken, body: { tutorPrompt: 42 } })).status === 400,
+  )
+  check(
+    'so is one over 4000 characters',
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: teacherToken, body: { tutorPrompt: 'x'.repeat(4001) } }))
+      .status === 400,
+  )
+  const createdWithGuidance = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Guided', tutorPrompt: 'Be Socratic.' },
+  })
+  check('it can be given at creation', createdWithGuidance.body.activity.tutorPrompt === 'Be Socratic.')
+  const clearedGuidance = await call('PATCH', `/api/activities/${createdWithGuidance.body.activity.id}`, {
+    token: teacherToken,
+    body: { tutorPrompt: null },
+  })
+  check('and null clears it', clearedGuidance.body.activity.tutorPrompt === '')
+  await call('DELETE', `/api/activities/${createdWithGuidance.body.activity.id}`, { token: teacherToken })
+  check(
+    "another teacher cannot set it on someone else's activity",
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: otherTeacherToken, body: { tutorPrompt: 'mine now' } }))
+      .status === 404,
+  )
+  check(
+    'nor can a student',
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: studentToken, body: { tutorPrompt: 'hi' } })).status ===
+      404,
+  )
+
+  console.log('\nenhancing a tutor prompt')
+  const enhanceAnon = await call('POST', '/api/tutor-prompt/enhance', { body: { text: 'ask questions' } })
+  check('enhancing needs a token', enhanceAnon.status === 401)
+  const enhanceStudent = await call('POST', '/api/tutor-prompt/enhance', {
+    token: studentToken,
+    body: { text: 'ask questions' },
+  })
+  check('and is for authors, not students', enhanceStudent.status === 403)
+  const enhanceEmpty = await call('POST', '/api/tutor-prompt/enhance', { token: teacherToken, body: { text: '  ' } })
+  check('an empty draft is a 400', enhanceEmpty.status === 400)
+  const enhanceLong = await call('POST', '/api/tutor-prompt/enhance', {
+    token: teacherToken,
+    body: { text: 'x'.repeat(4001) },
+  })
+  check('a draft over the limit is a 400', enhanceLong.status === 400)
+  const enhanceOff = await call('POST', '/api/tutor-prompt/enhance', {
+    token: teacherToken,
+    body: { text: 'ask questions', lang: 'en' },
+  })
+  check('with no model key it says so with a 503', enhanceOff.status === 503)
+
   console.log('\nadding questions')
   const emptyPublish = await call('PATCH', `/api/activities/${activity.id}`, {
     token: teacherToken,
@@ -861,6 +929,7 @@ try {
   check('no keyword survives the trip', !previewText.includes('water potential'))
   check('no hint text survives it', !previewText.includes('Start outside the cell'))
   check('no answer text survives it', !previewText.includes('exerts an opposing pressure'))
+  check('no tutor prompt survives it', !previewText.includes('TUTOR-GUIDANCE-MARKER'))
   check('criteria are counted, not listed', preview.body.activity.questions[0].criteriaCount === 3)
   check('and the count is honest', preview.body.activity.questions[0].points === 3)
   check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
@@ -913,6 +982,7 @@ try {
     'and no mark scheme',
     !JSON.stringify(openList.body).includes('water potential'),
   )
+  check('and no tutor prompt', !JSON.stringify(openList.body).includes('TUTOR-GUIDANCE-MARKER'))
 
   console.log('\nthe class code, once it is published')
   const byCode = await call('GET', `/api/activities/code/${activity.code.toLowerCase()}`)
@@ -921,6 +991,7 @@ try {
   check('it is named', byCode.body.activity.title === 'Membranes & transport')
   check('and counted', byCode.body.activity.questionCount === 3)
   check('but carries no questions', !('questions' in byCode.body.activity))
+  check('and no tutor prompt', !JSON.stringify(byCode.body).includes('TUTOR-GUIDANCE-MARKER'))
 
   const nonsenseCode = await call('GET', '/api/activities/code/ZZZZZZ')
   check('an unknown code is a 404', nonsenseCode.status === 404)
@@ -1086,6 +1157,12 @@ try {
     'no teacher answer in the session payload',
     !JSON.stringify(started.body).includes('exerts an opposing pressure'),
   )
+  check('no tutor prompt in the session payload', !JSON.stringify(started.body).includes('TUTOR-GUIDANCE-MARKER'))
+  const sessionReread = await call('GET', `/api/sessions/${session.id}`)
+  check(
+    'nor when the session is read back',
+    sessionReread.status === 200 && !JSON.stringify(sessionReread.body).includes('TUTOR-GUIDANCE-MARKER'),
+  )
 
   check('it still has a short code, as a label for the teacher', /^[A-Z2-9]{6}$/.test(session.code))
 
@@ -1162,6 +1239,10 @@ try {
     body: { text: 'Is it because the carriers are saturated?' },
   })
   check('free text gets a reply', typed.status === 201 && typed.body.tutor.text.length > 0)
+  check(
+    "the activity's tutor prompt is not in the chat response",
+    ![hint1, hint2, typed].some((reply) => JSON.stringify(reply.body).includes('TUTOR-GUIDANCE-MARKER')),
+  )
 
   const empty = await call('POST', `/api/sessions/${session.id}/questions/${markedQ.id}/messages`, {
     body: {},
@@ -2327,6 +2408,7 @@ try {
     ['POST', `/api/support/${ticket.body.message.id}/reply`, { text: 'hi' }, 403],
     ['POST', '/api/prompts', { text: 'Be terse.' }, 403],
     ['POST', '/api/translate', { text: 'hello', to: 'tr' }, 403],
+    ['POST', '/api/tutor-prompt/enhance', { text: 'hello' }, 403],
     ['POST', '/api/users', { role: 'student', name: 'Nope', studentNumber: '10000099' }, 403],
     ['POST', '/api/users/class-list', { studentNumbers: ['10000099'], teacherId: teacher.id }, 403],
     ['GET', `/api/users/${teacher.id}`, undefined, 404],

@@ -129,6 +129,7 @@ export async function reply({
   text,
   promptVersion,
   systemPrompt = null,
+  activityPrompt = null,
   thread = [],
   lang = 'en',
   store = null,
@@ -146,7 +147,7 @@ export async function reply({
     ])
 
     const result = await generate({
-      system: systemInstruction({ question, answer, action, lang, systemPrompt, image, answerImage, work }),
+      system: systemInstruction({ question, answer, action, lang, systemPrompt, activityPrompt, image, answerImage, work }),
       turns: turnsFor({ thread, text, image, answerImage, work }),
     })
 
@@ -362,21 +363,42 @@ plainly that they are right.`
 }
 
 /**
+ * The activity's own tutor prompt, as the system instruction states it.
+ *
+ * An addition, never a replacement: it sits after the system prompt and
+ * before the house rules, and says so in words — the house rules already
+ * override "anything above that conflicts with them", and placing it above
+ * them is what keeps that true for a teacher's text as well. Null when the
+ * activity has none, so the instruction is byte-for-byte what it was before
+ * activities could carry one.
+ */
+function activityPromptBlock(activityPrompt) {
+  const text = typeof activityPrompt === 'string' ? activityPrompt.trim() : ''
+  if (!text) return null
+  return `Guidance from the teacher who set this activity, for every question in it. Follow it where it does not override the instructions above or the rules below; where it conflicts with them, they win:
+${text}`
+}
+
+/**
  * Everything the model is told before the conversation itself: the active
- * system prompt, the house rules, the question, the teacher's answer when one
- * was written, and the student's answer as it stands.
+ * system prompt, the activity's own tutor prompt when the teacher wrote one,
+ * the house rules, the question, the teacher's answer when one was written,
+ * and the student's answer as it stands.
  *
  * Assembled per turn rather than cached, because all of it moves — the prompt
  * has versions, and the student's answer changes between one message and the
  * next.
  */
-function systemInstruction({ question, answer, action, lang, systemPrompt, image = null, answerImage = null, work = [] }) {
+export function systemInstruction({ question, answer, action, lang, systemPrompt, activityPrompt = null, image = null, answerImage = null, work = [] }) {
   const language = LANGUAGES[lang] ?? LANGUAGES.en
   const state = answerShape(answer)
   const hintsUsed = answer?.hintsUsed ?? 0
 
+  const guidance = activityPromptBlock(activityPrompt)
+
   const blocks = [
     (systemPrompt?.trim() || DEFAULT_SYSTEM_PROMPT),
+    ...(guidance ? [guidance] : []),
     HOUSE_RULES.replaceAll('{{language}}', language),
     questionBlock(question, image, lang),
   ]

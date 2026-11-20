@@ -199,6 +199,9 @@ export const api = {
   /** An AI draft of a teacher's text in the other language — see services/translate.js. */
   translate: ({ text, from, to }) => call('POST', '/api/translate', { text, from, to }),
 
+  /** An AI rewrite of an activity's tutor prompt, for the teacher to use or discard — see services/tutorPrompt.js. */
+  enhanceTutorPrompt: ({ text, lang }) => call('POST', '/api/tutor-prompt/enhance', { text, lang }),
+
   /**
    * What the person looking may start. Sends the token when there is one, which
    * narrows it to their own teacher's work; without one it is every published

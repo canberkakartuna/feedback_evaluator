@@ -7,7 +7,7 @@
  * has to take.
  *
  *   activity  { id, code, title, titleByLang{}, blurb, topic, level, ownerId,
- *               status, createdAt, updatedAt }
+ *               status, tutorPrompt, createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
  *               stimulus, answer, answerImage, workingExpected, rubric[],
  *               tutor{}, position, ... }
@@ -110,6 +110,7 @@ export const LIMITS = {
   hint: 2000,
   hints: 10,
   tutorField: 4000,
+  tutorPrompt: 4000, // the activity's own guidance for the AI tutor — see services/activities.js
   questionsPerActivity: 200,
 }
 
