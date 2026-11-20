@@ -53,6 +53,17 @@ process.env.SPACES_SECRET = ''
 // config is read at import time, so it must be imported after the env is set.
 const { config } = await import('./config.js')
 config.uploadDir = uploadDir
+/**
+ * The blank SPACES_* above come too late on their own: the static
+ * `import { createApp } from './app.js'` at the top is evaluated before this
+ * module's body, and it has already read config.js — so with keys in
+ * `.env.local` the uploads below went to the real bucket. Forced off here, and
+ * the storage backend rebuilt from it; the "deleting student work" section
+ * checks the files land on, and leave, this temp disk.
+ */
+config.spaces.key = null
+config.spaces.secret = null
+;(await import('./lib/storage.js')).resetStorage()
 config.researchToken = 'smoke-token'
 // Set explicitly rather than left to fall back to the research token, so a
 // BOOTSTRAP_TOKEN in a local .env cannot change what these assertions mean.
