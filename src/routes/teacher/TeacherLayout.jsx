@@ -1,12 +1,17 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../lib/auth'
+import { isNavActive } from '../../lib/navActive'
 import { roleStringKey, useT } from '../../lib/i18n'
 import { teacherCanLabel } from '../../../shared/roles'
 import Navbar from '../../components/Navbar'
 import '../console.css'
 
 const LINKS = [
-  { to: '/teacher', end: true, key: 'teacher.activities' },
+  /**
+   * The index tab: `end` so it is not current on every console page, and
+   * `also` so editing or previewing an activity still reads as Activities.
+   */
+  { to: '/teacher', end: true, also: ['/teacher/activities'], key: 'teacher.activities' },
   { to: '/teacher/students', key: 'teacher.studentWork' },
   { to: '/teacher/class-list', key: 'teacher.classList' },
   /** Hidden for a teacher whose labelling an admin or manager switched off. */
@@ -37,6 +42,7 @@ const LINKS = [
 export default function TeacherLayout() {
   const { user } = useAuth()
   const t = useT()
+  const { pathname } = useLocation()
 
   return (
     <>
@@ -49,9 +55,15 @@ export default function TeacherLayout() {
           <ul className="cs-links">
             {LINKS.filter((link) => !link.shown || link.shown(user)).map((link) => (
               <li key={link.to}>
-                <NavLink className="cs-link" to={link.to} end={link.end}>
+                {/* Link rather than NavLink: NavLink cannot mark the /teacher
+                    index current on /teacher/activities/… as well. */}
+                <Link
+                  className="cs-link"
+                  to={link.to}
+                  aria-current={isNavActive(pathname, link) ? 'page' : undefined}
+                >
                   {t(link.key)}
-                </NavLink>
+                </Link>
               </li>
             ))}
             {user.role === 'admin' ? (

@@ -35,6 +35,13 @@
   letter-spacing: -0.018em;
 }
 
+/* A page heading that takes focus when a multi-page screen moves on (see
+   ConsentScreen.jsx): focused for screen readers and the keyboard, not drawn
+   as a control, since it is not one. */
+.en-title[tabindex='-1']:focus {
+  outline: none;
+}
+
 .en-lede {
   margin: var(--s-3) 0 0;
   font-size: var(--t-14);
@@ -104,6 +111,48 @@
   height: 17px;
   margin: 2px 0 0;
   accent-color: var(--pen);
+}
+
+/* The consent form under the information sheet: a title, one line of
+   instruction, then one .en-agree row per statement with its "Yes" box. */
+.en-consent {
+  min-width: 0;
+  margin: var(--s-5) 0 0;
+  border: 0;
+  padding: 0;
+}
+
+.en-consent legend {
+  padding: 0;
+}
+
+.en-consent-title {
+  margin: 0;
+  font-size: var(--t-14);
+  font-weight: 700;
+}
+
+.en-consent-instruction {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-13);
+  line-height: 1.55;
+}
+
+.en-consent .en-agree:first-of-type {
+  margin-top: var(--s-3);
+}
+
+.en-consent-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.en-consent-yes {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 6px;
+  font-weight: 600;
 }
 
 /* ── topic choice ───────────────────────────────────────────── */

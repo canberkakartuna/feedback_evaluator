@@ -106,9 +106,8 @@ const en = {
     eyebrow: 'Before you continue',
     title: 'How this system uses your data',
     lede: 'Everything you do in this system — every action you take and every piece of data you generate — is used for research. Please read this before continuing.',
-    readSheet: 'I have read and understood the participant information sheet',
-    agree: 'I agree to take part in this study',
-    submit: 'Submit',
+    readSheet: 'I have read the Participant Information Sheet.',
+    continue: 'Continue',
     submitting: 'Saving…',
   },
 
@@ -125,14 +124,14 @@ const en = {
     consentGiven: 'Submitted {date}.',
     consentNone: 'No consent has been recorded on this account yet.',
     withdraw: 'Withdraw from the study',
-    withdrawHint: 'You can withdraw until you sign out. After that your consent stands.',
+    withdrawHint: 'You can withdraw here until you sign out. After that, you can withdraw by contacting your course instructor.',
     withdrawWarn: 'You are withdrawing from the study. You can keep using the system; what you do from now on is not part of the research.',
     withdrawn: 'You withdrew from the study on {date}.',
     withdrawnContact:
       'If you have any conversations recorded so far, the researcher will contact you to find out whether you would like them to be kept or deleted.',
     withdrawConfirm: 'Withdraw from the study',
     withdrawing: 'Withdrawing…',
-    withdrawClosed: 'Consent can only be withdrawn during the sign-in it was given in.',
+    withdrawClosed: 'Withdrawing here is only possible during the sign-in your consent was given in. To withdraw now, contact your course instructor.',
   },
 
   entry: {
@@ -835,9 +834,8 @@ const tr = {
     eyebrow: 'Devam etmeden önce',
     title: 'Verileriniz nasıl kullanılıyor',
     lede: 'Bu sistemde yaptığınız her şey — her işlem ve oluşturduğunuz her veri — araştırma amacıyla kullanılır. Devam etmeden önce lütfen bunu okuyun.',
-    readSheet: 'Katılımcı bilgilendirme formunu okudum ve anladım',
-    agree: 'Bu çalışmaya katılmayı onaylıyorum',
-    submit: 'Gönder',
+    readSheet: 'Katılımcı Bilgilendirme Formu’nu okudum.',
+    continue: 'Devam et',
     submitting: 'Kaydediliyor…',
   },
 
@@ -853,14 +851,14 @@ const tr = {
     consentGiven: '{date} tarihinde gönderildi.',
     consentNone: 'Bu hesapta henüz kayıtlı bir onay yok.',
     withdraw: 'Çalışmadan çekil',
-    withdrawHint: 'Çıkış yapana kadar onayını geri çekebilirsin. Sonrasında onayın geçerli kalır.',
+    withdrawHint: 'Çıkış yapana kadar buradan çalışmadan çekilebilirsin. Sonrasında dersin öğretim elemanıyla iletişime geçerek çekilebilirsin.',
     withdrawWarn: 'Çalışmadan çekiliyorsun. Sistemi kullanmaya devam edebilirsin; bundan sonra yaptıkların araştırmaya dahil edilmez.',
     withdrawn: '{date} tarihinde çalışmadan çekildin.',
     withdrawnContact:
       'Bu zamana kadar kaydedilmiş konuşmalarınız varsa, bunların saklanmasını mı yoksa silinmesini mi istediğinizi öğrenmek üzere araştırmacı sizinle iletişime geçecektir.',
     withdrawConfirm: 'Çalışmadan çekil',
     withdrawing: 'Geri çekiliyor…',
-    withdrawClosed: 'Onay yalnızca verildiği oturum boyunca geri çekilebilir.',
+    withdrawClosed: 'Buradan çekilmek yalnızca onayın verildiği oturum boyunca mümkündür. Şimdi çekilmek için dersin öğretim elemanıyla iletişime geçebilirsin.',
   },
 
   entry: {

@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useI18n } from '../lib/i18n'
+import { consentAppliesTo } from '../lib/consentSteps'
 import Navbar from '../components/Navbar'
 import ParticipantInfoSheet from '../components/ParticipantInfoSheet'
 import './console.css'
@@ -64,10 +65,11 @@ export default function Profile() {
         })
       : null
   const consentDate = formatDate(consent?.at)
+  const asked = consentAppliesTo(user)
 
   return (
     <main className="en-page">
-      <Navbar profile={false} />
+      <Navbar />
       <div className="en-card">
         <p className="eyebrow">{t('profile.eyebrow')}</p>
         <h1 className="en-title">{t('profile.title')}</h1>
@@ -105,7 +107,10 @@ export default function Profile() {
             <summary>{t('profile.readSheet')}</summary>
             <ParticipantInfoSheet />
           </details>
-          {consent?.given ? (
+          {/* Consent status and withdrawing are for students only: staff are
+              never asked (lib/consentSteps.js), so for them the sheet is here to
+              read and nothing more — even if an old consent is on the account. */}
+          {!asked ? null : consent?.given ? (
             <p className="pf-consent-note">{t('profile.consentGiven', { date: consentDate })}</p>
           ) : user.withdrawn ? (
             // What happens to what was already recorded is settled with the
@@ -118,7 +123,7 @@ export default function Profile() {
             <p className="pf-consent-note">{t('profile.consentNone')}</p>
           )}
 
-          {consent?.given && user.canWithdrawConsent ? (
+          {!asked ? null : consent?.given && user.canWithdrawConsent ? (
             <div className="pf-withdraw">
               {confirming ? (
                 <>

@@ -9,6 +9,7 @@ import { homeFor, useAuth } from "./lib/auth";
 import { AuthProvider } from "./lib/AuthProvider";
 import { useT } from "./lib/i18n";
 import ConsentScreen from "./components/ConsentScreen";
+import { needsConsent } from "./lib/consentSteps";
 import Profile from "./routes/Profile";
 import SignIn from "./routes/SignIn";
 import Support from "./routes/Support";
@@ -78,30 +79,23 @@ function Splash() {
 }
 
 /**
- * Shown in place of the whole app — every route, student or staff — to any
- * signed-in account that has not yet agreed to the research notice. Admins
- * are the one exception: see shared/roles.js and services/users.js for why
- * consent is a per-account record rather than a per-role one, which is what
- * lets this gate be a single role check rather than a list of routes to wrap.
+ * Shown in place of the whole app — every route — to any signed-in student
+ * who has not yet agreed to the research notice. Only students are asked:
+ * staff (teacher, manager, annotator, admin) are not subjects of the study and
+ * go straight in — see `needsConsent` in lib/consentSteps.js, the one place
+ * that rule lives.
  *
- * Sitting above <Routes> rather than inside Guard is the point: a teacher who
- * has not consented must not reach /teacher, and a student with an account
- * must not reach / either, without either becoming a special case in two
- * different places. Anonymous visitors (`user` is null) and admins pass
- * straight through, unchanged.
+ * Sitting above <Routes> rather than inside Guard is the point: a student with
+ * an account must not reach any route before agreeing, without that becoming a
+ * special case in several places. Anonymous visitors (`user` is null) and staff
+ * pass straight through, unchanged.
  */
 function ConsentGate({ children }) {
   const { user, ready } = useAuth();
 
   // A student who withdrew from the profile carries on without being asked
   // again: withdrawing takes them out of the study, not out of the system.
-  if (
-    ready &&
-    user &&
-    user.role !== "admin" &&
-    !user.consented &&
-    !user.withdrawn
-  ) {
+  if (ready && needsConsent(user)) {
     return <ConsentScreen />;
   }
 

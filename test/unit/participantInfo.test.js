@@ -12,10 +12,29 @@ test('both languages carry the full sheet, section for section', () => {
       assert.ok(section.paragraphs.length > 0)
     })
   }
+  // Paragraph breaks follow the source document per language: it splits TR
+  // section 3 into three paragraphs where the EN sheet has one.
   assert.deepEqual(
     PARTICIPANT_INFO.en.sections.map((s) => s.paragraphs.length),
-    PARTICIPANT_INFO.tr.sections.map((s) => s.paragraphs.length),
+    [1, 1, 1, 3, 1, 1, 1, 1, 1, 3, 2],
   )
+  assert.deepEqual(
+    PARTICIPANT_INFO.tr.sections.map((s) => s.paragraphs.length),
+    [1, 1, 3, 3, 1, 1, 1, 1, 1, 3, 2],
+  )
+})
+
+test('the sheet carries the current study title and withdrawal wording', () => {
+  const [en, tr] = [PARTICIPANT_INFO.en, PARTICIPANT_INFO.tr]
+  assert.deepEqual(en.details[0], ['Title of Study', 'Automating the Pedagogical Evaluation of LLM-generated Feedback'])
+  assert.deepEqual(tr.details[0], [
+    'Çalışmanın Başlığı',
+    'Büyük Dil Modellerinin Ürettiği Geri Bildirimlerin Pedagojik Niteliğinin Otomatik Olarak Değerlendirilmesi',
+  ])
+  assert.match(en.sections[2].paragraphs[0], /complete an online consent form/)
+  assert.match(en.sections[2].paragraphs[0], /withdraw through the “Profile” tab/)
+  assert.match(tr.sections[2].paragraphs[0], /çevrim içi onam formunu doldurmanız/)
+  assert.match(tr.sections[2].paragraphs[1], /“Profil” sekmesi üzerinden/)
 })
 
 test('participantInfoFor falls back to English', () => {

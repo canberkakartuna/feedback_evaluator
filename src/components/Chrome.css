@@ -111,6 +111,18 @@
   background: var(--paper-sunk);
 }
 
+/* The page already open. Same pen tint as the console sidebar's current link
+   and the pressed language/topic chips, plus weight and an underline so it
+   does not rest on colour alone. */
+.ch-btn[aria-current='page'],
+.ch-btn[aria-current='page']:hover {
+  color: var(--pen-deep);
+  background: var(--pen-soft);
+  border-color: var(--pen);
+  box-shadow: inset 0 -2px 0 var(--pen);
+  font-weight: 600;
+}
+
 .ch-dot {
   width: 7px;
   height: 7px;

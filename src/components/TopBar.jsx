@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { isStaff } from '../../shared/roles'
 import { homeFor, useAuth } from '../lib/auth'
 import { useT } from '../lib/i18n'
@@ -83,39 +83,43 @@ export default function TopBar({
       ) : null}
 
       {/* "Home" is the student entry screen, and the label is the caller's to
-          set — the destination is not. */}
+          set — the destination is not.
+
+          The destinations below are NavLinks so the one for the page already
+          open carries aria-current="page" (styled in Chrome.css). Home is
+          `end`, or it would be current on every page. */}
       {hasHome ? (
-        <Link className="ch-btn" to="/">
+        <NavLink className="ch-btn" to="/" end>
           {t(homeKey)}
-        </Link>
+        </NavLink>
       ) : null}
 
       {join ? (
-        <Link className="ch-btn" to="/join">
+        <NavLink className="ch-btn" to="/join">
           {t('nav.joinWithCode')}
-        </Link>
+        </NavLink>
       ) : null}
 
       {hasConsole ? (
-        <Link className="ch-btn" to={consoleHref}>
+        <NavLink className="ch-btn" to={consoleHref}>
           {t('nav.myConsole')}
-        </Link>
+        </NavLink>
       ) : null}
 
       {profile && ready && user ? (
-        <Link className="ch-btn" to="/profil">
+        <NavLink className="ch-btn" to="/profil">
           {t('nav.profile')}
-        </Link>
+        </NavLink>
       ) : null}
 
       {/* The support / suggestion channel, for anyone signed in (3 Nov 2026 doc). */}
       {ready && user ? (
-        <Link className="ch-btn" to="/support">
+        <NavLink className="ch-btn" to="/support">
           {t('nav.support')}
           {supportUnread > 0 ? (
             <span className="ch-dot" aria-label={t('nav.supportUnread')} />
           ) : null}
-        </Link>
+        </NavLink>
       ) : null}
 
       {ready && user ? (

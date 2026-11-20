@@ -15,7 +15,7 @@ export const PARTICIPANT_INFO = {
     title: 'Participant Information Sheet',
     committee: 'UCL Research Ethics Committee',
     details: [
-      ['Title of Study', 'Towards Evaluating Pedagogical Quality of LLM-generated Feedback'],
+      ['Title of Study', 'Automating the Pedagogical Evaluation of LLM-generated Feedback'],
       ['Department', 'Culture, Communication and Media'],
       ['Name and Contact Details of the Researcher', 'Ebru Toka, ebru.toka.24@ucl.ac.uk'],
       ['Name and Contact Details of the Course Instructor', 'Defne Yabas, defne.yabas@medipol.edu.tr'],
@@ -38,7 +38,7 @@ export const PARTICIPANT_INFO = {
       {
         heading: '3. Do I have to take part?',
         paragraphs: [
-          'It is up to you to decide whether or not to take part. If you decide to participate, you will be given a copy of this information sheet to keep and asked to sign a consent form. After giving consent and logging into the system for the first time, you may withdraw from the study at any point during your first session, without giving a reason, by going to the profile section. If you withdraw during this session, you will be asked whether you would like the data you have already provided to be retained or deleted. Once your first session has ended, it will no longer be possible to withdraw the data collected during that session from the study.',
+          'It is up to you to decide whether or not to take part. If you decide to participate, you will be given a copy of this information sheet to keep and asked to complete an online consent form. You can withdraw from the study until the end of the course without affecting your grade. During your first session, you can withdraw through the “Profile” tab. After that session, you can withdraw by contacting your course instructor. If you withdraw, you will be asked whether you would like the research team to keep or remove any conversations you have already had with the AI tutor. You can request removal of these conversations until your course instructor destroys the list linking your participant code to your identity. The instructor will destroy the list once grading is complete. After that, the research team will no longer be able to identify which recordings are yours.',
         ],
       },
       {
@@ -103,7 +103,7 @@ export const PARTICIPANT_INFO = {
     details: [
       [
         'Çalışmanın Başlığı',
-        'LLM tabanlı öğreticilerin öğrencilere verdiği geri bildirimlerin pedagojik kalitesinin değerlendirilmesi',
+        'Büyük Dil Modellerinin Ürettiği Geri Bildirimlerin Pedagojik Niteliğinin Otomatik Olarak Değerlendirilmesi',
       ],
       ['Departman', 'Culture, Communication and Media'],
       ['Araştırmacının Adı ve İletişim Bilgileri', 'Ebru Toka, ebru.toka.24@ucl.ac.uk'],
@@ -127,7 +127,9 @@ export const PARTICIPANT_INFO = {
       {
         heading: '3. Katılmak zorunda mıyım?',
         paragraphs: [
-          'Araştırmaya katılıp katılmamak tamamen sizin kararınızdır. Katılmaya karar verirseniz, saklamanız için bu bilgilendirme formunun bir kopyası size verilecek ve bir onam formu imzalamanız istenecektir. Onam verdikten ve sisteme ilk kez giriş yaptıktan sonra, ilk oturumunuz boyunca herhangi bir gerekçe göstermeden profil kısmına giderek araştırmadan çekilebilirsiniz. Bu oturum sırasında çekilmeye karar verirseniz, o ana kadar sağladığınız verilerin saklanmasını mı yoksa silinmesini mi istediğiniz size sorulacaktır. İlk oturumunuz sona erdikten sonra, oturumda toplanan verilerin araştırmadan çıkarılmasını talep etmeniz mümkün olmayacaktır.',
+          'Araştırmaya katılıp katılmamak sizin kararınızdır. Katılmaya karar verirseniz, bu bilgilendirme formunun bir kopyası size verilecek ve çevrim içi onam formunu doldurmanız istenecektir.',
+          'Dersinizin sonuna kadar, ders notunuz etkilenmeden araştırmadan çekilebilirsiniz. İlk oturumunuz sırasında “Profil” sekmesi üzerinden, ilk oturumunuz sona erdikten sonra ise dersinizin öğretim elemanıyla iletişime geçerek çekilebilirsiniz.',
+          'Araştırmadan çekilirseniz, yapay zekâ eğitmeniyle o ana kadar yaptığınız görüşmelerin kayıtlarının araştırma ekibi tarafından saklanmasını mı, yoksa araştırmadan çıkarılmasını mı istediğiniz sorulacaktır. Katılımcı kodunuzu kimliğinizle eşleştiren liste imha edilene kadar bu kayıtların araştırmadan çıkarılmasını talep edebilirsiniz. Dersinizin öğretim elemanı, notlandırma tamamlandıktan sonra bu listeyi imha edecektir. Liste imha edildikten sonra araştırma ekibi hangi kayıtların size ait olduğunu belirleyemeyecektir.',
         ],
       },
       {
