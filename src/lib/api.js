@@ -283,6 +283,13 @@ export const api = {
 
   researchSessions: () => call('GET', '/api/research/sessions'),
   transcript: (sessionId) => call('GET', `/api/research/sessions/${sessionId}/transcript`),
+  /**
+   * Deletes Student work entries (sessions): teacher, manager or admin, within
+   * scope. `{ deleted, protected, failed, files, labelRecords }` — see
+   * shared/sessionDeletion.js. `force` (admin only) also deletes protected ones.
+   */
+  deleteSessions: (sessionIds, { force = false } = {}) =>
+    call('POST', '/api/research/sessions/delete', { sessionIds, ...(force ? { force: true } : {}) }),
   snippets: (query = {}) => {
     const search = new URLSearchParams(
       Object.entries(query).filter(([, value]) => value != null && value !== ''),

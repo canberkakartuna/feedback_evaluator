@@ -136,6 +136,7 @@ Reports, traces and screenshots land in `e2e/.report` and `e2e/.results`
 | `support.spec.js` | Write in, the reply dot, read the reply, answer in the same thread |
 | `profile.spec.js` | Username, the sheet again, withdrawing in the first sign-in, closed after the next |
 | `privacy.spec.js` | An activity's `tutorPrompt` is in no response the student's browser receives |
+| `student-work-delete.spec.js` | Staff side: a teacher ticks two entries on Student work (select-all shows "some"), cancels, confirms, the list drops to one; that student signs in again with no consent pages and a blank answer |
 
 ## Manual check before merging UI changes
 

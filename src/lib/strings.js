@@ -590,6 +590,41 @@ const en = {
     preview: 'your preview',
     signedInStudent: 'Signed-in student',
     read: 'Read',
+    bulkLabel: 'Select entries to delete',
+    thSelect: 'Select',
+    selectEntry: 'Select entry {code}',
+    selectAllShown_one: 'Select the {count} entry shown',
+    selectAllShown_other: 'Select all {count} entries shown',
+    selectedCount_one: '{count} selected',
+    selectedCount_other: '{count} selected',
+    deleteSelected: 'Delete selected',
+    deleteEntry: 'Delete entry {code}',
+    confirmTitle_one: 'Delete {count} entry?',
+    confirmTitle_other: 'Delete {count} entries?',
+    confirmBody:
+      "This permanently removes the students' answers, uploaded photos and tutor conversations for these entries. It cannot be undone. Their accounts and consent stay; a student whose entry is deleted starts afresh the next time they open the activity.",
+    confirmProtected:
+      'Entries whose dialogs are in a dataset or have labels are research data: they are skipped, not deleted.',
+    confirmDelete_one: 'Delete {count} entry',
+    confirmDelete_other: 'Delete {count} entries',
+    deleting: 'Deleting…',
+    resultDeleted_one: '{count} entry deleted.',
+    resultDeleted_other: '{count} entries deleted.',
+    resultNone: 'Nothing was deleted.',
+    resultProtected_one:
+      '{count} entry was not deleted because its dialogs are in a dataset or have labels.',
+    resultProtected_other:
+      '{count} entries were not deleted because their dialogs are in a dataset or have labels.',
+    resultFailed_one: '{count} entry could not be deleted because of a server error. Try again.',
+    resultFailed_other: '{count} entries could not be deleted because of a server error. Try again.',
+    forceOffer_one: 'Delete it anyway (admin)…',
+    forceOffer_other: 'Delete these {count} anyway (admin)…',
+    forceTitle_one: 'Delete {count} entry and its research data?',
+    forceTitle_other: 'Delete {count} entries and their research data?',
+    forceBody:
+      'Their dialogs are in a dataset or have labels. Deleting also removes the label records of {dialogs} dialog(s) — staff and annotator labels, notes and dataset memberships — so datasets and the export no longer include them.',
+    forceConfirm_one: 'Delete {count} entry and its research data',
+    forceConfirm_other: 'Delete {count} entries and their research data',
   },
 
   transcript: {
@@ -1431,6 +1466,41 @@ const tr = {
     preview: 'önizlemeniz',
     signedInStudent: 'Girişli öğrenci',
     read: 'Oku',
+    bulkLabel: 'Silinecek kayıtları seçin',
+    thSelect: 'Seç',
+    selectEntry: '{code} kaydını seç',
+    selectAllShown_one: 'Gösterilen {count} kaydı seç',
+    selectAllShown_other: 'Gösterilen {count} kaydın tümünü seç',
+    selectedCount_one: '{count} seçili',
+    selectedCount_other: '{count} seçili',
+    deleteSelected: 'Seçilenleri sil',
+    deleteEntry: '{code} kaydını sil',
+    confirmTitle_one: '{count} kayıt silinsin mi?',
+    confirmTitle_other: '{count} kayıt silinsin mi?',
+    confirmBody:
+      'Bu işlem, bu kayıtlardaki öğrenci cevaplarını, yüklenen fotoğrafları ve öğretmenle yaptıkları sohbetleri kalıcı olarak siler. Geri alınamaz. Hesaplar ve onaylar kalır; kaydı silinen öğrenci etkinliği bir sonraki açışında baştan başlar.',
+    confirmProtected:
+      'Diyalogları bir veri setinde olan ya da etiketlenmiş kayıtlar araştırma verisidir: silinmez, atlanır.',
+    confirmDelete_one: '{count} kaydı sil',
+    confirmDelete_other: '{count} kaydı sil',
+    deleting: 'Siliniyor…',
+    resultDeleted_one: '{count} kayıt silindi.',
+    resultDeleted_other: '{count} kayıt silindi.',
+    resultNone: 'Hiçbir şey silinmedi.',
+    resultProtected_one:
+      '{count} kayıt silinmedi, çünkü diyalogları bir veri setinde ya da etiketlenmiş.',
+    resultProtected_other:
+      '{count} kayıt silinmedi, çünkü diyalogları bir veri setinde ya da etiketlenmiş.',
+    resultFailed_one: '{count} kayıt bir sunucu hatası yüzünden silinemedi. Yeniden deneyin.',
+    resultFailed_other: '{count} kayıt bir sunucu hatası yüzünden silinemedi. Yeniden deneyin.',
+    forceOffer_one: 'Yine de sil (yönetici)…',
+    forceOffer_other: 'Bu {count} kaydı yine de sil (yönetici)…',
+    forceTitle_one: '{count} kayıt araştırma verisiyle birlikte silinsin mi?',
+    forceTitle_other: '{count} kayıt araştırma verisiyle birlikte silinsin mi?',
+    forceBody:
+      'Bu kayıtların diyalogları bir veri setinde ya da etiketlenmiş. Silmek, {dialogs} diyaloğun etiket kayıtlarını da (personel ve etiketleyici etiketleri, notlar ve veri seti üyelikleri) siler; veri setleri ve dışa aktarma artık onları içermez.',
+    forceConfirm_one: '{count} kaydı araştırma verisiyle sil',
+    forceConfirm_other: '{count} kaydı araştırma verisiyle sil',
   },
 
   transcript: {

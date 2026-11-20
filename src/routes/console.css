@@ -1170,3 +1170,52 @@
   display: grid;
   gap: var(--s-2);
 }
+
+/* ── deleting Student work entries (Roster: teacher, manager, admin) ── */
+
+.cs-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-3);
+}
+
+.cs-bulk .cs-check {
+  align-items: center;
+}
+
+.cs-bulk .cs-check input {
+  margin-top: 0;
+}
+
+.cs-confirm {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+}
+
+.cs-confirm p {
+  margin: 0;
+}
+
+.cs-confirm-title {
+  font-weight: 650;
+}
+
+.cs-confirm:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 2px;
+}
+
+.cs-row-check {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+}
+
+.cs-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}

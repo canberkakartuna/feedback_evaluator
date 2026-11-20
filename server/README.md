@@ -425,6 +425,8 @@ snippets' label records along with everything else it left.
 | --- | --- | --- | --- |
 | `GET` | `/api/research/sessions` | scoped | Sessions with message/snippet/event counts |
 | `GET` | `/api/research/sessions/:id/transcript` | scoped | Grouped by question, with answers and events |
+| `POST` | `/api/research/sessions/delete` | teacher, manager, admin (an account; not the research token alone) | `{ sessionIds: [...], force? }` → `{ deleted, protected: [{ sessionId, dialogs }], failed, files, labelRecords }`. 1–100 ids. **Scope is all-or-nothing**: one id unknown or out of scope → 404 `{ details: { sessionIds } }`, nothing deleted. Deletes what withdrawal deletes (session, answers, messages, events, own questions, upload records and bytes, label records). A session whose dialogs are in a dataset or labelled is **skipped** and listed under `protected`; `force: true` (admin only, else 403) deletes it with its label records and so its dataset memberships. Logs a `student_work_deleted` account event |
+| `DELETE` | `/api/research/sessions/:id?force=true` | same | One entry, same rules; a protected entry is 409 |
 | `GET` | `/api/research/snippets?sessionId=&included=true\|false\|undecided` | scoped, annotator: assigned | **Snippets** = one student turn + the feedback that answered it. Each carries `assigneeId`, `assignedBy`, `assignedAt`; for an admin or manager also `assigneeName` and `assigneeActive` (`null` when unassigned); for an admin, a manager or the research token also `annotation` and `annotations`. An annotator's `labels`/`notes`/`note` are their own |
 | `PATCH` | `/api/research/snippets/:id` | scoped, annotator: assigned | `{ included, labels: { criterionId: yes\|no\|partly }, note, notes }`. `included` is refused for an annotator, whose labels go to their own entry |
 | `GET` | `/api/research/snippets/:handle/files/:index` | annotator: assigned | A student's file for that snippet, streamed (no redirect). 403 for any other role |
@@ -449,9 +451,9 @@ timestamps, not states worth a request each.
 `answer_checked` · `student_marked_question` · `student_message_sent` ·
 `student_requested_help` · `ai_feedback_shown` · `student_rated_feedback` ·
 `student_uploaded_image` · `student_removed_image` · `student_added_own_question` · `user_signed_in` ·
-`user_created`
+`user_created` · `student_work_deleted`
 
-The last two are account events rather than session telemetry, so they carry
+The last three are account events rather than session telemetry, so they carry
 `userId` and a `sessionId` of `null`.
 
 Server time is authoritative; a client-supplied `at` is kept as `clientAt`.

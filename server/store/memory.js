@@ -522,6 +522,12 @@ export function createMemoryStore() {
         snippetLabels.set(id, next)
         return clone(next)
       },
+      /** One session's records — what deleting it would take with it. */
+      async listBySession(sessionId) {
+        return [...snippetLabels]
+          .filter(([id]) => id.startsWith(`${sessionId}:`))
+          .map(([, value]) => clone(value))
+      },
       /** A withdrawn session's records. Snippet ids start with `${sessionId}:`. */
       async removeBySession(sessionId) {
         let removed = 0

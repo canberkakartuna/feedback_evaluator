@@ -24,6 +24,13 @@ import {
   datasetIdsOf,
   membershipForIncluded,
 } from '../../shared/datasets.js'
+import {
+  canDeleteSessions,
+  canForceDeleteSessions,
+  parseSessionIds,
+  researchRecordCount,
+} from '../../shared/sessionDeletion.js'
+import { removeSessionData } from '../services/withdrawal.js'
 import { EXTENSIONS } from '../lib/attachments.js'
 import { readBytes } from './uploads.js'
 import {
@@ -383,6 +390,132 @@ export function researchRoutes(store) {
       })
 
       res.json({ session, questions, events })
+    }),
+  )
+
+  /* ------------------------------------------------- deleting student work */
+
+  /**
+   * Deleting entries from the Student work page. One entry is one session, and
+   * deleting it removes what `removeSessionData` removes for a withdrawal: the
+   * session, its answers, tutor messages, events, own questions, uploaded files
+   * (records and bytes) and the label records on its dialogs. The student's
+   * account, sign-in and consent are not touched; opening the activity again
+   * starts a new session.
+   *
+   * - **Who:** a signed-in teacher, manager or admin, each within the sessions
+   *   `sessionScope` already lets them read. The research token alone is not
+   *   enough — a deletion is attributed to an account.
+   * - **Scope is all-or-nothing:** one id that is unknown or out of reach and
+   *   nothing is deleted — 404 with the offending ids, the same answer for both
+   *   so it says nothing about whether a session exists elsewhere.
+   * - **Research data is per id:** a session whose dialogs are in a dataset or
+   *   carry labels (shared/sessionDeletion.js `isResearchRecord`) is skipped and
+   *   reported under `protected`, unless an admin sends `force: true`, which
+   *   deletes it with its label records — and so its dataset memberships,
+   *   which live on those records. Nothing is left pointing at it.
+   *
+   * Sessions are deleted one by one; one that fails is reported under
+   * `failed` and the rest carry on, so the answer always says exactly which
+   * ids are gone.
+   */
+  async function deleteSessions(req, sessionIds, force) {
+    if (!canDeleteSessions(req.user)) {
+      throw forbidden('Only a teacher, a manager or an admin can delete student work')
+    }
+    if (force && !canForceDeleteSessions(req.user)) {
+      throw forbidden('Only an admin can delete entries whose dialogs are research data')
+    }
+
+    const scope = await sessionScope(req)
+    const sessions = await Promise.all(sessionIds.map((sessionId) => store.sessions.findById(sessionId)))
+    const missing = sessionIds.filter(
+      (sessionId, index) => !sessions[index] || !canRead(scope, sessionId),
+    )
+    if (missing.length) throw new ApiError(404, 'No such session', { sessionIds: missing })
+
+    const result = { deleted: [], protected: [], failed: [], files: 0, labelRecords: 0 }
+
+    for (const session of sessions) {
+      try {
+        const labels = await store.snippetLabels.listBySession(session.id)
+        const dialogs = researchRecordCount(labels)
+        if (dialogs > 0 && !force) {
+          result.protected.push({ sessionId: session.id, dialogs })
+          continue
+        }
+        const { files } = await removeSessionData(store, session)
+        result.deleted.push(session.id)
+        result.files += files
+        result.labelRecords += labels.length
+      } catch (error) {
+        console.error(`[api] could not delete session ${session.id}: ${error.message}`)
+        result.failed.push({ sessionId: session.id, reason: 'error' })
+      }
+    }
+
+    // Who deleted what, kept after the work itself is gone. An account event:
+    // `sessionId` is null, as for sign-ins.
+    if (result.deleted.length) {
+      await store.events.insertMany([
+        {
+          id: newId('evt'),
+          sessionId: null,
+          userId: req.user.id,
+          type: 'student_work_deleted',
+          at: now(),
+          payload: {
+            sessionIds: result.deleted,
+            forced: Boolean(force),
+            files: result.files,
+            labelRecords: result.labelRecords,
+          },
+        },
+      ])
+    }
+
+    return result
+  }
+
+  /**
+   * `{ sessionIds: [...], force? }` → `{ deleted, protected, failed, files,
+   * labelRecords }`. At most DELETE_SESSIONS_MAX ids. See deleteSessions.
+   */
+  router.post(
+    '/sessions/delete',
+    route(async (req, res) => {
+      notForAnnotators(req)
+      if (!canDeleteSessions(req.user)) {
+        throw forbidden('Only a teacher, a manager or an admin can delete student work')
+      }
+      const { ids, error } = parseSessionIds(req.body?.sessionIds)
+      if (error) throw badRequest(error)
+      const force = req.body?.force === true
+
+      res.json(await deleteSessions(req, ids, force))
+    }),
+  )
+
+  /**
+   * One entry. The same rules; `?force=true` for an admin. A protected session
+   * is a 409 here rather than a 200 that deleted nothing.
+   */
+  router.delete(
+    '/sessions/:sessionId',
+    route(async (req, res) => {
+      notForAnnotators(req)
+      const force = req.query.force === 'true' || req.query.force === '1'
+      const result = await deleteSessions(req, [req.params.sessionId], force)
+
+      if (result.protected.length) {
+        throw new ApiError(
+          409,
+          'This entry has dialogs in a dataset or with labels — only an admin can delete it',
+          { protected: result.protected },
+        )
+      }
+      if (result.failed.length) throw new ApiError(500, 'The entry could not be deleted')
+      res.json(result)
     }),
   )
 

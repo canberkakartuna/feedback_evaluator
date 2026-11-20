@@ -3999,6 +3999,222 @@ try {
     'and so is one moved to a role that does not label by assignment',
     !(await dsList(adminToken)).body.datasets.some((d) => d.memberIds.includes(secondAnnotator.id)),
   )
+
+  /* ============================================== deleting Student work entries */
+
+  // A block of its own, so its names cannot collide with the sections above.
+  {
+    console.log('\ndeleting student work: setting up')
+    // A world of its own: a manager with two teachers, a second manager with one,
+    // signed-in students with answers, a tutor exchange and a photo each.
+    const delStaff = async (body) => {
+      const made = (await call('POST', '/api/users', { token: adminToken, body: { password: 'correct horse battery', ...body } })).body.user
+      const token = (await call('POST', '/api/auth/login', { body: { email: body.email, password: 'correct horse battery' } })).body.token
+      return { user: made, token }
+    }
+    const delManager = await delStaff({ role: 'manager', name: 'Del Manager', email: 'del-mgr@example.com' })
+    const delTeacher = await delStaff({ role: 'teacher', name: 'Del Teacher', email: 'del-t1@example.com', managerId: delManager.user.id })
+    const delSibling = await delStaff({ role: 'teacher', name: 'Del Sibling', email: 'del-t2@example.com', managerId: delManager.user.id })
+    const delFarManager = await delStaff({ role: 'manager', name: 'Del Far Manager', email: 'del-mgr2@example.com' })
+    const delFarTeacher = await delStaff({ role: 'teacher', name: 'Del Far', email: 'del-t3@example.com', managerId: delFarManager.user.id })
+
+    const delActivity = async (teacherToken_) => {
+      const activity = (await call('POST', '/api/activities', { token: teacherToken_, body: { title: 'Deletable work' } })).body.activity
+      const question = (await call('POST', `/api/activities/${activity.id}/questions`, { token: teacherToken_, body: BARE_QUESTION })).body.question
+      await call('PATCH', `/api/activities/${activity.id}`, { token: teacherToken_, body: { status: 'published' } })
+      return { activity, question }
+    }
+    const delNear = await delActivity(delTeacher.token)
+    const delFar = await delActivity(delFarTeacher.token)
+
+    const delStudent = async (teacherToken_, number) => {
+      await call('POST', '/api/users/class-list', { token: teacherToken_, body: { studentNumbers: [number] } })
+      const login = (await call('POST', '/api/auth/student', { body: { studentNumber: number } })).body
+      await call('POST', '/api/auth/consent', { token: login.token })
+      return { user: login.user, token: login.token }
+    }
+    /** One entry with everything an entry can hold: an answer, a tutor exchange, a photo. */
+    const delWork = async (who, { activity, question }) => {
+      const started = await call('POST', '/api/sessions', { token: who?.token, body: { consent: true, activityId: activity.id } })
+      const session = started.body.session
+      await call('PUT', `/api/sessions/${session.id}/answers/${question.id}`, { token: who?.token, body: { mode: 'write', draft: 'my working' } })
+      await call('POST', `/api/sessions/${session.id}/questions/${question.id}/messages`, { token: who?.token, body: { text: 'Where do I start?' } })
+      const photo = (await call('POST', `/api/sessions/${session.id}/questions/${question.id}/uploads`, { token: who?.token, body: { name: 'w.png', dataUrl: PNG } })).body.upload
+      return { session, photo, snippetId: `${session.id}:${question.id}:` }
+    }
+    const delStudents = []
+    for (let i = 1; i <= 7; i += 1) delStudents.push(await delStudent(delTeacher.token, `5050000${i}`))
+    const farStudent = await delStudent(delFarTeacher.token, '50500009')
+    const work = []
+    for (const who of delStudents) work.push(await delWork(who, delNear))
+    const anonWork = await delWork(null, delNear) // anonymous, reached through the activity
+    const farWork = await delWork(farStudent, delFar)
+    const snippetOf = async (sessionId) =>
+      (await call('GET', `/api/research/snippets?sessionId=${sessionId}`, { token: adminToken })).body.snippets[0]
+    check('every entry has a dialog and a photo', (await snippetOf(work[0].session.id))?.id && Boolean(work[0].photo?.id))
+
+    const exists = async (sessionId) => (await call('GET', `/api/research/sessions/${sessionId}/transcript`, { token: adminToken })).status === 200
+    const deleteMany = (sessionIds, token, extra = {}) =>
+      call('POST', '/api/research/sessions/delete', { token, body: { sessionIds, ...extra } })
+    const filesOnDisk = async (sessionId) => {
+      try {
+        return (await fs.readdir(path.join(uploadDir, config.spaces.prefix, sessionId))).length
+      } catch {
+        return 0
+      }
+    }
+
+    console.log('\ndeleting student work: who may')
+    const target = work[0].session.id
+    const refused = {
+      anonymous: undefined,
+      student: delStudents[0].token,
+      annotator: annotatorToken,
+      'the research token alone': 'smoke-token',
+    }
+    for (const [who, token] of Object.entries(refused)) {
+      const answer = await deleteMany([target], token)
+      check(`${who} is refused (${answer.status})`, answer.status === 401 || answer.status === 403, String(answer.status))
+      const single = await call('DELETE', `/api/research/sessions/${target}`, { token })
+      check(`${who} is refused one at a time too (${single.status})`, single.status === 401 || single.status === 403, String(single.status))
+    }
+    check('and the entry is still there', await exists(target))
+    check('the older student door still refuses a teacher', (await call('DELETE', `/api/sessions/${target}`, { token: delTeacher.token })).status === 403)
+
+    console.log('\ndeleting student work: scope')
+    const sibling = await deleteMany([target], delSibling.token)
+    check('another teacher, same manager: 404', sibling.status === 404 && sibling.body.error.details.sessionIds.join() === target)
+    const unknown = await deleteMany(['ses_doesnotexist'], delTeacher.token)
+    check(
+      'an unknown id answers exactly as an out-of-scope one',
+      unknown.status === 404 && unknown.body.error.message === sibling.body.error.message,
+    )
+    const farManager = await deleteMany([target], delFarManager.token)
+    check('a manager outside the branch: 404', farManager.status === 404)
+    const mixed = await deleteMany([work[1].session.id, farWork.session.id], delTeacher.token)
+    check(
+      'one id out of scope and nothing is deleted',
+      mixed.status === 404 &&
+        mixed.body.error.details.sessionIds.join() === farWork.session.id &&
+        (await exists(work[1].session.id)) &&
+        (await exists(farWork.session.id)),
+    )
+
+    console.log('\ndeleting student work: limits')
+    check('ids are required', (await call('POST', '/api/research/sessions/delete', { token: delTeacher.token, body: {} })).status === 400)
+    check('an empty list is refused', (await deleteMany([], delTeacher.token)).status === 400)
+    check('ids are strings', (await deleteMany([42], delTeacher.token)).status === 400)
+    check('a string is not a list', (await call('POST', '/api/research/sessions/delete', { token: delTeacher.token, body: { sessionIds: target } })).status === 400)
+    const tooMany = Array.from({ length: 101 }, (_, i) => `ses_bulk_${i}`)
+    check('at most 100 per request', (await deleteMany(tooMany, delTeacher.token)).status === 400)
+    check('a teacher cannot force', (await deleteMany([target], delTeacher.token, { force: true })).status === 403 && (await exists(target)))
+    check('nor a manager', (await deleteMany([target], delManager.token, { force: true })).status === 403 && (await exists(target)))
+
+    console.log('\ndeleting student work: a teacher deletes two at once')
+    const before = await call('GET', '/api/research/sessions', { token: delTeacher.token })
+    check('the teacher sees all eight entries', before.body.sessions.filter((s) => s.activityId === delNear.activity.id).length === 8)
+    check('the photos are on disk', (await filesOnDisk(work[0].session.id)) === 1 && (await filesOnDisk(work[1].session.id)) === 1)
+    const pair = await deleteMany([work[0].session.id, work[1].session.id, work[0].session.id], delTeacher.token)
+    check(
+      'both deleted, duplicates ignored',
+      pair.status === 200 &&
+        pair.body.deleted.join() === [work[0].session.id, work[1].session.id].join() &&
+        pair.body.protected.length === 0 &&
+        pair.body.failed.length === 0 &&
+        pair.body.files === 2,
+      JSON.stringify(pair.body),
+    )
+    check('their transcripts are gone', !(await exists(work[0].session.id)) && !(await exists(work[1].session.id)))
+    check('so is the session itself', (await call('GET', `/api/sessions/${work[0].session.id}`, { token: delStudents[0].token })).status === 404)
+    check('the photo is no longer served', (await fetch(`${base}${work[0].photo.url}`)).status === 404)
+    check('nor left on disk', (await filesOnDisk(work[0].session.id)) === 0 && (await filesOnDisk(work[1].session.id)) === 0)
+    check('the store has nothing left for it', (await app.locals.store.answers.listBySession(work[0].session.id)).length === 0 &&
+      (await app.locals.store.messages.listBySession(work[0].session.id)).length === 0 &&
+      (await app.locals.store.uploads.listBySession(work[0].session.id)).length === 0 &&
+      (await app.locals.store.events.countBySession(work[0].session.id)) === 0)
+    const after = await call('GET', '/api/research/sessions', { token: delTeacher.token })
+    check('the list no longer has them', after.body.sessions.filter((s) => s.activityId === delNear.activity.id).length === 6)
+    check(
+      'nor the students list',
+      !(await call('GET', '/api/research/students', { token: delTeacher.token })).body.students.some(
+        (row) => row.key === `u:${delStudents[0].user.id}`,
+      ),
+    )
+    check(
+      'and who did it is recorded, as an account event',
+      (await app.locals.store.events.listBySession(null)).some(
+        (event) =>
+          event.type === 'student_work_deleted' &&
+          event.userId === delTeacher.user.id &&
+          event.payload.sessionIds.join() === [work[0].session.id, work[1].session.id].join(),
+      ),
+    )
+
+    console.log('\ndeleting student work: the student starts fresh')
+    const me = await call('GET', '/api/auth/me', { token: delStudents[0].token })
+    check('their sign-in still works', me.status === 200 && me.body.user.id === delStudents[0].user.id)
+    check('their consent is untouched', me.body.user.consented === true)
+    check('their account is still on the roster', (await call('GET', `/api/users/${delStudents[0].user.id}`, { token: delTeacher.token })).status === 200)
+    const fresh = await call('POST', '/api/sessions', { token: delStudents[0].token, body: { activityId: delNear.activity.id } })
+    check('opening the activity again starts a new entry', fresh.status === 201 && !fresh.body.resumed && fresh.body.session.id !== work[0].session.id)
+    const freshRead = await call('GET', `/api/sessions/${fresh.body.session.id}`, { token: delStudents[0].token })
+    check('with nothing carried over', freshRead.body.answers.length === 0 && freshRead.body.messages.length === 0)
+
+    console.log('\ndeleting student work: one at a time, manager, admin')
+    const one = await call('DELETE', `/api/research/sessions/${work[2].session.id}`, { token: delTeacher.token })
+    check('a teacher deletes one entry', one.status === 200 && one.body.deleted.join() === work[2].session.id && !(await exists(work[2].session.id)))
+    check('one out of scope is 404', (await call('DELETE', `/api/research/sessions/${farWork.session.id}`, { token: delTeacher.token })).status === 404)
+    check('and again is 404', (await call('DELETE', `/api/research/sessions/${work[2].session.id}`, { token: delTeacher.token })).status === 404)
+    const byManager = await deleteMany([work[3].session.id, anonWork.session.id], delManager.token)
+    check('a manager deletes in their branch, anonymous work included', byManager.status === 200 && byManager.body.deleted.length === 2)
+    const byFarManager = await deleteMany([farWork.session.id], delFarManager.token)
+    check('the other manager deletes in theirs', byFarManager.status === 200 && byFarManager.body.deleted.length === 1)
+
+    console.log('\ndeleting student work: research data is protected')
+    const keptSnippet = await snippetOf(work[4].session.id)
+    const labelledSnippet = await snippetOf(work[5].session.id)
+    const assignedSnippet = await snippetOf(work[6].session.id)
+    await call('POST', '/api/research/datasets/ds_default/snippets', { token: adminToken, body: { snippetIds: [keptSnippet.id] } })
+    await call('PATCH', `/api/research/snippets/${encodeURIComponent(labelledSnippet.id)}`, { token: adminToken, body: { labels: { specific: 'yes' } } })
+    await call('POST', '/api/research/snippets/assign', { token: adminToken, body: { snippetIds: [assignedSnippet.id], assigneeId: annotator.id } })
+    const datasetCount = async () =>
+      (await call('GET', '/api/research/datasets', { token: adminToken })).body.datasets.find((d) => d.id === 'ds_default').count
+    const countBefore = await datasetCount()
+    const guarded = await deleteMany([work[4].session.id, work[5].session.id, work[6].session.id], delTeacher.token)
+    check(
+      'in a dataset or labelled: skipped and reported, the rest deleted',
+      guarded.status === 200 &&
+        guarded.body.deleted.join() === work[6].session.id &&
+        guarded.body.protected.map((p) => p.sessionId).sort().join() === [work[4].session.id, work[5].session.id].sort().join() &&
+        guarded.body.protected.every((p) => p.dialogs === 1),
+      JSON.stringify(guarded.body),
+    )
+    check('an assigned-only dialog is not research data, and its record goes with it', (await app.locals.store.snippetLabels.get(assignedSnippet.id)) === null)
+    check('the protected entries are untouched', (await exists(work[4].session.id)) && (await exists(work[5].session.id)) && (await filesOnDisk(work[4].session.id)) === 1)
+    check('their records are untouched', Boolean(await app.locals.store.snippetLabels.get(keptSnippet.id)) && Boolean(await app.locals.store.snippetLabels.get(labelledSnippet.id)))
+    const singleGuarded = await call('DELETE', `/api/research/sessions/${work[4].session.id}`, { token: delManager.token })
+    check('one at a time, a protected entry is a 409', singleGuarded.status === 409 && singleGuarded.body.error.details.protected[0].dialogs === 1 && (await exists(work[4].session.id)))
+
+    const forced = await deleteMany([work[4].session.id, work[5].session.id], adminToken, { force: true })
+    check(
+      'an admin forces it',
+      forced.status === 200 && forced.body.deleted.length === 2 && forced.body.protected.length === 0 && forced.body.labelRecords === 2,
+      JSON.stringify(forced.body),
+    )
+    check('the label records go with it', (await app.locals.store.snippetLabels.get(keptSnippet.id)) === null && (await app.locals.store.snippetLabels.get(labelledSnippet.id)) === null)
+    check('so the dataset counts one fewer', (await datasetCount()) === countBefore - 1)
+    check('no record anywhere names a deleted session', ![...(await app.locals.store.snippetLabels.map()).keys()].some((key) =>
+      work.some((entry) => key.startsWith(`${entry.session.id}:`)),
+    ))
+    const exportAfter = await call('GET', '/api/research/export', { token: 'smoke-token' })
+    check('the export still works and leaves them out', exportAfter.status === 200 && !exportAfter.body.snippets.some((s) => s.id === keptSnippet.id))
+    const csvAfter = await fetch(`${base}/api/research/export?format=csv`, { headers: { authorization: 'Bearer smoke-token' } })
+    check('the CSV export too', csvAfter.status === 200 && !(await csvAfter.text()).includes(work[4].session.id))
+    check('the annotator’s list is still readable', (await call('GET', '/api/research/snippets', { token: annotatorToken })).status === 200)
+
+    const forcedOne = await deleteMany([fresh.body.session.id], adminToken)
+    check('an admin deletes without force when nothing is protected', forcedOne.status === 200 && forcedOne.body.deleted.length === 1)
+  }
 } finally {
   server.close()
   await fs.rm(uploadDir, { recursive: true, force: true })

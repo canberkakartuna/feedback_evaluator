@@ -681,6 +681,13 @@ export function createMongoStore({ uri, dbName } = {}) {
           { ...BARE, upsert: true, returnDocument: 'after' },
         )
       },
+      /** See memory.js. The same anchored prefix match as removeBySession below. */
+      async listBySession(sessionId) {
+        const escaped = String(sessionId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        return (await col('snippetLabels'))
+          .find({ _id: { $regex: `^${escaped}:` } }, BARE)
+          .toArray()
+      },
       /**
        * A withdrawn session's records. `_id` is the snippet id,
        * `sessionId:questionId:seq`, so an anchored prefix match on it is a
