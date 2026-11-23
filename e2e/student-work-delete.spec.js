@@ -72,5 +72,5 @@ test('a teacher selects two entries, confirms, and the list updates; the student
   await expect(page.getByRole('heading', { name: 'What are you working on?' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Ratio practice/ })).not.toContainText('continue where you left off')
   await openActivity(page, 'Ratio practice')
-  await expect(page.getByLabel('Your written answer')).toHaveValue('')
+  await expect(page.getByLabel('Your written answer')).toHaveAttribute('data-value', '')
 })

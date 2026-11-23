@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { turnState } from '../../shared/turns'
 import { useI18n } from '../lib/i18n'
+import { MAX_MESSAGE_LENGTH } from '../lib/mathDraft'
 import { questionName } from '../lib/questionName'
+import MathInput from './MathInput'
 import MathText from './MathText'
-import MathTools from './MathTools'
 import './TutorPanel.css'
 
 export default function TutorPanel({
@@ -22,7 +23,6 @@ export default function TutorPanel({
   const [clock, setClock] = useState(() => Date.now())
   const thread = useRef(null)
   const closeButton = useRef(null)
-  const input = useRef(null)
 
   /**
    * Turns left on this question, read from the thread exactly as the server
@@ -50,8 +50,9 @@ export default function TutorPanel({
     if (open) closeButton.current?.focus()
   }, [open])
 
+  // From the form, or from Enter in the box (no event then).
   const submit = (event) => {
-    event.preventDefault()
+    event?.preventDefault()
     if (locked || pending || !draft.trim()) return
     onSend(draft)
     setDraft('')
@@ -162,35 +163,23 @@ export default function TutorPanel({
         </p>
       ) : (
         <form className="tp-composer" onSubmit={submit}>
-          <MathTools
-            inputRef={input}
+          <MathInput
+            id="tutor-message"
+            label={t('tp.messageLabel')}
+            className="tp-input"
+            rowClassName="tp-compose-row"
             value={draft}
             onChange={setDraft}
-            inputId="tutor-message"
+            placeholder={t('tp.placeholder')}
+            maxLength={MAX_MESSAGE_LENGTH}
+            onEnter={submit}
             storageKey="feedback-evaluator.mathBar.tutor"
             defaultOpen={mathDefault}
-          />
-
-          <div className="tp-compose-row">
-            <label className="sr-only" htmlFor="tutor-message">
-              {t('tp.messageLabel')}
-            </label>
-            <textarea
-              id="tutor-message"
-              ref={input}
-              className="tp-input"
-              rows={1}
-              value={draft}
-              placeholder={t('tp.placeholder')}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey) submit(event)
-              }}
-            />
+          >
             <button type="submit" className="tp-send" disabled={!draft.trim() || pending}>
               {t('tp.send')}
             </button>
-          </div>
+          </MathInput>
         </form>
       )}
     </>

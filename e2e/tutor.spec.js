@@ -45,7 +45,7 @@ test.describe('tutor chat', () => {
     await expect(tutorPane(page).getByText('Can you give me a hint?')).toBeVisible()
   })
 
-  test('the maths row writes a formula, previews it and sends it rendered', async ({ page }) => {
+  test('the maths row puts a formula in the message and sends it rendered', async ({ page }) => {
     const { studentNumber } = await seedClass()
     await signInFirstTime(page, studentNumber)
     await openActivity(page, 'Ratio practice')
@@ -61,26 +61,19 @@ test.describe('tutor chat', () => {
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
     const row = tutor.getByRole('toolbar', { name: 'Maths symbols' })
 
-    // "Is it " then a fraction: the cursor lands in the numerator.
+    // "Is it " then a fraction: the cursor lands in the top box.
     await box.fill('Is it ')
     await row.getByRole('button', { name: 'Fraction' }).click()
-    await expect(box).toBeFocused()
-    await expect(box).toHaveValue('Is it $\\frac{}{}$')
+    await expect(box.locator('math-field')).toBeFocused()
     await page.keyboard.type('1')
-    await page.keyboard.press('ArrowRight')
-    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('Tab')
     await page.keyboard.type('2')
-    await expect(box).toHaveValue('Is it $\\frac{1}{2}$')
-
-    // A rendered preview, before sending.
-    const preview = tutor.locator('.mt-preview')
-    await expect(preview.getByText('Preview')).toBeVisible()
-    await expect(preview.locator('.katex')).toHaveCount(1)
+    await page.keyboard.press('Tab')
+    await expect(box).toHaveAttribute('data-value', 'Is it $\\frac{1}{2}$')
 
     await tutor.getByRole('button', { name: 'Send' }).click()
     await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
-    await expect(box).toHaveValue('')
-    await expect(preview).toHaveCount(0)
+    await expect(box).toHaveAttribute('data-value', '')
 
     const sent = tutor.locator('article[data-from="student"]').last()
     await expect(sent.locator('.katex')).toHaveCount(1)

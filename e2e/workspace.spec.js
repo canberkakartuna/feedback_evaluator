@@ -42,10 +42,10 @@ test.describe('working on an activity', () => {
     expect((await saved).ok()).toBe(true)
 
     await page.reload()
-    await expect(page.getByLabel('Your written answer')).toHaveValue('Two to four simplifies to one to two.')
+    await expect(page.getByLabel('Your written answer')).toHaveAttribute('data-value', 'Two to four simplifies to one to two.')
   })
 
-  test('the maths row writes into the answer, previews it, and the answer is saved', async ({ page }) => {
+  test('the maths row puts a formula in the answer, and the answer is saved', async ({ page }) => {
     const { studentNumber } = await seedClass()
     await signInFirstTime(page, studentNumber)
     await openActivity(page, 'Ratio practice')
@@ -60,23 +60,19 @@ test.describe('working on an activity', () => {
 
     // "x" then the power button: x becomes the base, the cursor the exponent.
     await answer.fill('It is x')
-    await row.getByRole('button', { name: 'Power' }).click()
-    await expect(answer).toBeFocused()
+    await row.getByRole('button', { name: 'Power', exact: true }).click()
+    await expect(answer.locator('math-field')).toBeFocused()
     const saved = page.waitForResponse(
-      (response) => isAnswerSave(response) && response.request().postData()?.includes('x^{2}'),
+      (response) => isAnswerSave(response) && response.request().postData()?.includes('x^2'),
     )
     await page.keyboard.type('2')
-    await expect(answer).toHaveValue('It is $x^{2}$')
+    await expect(answer).toHaveAttribute('data-value', 'It is $x^2$')
 
-    const preview = main.locator('.mt-preview')
-    await expect(preview.getByText('Preview')).toBeVisible()
-    await expect(preview.locator('.katex')).toHaveCount(1)
-
-    // Through the same autosave as typing: it is there after a reload.
+    // Through the same autosave as typing: it is there after a reload, as a formula.
     expect((await saved).ok()).toBe(true)
     await page.reload()
-    await expect(page.getByLabel('Your written answer')).toHaveValue('It is $x^{2}$')
-    await expect(page.getByRole('main').locator('.mt-preview .katex')).toHaveCount(1)
+    await expect(page.getByLabel('Your written answer')).toHaveAttribute('data-value', 'It is $x^2$')
+    await expect(page.getByLabel('Your written answer').locator('math-field')).toHaveCount(1)
   })
 
   test('checking a written answer marks it against the rubric', async ({ page }) => {

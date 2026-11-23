@@ -90,8 +90,11 @@ npm run test:e2e:ui       # Playwright's UI mode, to watch or debug a test
 npm run test:e2e:report   # the HTML report of the last run (traces of failures)
 ```
 
-First time on a machine: `npx playwright install chromium` (the browser binary
-is not in `node_modules`).
+First time on a machine: `npx playwright install chromium webkit` (the browser
+binaries are not in `node_modules`). Desktop specs run in Chromium; the
+`*.mobile.spec.js` files run twice more, as a Pixel 7 (Chromium) and an
+iPhone 13 (WebKit) — the `android` and `iphone` projects in
+[playwright.config.js](playwright.config.js).
 
 **It starts its own servers and never touches yours.** `playwright.config.js`
 starts two processes and stops them when the run ends; a run never reuses a
@@ -136,6 +139,8 @@ Reports, traces and screenshots land in `e2e/.report` and `e2e/.results`
 | `support.spec.js` | Write in, the reply dot, read the reply, answer in the same thread |
 | `profile.spec.js` | Username, the sheet again, withdrawing in the first sign-in, closed after the next |
 | `privacy.spec.js` | An activity's `tutorPrompt` is in no response the student's browser receives |
+| `math-tools.spec.js` | The maths row and formula editor: open on an activity with maths, closed without, the teacher's setting, a student's choice remembered; every button inserts a rendered formula and stores `$…$` text KaTeX renders; Tab / Next blank / Backspace; nesting; a saved draft opens without saving; Enter in the chat; a plain textarea if the editor cannot load |
+| `math-editor.mobile.spec.js` | The same editor on a phone (Android and iPhone emulation): an integral and a fraction mid-sentence by taps, saved and restored; tap to edit and Backspace; a message with a power, Send on screen, the bubble rendered |
 | `student-work-delete.spec.js` | Staff side: a teacher ticks two entries on Student work (select-all shows "some"), cancels, confirms, the list drops to one; that student signs in again with no consent pages and a blank answer |
 
 ## Manual check before merging UI changes

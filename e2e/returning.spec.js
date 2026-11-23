@@ -35,7 +35,7 @@ test('a returning student finds their answers, marks and tutor chat waiting', as
   await expect(page.getByRole('button', { name: /Ratio practice/ })).toContainText('continue where you left off')
   await openActivity(page, 'Ratio practice')
 
-  await expect(page.getByLabel('Your written answer')).toHaveValue('Both sides halve, so it stays the same ratio.')
+  await expect(page.getByLabel('Your written answer')).toHaveAttribute('data-value', 'Both sides halve, so it stays the same ratio.')
   await expect(questionList(page).getByRole('button', { name: /^Q2/ })).toContainText('Done')
   await expect(questionList(page).getByText('1 of 2')).toBeVisible()
 

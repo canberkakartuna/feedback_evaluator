@@ -1,11 +1,15 @@
 import { expect, test } from '@playwright/test'
+import katex from 'katex'
+import { splitMath } from '../src/lib/latex.js'
 import { seedClass } from './support/seed.mjs'
 import { openActivity, signInFirstTime, tutorPane } from './support/student.mjs'
 
 /**
- * The maths row over the answer box and the tutor's message box —
- * src/components/MathTools.jsx: where it starts (the activity's setting), the
- * short guide, and moving between blanks.
+ * The maths row and the formula editor in the answer box and the tutor's
+ * message box — MathInput / MathTools / MathEditor in src/components.
+ *
+ * The editor is not a textarea: what it would send is on its `data-value`
+ * (the same `$…$` text a textarea held), and formulas are MathLive fields.
  */
 
 /** An activity whose first question has maths in it, so "automatic" opens the row. */
@@ -14,32 +18,28 @@ const MATHS_QUESTIONS = [
   { kind: 'Calculate', prompt: 'What is $3^{2}$?' },
 ]
 
-const GUIDE = 'How to write maths'
+const isAnswerSave = (response) =>
+  response.request().method() === 'PUT' && /\/api\/sessions\/[^/]+\/answers\//.test(response.url())
 
 const answerBox = (page) => page.getByRole('main').getByLabel('Your written answer')
 const answerToggle = (page) => page.getByRole('main').getByRole('button', { name: 'Maths', exact: true })
 const chatToggle = (page) => tutorPane(page).getByRole('button', { name: 'Maths', exact: true })
-const guide = (page) => page.getByRole('region', { name: GUIDE })
+const answerRow = (page) => page.getByRole('main').getByRole('toolbar', { name: 'Maths symbols' })
+const nextBlank = (page) => page.getByRole('main').getByRole('button', { name: 'Next blank' })
 
-/** The guide shows itself the first time; these tests close it out of the way. */
-async function closeGuide(page) {
-  await guide(page).getByRole('button', { name: 'Close the guide' }).click()
-  await expect(guide(page)).toHaveCount(0)
+async function start(page, options = { title: 'Fractions', questions: MATHS_QUESTIONS }) {
+  const { studentNumber } = await seedClass(options)
+  await signInFirstTime(page, studentNumber)
+  await openActivity(page, options.title ?? 'Ratio practice')
 }
 
 test.describe('maths tools', () => {
-  test('open from the start on an activity with maths, closed on one without', async ({ page }) => {
-    const { studentNumber } = await seedClass({ title: 'Fractions', questions: MATHS_QUESTIONS })
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Fractions')
-
+  test('open from the start on an activity with maths; a student choice wins and is remembered', async ({ page }) => {
+    await start(page)
     await expect(answerToggle(page)).toHaveAttribute('aria-expanded', 'true')
     await expect(chatToggle(page)).toHaveAttribute('aria-expanded', 'true')
-    await expect(page.getByRole('main').getByRole('toolbar', { name: 'Maths symbols' })).toBeVisible()
-    await expect(tutorPane(page).getByRole('toolbar', { name: 'Maths symbols' })).toBeVisible()
+    await expect(answerRow(page)).toBeVisible()
 
-    // The student's own choice wins over the activity, and is remembered.
-    await closeGuide(page)
     await answerToggle(page).click()
     await expect(answerToggle(page)).toHaveAttribute('aria-expanded', 'false')
     await page.reload()
@@ -47,125 +47,175 @@ test.describe('maths tools', () => {
     await expect(chatToggle(page)).toHaveAttribute('aria-expanded', 'true')
   })
 
-  test('closed from the start on an activity without maths', async ({ page }) => {
-    const { studentNumber } = await seedClass()
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Ratio practice')
-
+  test('closed from the start on an activity without maths, or when the teacher says so', async ({ page }) => {
+    await start(page, {})
     await expect(answerToggle(page)).toHaveAttribute('aria-expanded', 'false')
     await expect(chatToggle(page)).toHaveAttribute('aria-expanded', 'false')
     await expect(page.getByRole('toolbar', { name: 'Maths symbols' })).toHaveCount(0)
-    await expect(guide(page)).toHaveCount(0)
   })
 
   test("the teacher's setting overrides automatic", async ({ page }) => {
-    const { studentNumber } = await seedClass({ title: 'Fractions', questions: MATHS_QUESTIONS, mathTools: 'closed' })
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Fractions')
+    await start(page, { title: 'Fractions', questions: MATHS_QUESTIONS, mathTools: 'closed' })
     await expect(answerToggle(page)).toHaveAttribute('aria-expanded', 'false')
-    await expect(chatToggle(page)).toHaveAttribute('aria-expanded', 'false')
   })
 
-  test('the guide shows once, steps through, closes, and comes back from "?"', async ({ page }) => {
-    const { studentNumber } = await seedClass({ title: 'Fractions', questions: MATHS_QUESTIONS })
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Fractions')
-
-    // Once, by itself — not twice with both boxes on screen.
-    await expect(guide(page)).toHaveCount(1)
-    await expect(guide(page)).toContainText('Step 1 of 4')
-    await expect(guide(page)).toContainText('Make a fraction')
-    // It renders the example, and it does not take the student's focus.
-    await expect(guide(page).locator('.katex')).toHaveCount(1)
-    await answerBox(page).click()
-    await expect(answerBox(page)).toBeFocused()
-
-    await guide(page).getByRole('button', { name: 'Next', exact: true }).click()
-    await expect(guide(page)).toContainText('Step 2 of 4')
-    await guide(page).getByRole('button', { name: 'Back' }).click()
-    await expect(guide(page)).toContainText('Step 1 of 4')
-
-    // Escape closes it, and it stays closed after a reload.
-    await guide(page).getByRole('button', { name: 'Next', exact: true }).focus()
-    await page.keyboard.press('Escape')
-    await expect(guide(page)).toHaveCount(0)
-    await page.reload()
-    await expect(answerToggle(page)).toHaveAttribute('aria-expanded', 'true')
-    await expect(guide(page)).toHaveCount(0)
-
-    // "?" brings it back, with focus on it; closing returns focus to "?".
-    const help = page.getByRole('main').getByRole('button', { name: GUIDE })
-    await help.click()
-    await expect(guide(page)).toBeVisible()
-    await expect(guide(page).getByRole('heading', { name: 'Make a fraction' })).toBeFocused()
-    for (let step = 1; step < 4; step += 1) {
-      await guide(page).getByRole('button', { name: 'Next', exact: true }).click()
-    }
-    await expect(guide(page)).toContainText('Check the preview')
-    await guide(page).getByRole('button', { name: 'Got it' }).click()
-    await expect(guide(page)).toHaveCount(0)
-    await expect(help).toBeFocused()
-  })
-
-  test('Tab moves between blanks and out; a blank shows as a box in the preview', async ({ page }) => {
-    const { studentNumber } = await seedClass({ title: 'Fractions', questions: MATHS_QUESTIONS })
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Fractions')
-    await closeGuide(page)
-
-    const main = page.getByRole('main')
+  test('every button puts a rendered structure in the sentence; no code ever shows', async ({ page }) => {
+    await start(page)
     const box = answerBox(page)
-    const row = main.getByRole('toolbar', { name: 'Maths symbols' })
+    await box.click()
+    await page.keyboard.type('So ')
 
-    await box.fill('Half is ')
-    await row.getByRole('button', { name: 'Fraction' }).click()
+    const buttons = ['Power', 'Subscript', 'Fraction', 'Square root', 'Integral', 'Sum', 'Pi', 'Infinity']
+    for (const name of buttons) {
+      await answerRow(page).getByRole('button', { name, exact: true }).click()
+      await page.keyboard.type('2')
+      // Out of the formula, whatever boxes are left.
+      for (let step = 0; step < 4 && (await box.evaluate((el) => document.activeElement !== el)); step += 1) {
+        await page.keyboard.press('Tab')
+      }
+      await page.keyboard.type(' ')
+    }
+    for (const name of ['Less than or equal to', 'Greater than or equal to', 'Not equal to', 'Multiply', 'Divide']) {
+      await answerRow(page).getByRole('button', { name }).click()
+      await page.keyboard.type(' ')
+    }
+
+    await expect(box.locator('math-field')).toHaveCount(13)
+    // What the student sees is prose and formulas: no dollar signs, braces or backslashes.
+    expect(await box.innerText()).not.toMatch(/[$\\{}]/)
+    // What it stores is the usual text, every formula in $…$.
+    const value = await box.getAttribute('data-value')
+    expect(value.startsWith('So $')).toBe(true)
+    expect(value.match(/\$[^$]+\$/g)).toHaveLength(13)
+    for (const piece of ['\\frac', '\\sqrt', '\\int', '\\sum', '\\pi', '\\infty', '\\le', '\\ge', '\\ne', '\\times', '\\div']) {
+      expect(value).toContain(piece)
+    }
+    // And every one renders where the tutor's and teachers' views show it (MathText / KaTeX).
+    for (const segment of splitMath(value).filter((each) => each.kind === 'math')) {
+      expect(() => katex.renderToString(segment.value, { throwOnError: true }), segment.value).not.toThrow()
+    }
+    console.log('every button stores:', value)
+  })
+
+  test('a fraction mid-sentence: Tab between boxes, out, Backspace removes it, reload restores', async ({ page }) => {
+    await start(page)
+    const box = answerBox(page)
+    await box.click()
+    await page.keyboard.type('Half is ')
+    await answerRow(page).getByRole('button', { name: 'Fraction' }).click()
+    await expect(box.locator('math-field')).toBeFocused()
     await page.keyboard.type('1')
-    await expect(box).toHaveValue('Half is $\\frac{1}{}$')
-    // The empty bottom is drawn as a box, only in the preview.
-    await expect(main.locator('.mt-preview')).toContainText('□')
-
     await page.keyboard.press('Tab')
     await page.keyboard.type('2')
-    await page.keyboard.press('Tab') // out of the formula
-    await page.keyboard.type(' exactly.')
-    await expect(box).toHaveValue('Half is $\\frac{1}{2}$ exactly.')
-    await expect(main.locator('.mt-preview')).not.toContainText('□')
-    await expect(box).toBeFocused()
-
-    // Outside a formula Tab is an ordinary Tab: focus moves on.
     await page.keyboard.press('Tab')
-    await expect(box).not.toBeFocused()
+    await expect(box).toBeFocused()
+    await page.keyboard.type(' exactly.')
+    await expect(box).toHaveAttribute('data-value', 'Half is $\\frac{1}{2}$ exactly.')
 
-    // "Next blank" does the same for a touch screen.
-    await box.fill('')
-    await row.getByRole('button', { name: 'Integral' }).click()
-    await page.keyboard.type('0')
-    await main.getByRole('button', { name: 'Next blank' }).click()
-    await page.keyboard.type('1')
-    await main.getByRole('button', { name: 'Next blank' }).click()
-    await page.keyboard.type('x')
-    await expect(box).toHaveValue('$\\int_{0}^{1}{x}\\,dx$')
-    await expect(main.locator('.mt-preview .katex')).toHaveCount(1)
+    // Saved like typing, and back as a formula after a reload.
+    await page.waitForResponse((response) => isAnswerSave(response) && response.request().postData()?.includes('exactly'))
+    await page.reload()
+    await expect(answerBox(page)).toHaveAttribute('data-value', 'Half is $\\frac{1}{2}$ exactly.')
+    await expect(answerBox(page).locator('math-field')).toHaveCount(1)
+
+    // Tap the formula to edit it; Backspace empties it, then removes it.
+    await answerBox(page).locator('math-field').click()
+    await expect(answerBox(page).locator('math-field')).toBeFocused()
+    await page.keyboard.press('End')
+    for (let step = 0; step < 8 && (await answerBox(page).locator('math-field').count()); step += 1) {
+      await page.keyboard.press('Backspace')
+    }
+    await expect(answerBox(page).locator('math-field')).toHaveCount(0)
+    await expect(answerBox(page)).toHaveAttribute('data-value', 'Half is  exactly.')
   })
 
-  test('in the chat, Tab fills the blanks and Enter still sends', async ({ page }) => {
-    const { studentNumber } = await seedClass({ title: 'Fractions', questions: MATHS_QUESTIONS })
-    await signInFirstTime(page, studentNumber)
-    await openActivity(page, 'Fractions')
-    await closeGuide(page)
+  test('an integral with "Next blank": lower limit, upper limit, body, then out', async ({ page }) => {
+    await start(page)
+    const box = answerBox(page)
+    await box.click()
+    await page.keyboard.type('Area ')
+    await answerRow(page).getByRole('button', { name: 'Integral' }).click()
+    await page.keyboard.type('0')
+    await nextBlank(page).click()
+    await page.keyboard.type('1')
+    await nextBlank(page).click()
+    await page.keyboard.type('x')
+    await nextBlank(page).click()
+    await expect(box).toBeFocused()
+    await page.keyboard.type(' units')
+    await expect(box).toHaveAttribute('data-value', /^Area \$\\int_\{?0\}?\^\{?1\}?\{?x\}?\\,dx\$ units$/)
+  })
 
+  test('structures nest: a fraction inside a power', async ({ page }) => {
+    await start(page)
+    const box = answerBox(page)
+    await box.click()
+    await page.keyboard.type('x')
+    await answerRow(page).getByRole('button', { name: 'Power', exact: true }).click()
+    await answerRow(page).getByRole('button', { name: 'Fraction' }).click()
+    await page.keyboard.type('1')
+    await page.keyboard.press('Tab')
+    await page.keyboard.type('2')
+    await expect(box.locator('math-field')).toHaveCount(1)
+    await expect(box).toHaveAttribute('data-value', '$x^{\\frac{1}{2}}$')
+  })
+
+  test('opening a saved draft changes nothing and saves nothing', async ({ page }) => {
+    await start(page)
+    const box = answerBox(page)
+    await box.click()
+    await page.keyboard.type('Seed ')
+    const saved = page.waitForResponse(isAnswerSave)
+    // A draft typed the old way: dollars and all.
+    await page.evaluate(() => {
+      const data = new DataTransfer()
+      data.setData('text/plain', 'is $$\\int_0^1 x\\,dx$$ or \\(a+b\\)')
+      document.getElementById('answer').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+    })
+    await saved
+    const stored = await box.getAttribute('data-value')
+    expect(stored).toContain('$$\\int_0^1 x\\,dx$$')
+    await expect(box.locator('math-field')).toHaveCount(2)
+
+    let saves = 0
+    page.on('request', (request) => {
+      if (request.method() === 'PUT' && request.url().includes('/answers/')) saves += 1
+    })
+    await page.reload()
+    await expect(answerBox(page).locator('math-field')).toHaveCount(2)
+    await expect(answerBox(page)).toHaveAttribute('data-value', stored)
+    await page.waitForTimeout(1500)
+    expect(saves).toBe(0)
+  })
+
+  test('in the chat: Enter inside a formula leaves it, Enter in the sentence sends, the bubble is rendered', async ({ page }) => {
+    await start(page)
     const tutor = tutorPane(page)
     const box = tutor.getByLabel('Message the tutor')
-    await box.fill('Is it ')
-    await tutor.getByRole('toolbar', { name: 'Maths symbols' }).getByRole('button', { name: 'Power' }).click()
+    await box.click()
+    await page.keyboard.type('Is it ')
+    await tutor.getByRole('toolbar', { name: 'Maths symbols' }).getByRole('button', { name: 'Power', exact: true }).click()
     await page.keyboard.type('3')
     await page.keyboard.press('Tab')
     await page.keyboard.type('2')
-    await page.keyboard.press('Tab')
+    await page.keyboard.press('Enter') // leaves the formula, does not send
+    await expect(tutor.getByText('20 of 20 questions left')).toBeVisible()
     await page.keyboard.type('?')
-    await expect(box).toHaveValue('Is it ${3}^{2}$?')
+    await expect(box).toHaveAttribute('data-value', 'Is it $3^2$?')
     await page.keyboard.press('Enter')
     await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
+    await expect(box).toHaveAttribute('data-value', '')
+    await expect(box).toBeFocused()
     await expect(tutor.locator('article[data-from="student"]').last().locator('.katex')).toHaveCount(1)
+  })
+
+  test('if the formula editor cannot load, the box is a plain textarea with the same text', async ({ page }) => {
+    await page.route(/mathlive[^/]*\.js$/, (route) => route.abort())
+    await start(page)
+    const box = answerBox(page)
+    await expect(box).toHaveJSProperty('tagName', 'TEXTAREA')
+    await expect(page.getByRole('toolbar', { name: 'Maths symbols' })).toHaveCount(0)
+    await box.fill('Half is $\\frac{1}{2}$')
+    await expect(box).toHaveValue('Half is $\\frac{1}{2}$')
   })
 })

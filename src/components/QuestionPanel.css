@@ -283,19 +283,9 @@
   background-attachment: local;
 }
 
-/* The maths row and its preview, over the squares. */
+/* The maths row, over the squares. */
 .qp-math {
-  display: grid;
-  gap: var(--s-2);
   margin-bottom: var(--s-2);
-}
-
-.qp-math .mt-preview {
-  background: var(--paper-raise);
-}
-
-.qp-math .mt-preview-text {
-  font-size: var(--t-14);
 }
 
 .qp-answer::placeholder {

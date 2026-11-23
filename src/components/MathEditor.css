@@ -1,0 +1,75 @@
+/* The text box with formulas in it — MathEditor.jsx. Its size, border and
+   paper come from the class each panel passes (tp-input, qp-answer). */
+
+.mi-editor {
+  position: relative;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.mi-editor:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 1px;
+}
+
+/* The placeholder, while there is nothing in the box. */
+.mi-editor[data-empty='true']::before {
+  content: attr(data-placeholder);
+  position: absolute;
+  pointer-events: none;
+  color: var(--graphite-faint);
+}
+
+/* A formula sits in the line like a word. */
+.mi-chip {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  margin: 0 1px;
+  white-space: normal;
+}
+
+.mi-chip math-field {
+  display: inline-block;
+  min-width: 1.2em;
+  max-width: 100%;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0 2px;
+  font-size: 1.05em;
+  vertical-align: middle;
+  /* The empty boxes and the caret in the pen colour. */
+  --caret-color: var(--pen);
+  --selection-background-color: var(--pen-soft);
+  --placeholder-color: var(--pen);
+  --placeholder-opacity: 0.55;
+  --contains-highlight-background-color: transparent;
+  --smart-fence-color: currentColor;
+}
+
+/* The formula being edited is outlined, so it is clear where typing goes. */
+.mi-chip math-field:focus-within {
+  border-color: var(--pen);
+  background: var(--pen-soft);
+}
+
+/* MathLive's own keyboard and menu buttons: the row above replaces both. */
+.mi-chip math-field::part(virtual-keyboard-toggle),
+.mi-chip math-field::part(menu-toggle) {
+  display: none;
+}
+
+.mi-chip math-field::part(content) {
+  padding: 2px 0;
+}
+
+/* Before MathLive has loaded: the same formula, drawn by KaTeX. */
+.mi-static {
+  display: inline-block;
+  padding: 0 2px;
+}

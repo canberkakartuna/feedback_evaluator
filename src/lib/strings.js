@@ -347,7 +347,6 @@ const en = {
   math: {
     toggle: 'Maths',
     bar: 'Maths symbols',
-    preview: 'Preview',
     power: 'Power',
     subscript: 'Subscript',
     fraction: 'Fraction',
@@ -363,30 +362,6 @@ const en = {
     divide: 'Divide',
     nextBlank: 'Next blank',
     nextBlankHint: 'Jump to the next blank (Tab)',
-    help: 'How to write maths',
-    /** The short guide on the row — shown once, reopened with "?". */
-    tutorial: {
-      title: 'How to write maths',
-      step: 'Step {current} of {total}',
-      back: 'Back',
-      next: 'Next',
-      done: 'Got it',
-      close: 'Close the guide',
-      youType: 'You type',
-      theySee: 'Everyone sees',
-      fractionTitle: 'Make a fraction',
-      fractionText:
-        'Press the fraction button. Type the top number, press Tab (or Next blank) to jump to the bottom, then type that one.',
-      powerTitle: 'Make a power',
-      powerText:
-        'Type the number or letter first, then press the power button and type the power. Press Tab to carry on writing after it.',
-      blanksTitle: 'Fill in every blank',
-      blanksText:
-        'Some buttons have more than one blank. An integral has a bottom, a top and what goes inside. An empty blank shows as a little box in the preview. Tab or Next blank takes you to the next one.',
-      previewTitle: 'Check the preview',
-      previewText:
-        'The box shows your maths as code, which can look strange. The preview shows it the way your tutor and your teacher will see it. Check it before you send.',
-    },
   },
 
   wb: {
@@ -1276,7 +1251,6 @@ const tr = {
   math: {
     toggle: 'Matematik',
     bar: 'Matematik sembolleri',
-    preview: 'Önizleme',
     power: 'Üs',
     subscript: 'Alt simge',
     fraction: 'Kesir',
@@ -1292,29 +1266,6 @@ const tr = {
     divide: 'Bölü',
     nextBlank: 'Sonraki boşluk',
     nextBlankHint: 'Sonraki boşluğa geç (Tab)',
-    help: 'Matematik nasıl yazılır',
-    tutorial: {
-      title: 'Matematik nasıl yazılır',
-      step: 'Adım {current} / {total}',
-      back: 'Geri',
-      next: 'İleri',
-      done: 'Anladım',
-      close: 'Rehberi kapat',
-      youType: 'Sen yazarsın',
-      theySee: 'Herkes görür',
-      fractionTitle: 'Kesir yaz',
-      fractionText:
-        'Kesir düğmesine bas. Üstteki sayıyı yaz, alta geçmek için Tab’a (ya da Sonraki boşluk’a) bas, sonra alttakini yaz.',
-      powerTitle: 'Üs yaz',
-      powerText:
-        'Önce sayıyı ya da harfi yaz, sonra üs düğmesine bas ve üssü yaz. Ardından yazmaya devam etmek için Tab’a bas.',
-      blanksTitle: 'Her boşluğu doldur',
-      blanksText:
-        'Bazı düğmelerde birden fazla boşluk var. İntegralde alt sınır, üst sınır ve içindeki ifade var. Boş kalan yer önizlemede küçük bir kutu olarak görünür. Tab ya da Sonraki boşluk seni bir sonrakine götürür.',
-      previewTitle: 'Önizlemeye bak',
-      previewText:
-        'Kutu matematiğini kod olarak gösterir, bu garip görünebilir. Önizleme onu öğretmeninin göreceği gibi gösterir. Göndermeden önce kontrol et.',
-    },
   },
 
   wb: {

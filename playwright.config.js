@@ -32,7 +32,17 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } } }],
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: /\.mobile\.spec\.js$/,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 860 } },
+    },
+    // Phone-only specs (*.mobile.spec.js) — the maths editor, which most
+    // students use on a phone: touch, a narrow screen, Android and iOS engines.
+    { name: 'android', testMatch: /\.mobile\.spec\.js$/, use: { ...devices['Pixel 7'] } },
+    { name: 'iphone', testMatch: /\.mobile\.spec\.js$/, use: { ...devices['iPhone 13'] } },
+  ],
 
   webServer: [
     {

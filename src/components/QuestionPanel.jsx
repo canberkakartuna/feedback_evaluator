@@ -9,8 +9,8 @@ import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
 import { opensPicker } from '../lib/uploadPicker'
 import MathText from './MathText'
-import MathTools from './MathTools'
-import { MAX_ANSWER_LENGTH } from '../lib/mathInsert'
+import MathInput from './MathInput'
+import { MAX_ANSWER_LENGTH } from '../lib/mathDraft'
 import QuestionFile from './QuestionFile'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
@@ -70,7 +70,6 @@ export default function QuestionPanel({
   // The photo is the whole question, so the card becomes the photo.
   const pictureOnly = Boolean(picture) && !prompt && !question.stimulus
   const sheet = useRef(null)
-  const answerBox = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
   const [boardOpen, setBoardOpen] = useState(false)
@@ -314,34 +313,24 @@ export default function QuestionPanel({
 
             {state.mode === 'write' ? (
               <>
-                <label className="sr-only" htmlFor="answer">
-                  {t('qp.writtenAnswer')}
-                </label>
                 {/* Through onDraftChange like typing, so the autosave and the
-                    word count see a button's text the same way. */}
-                <div className="qp-math">
-                  <MathTools
-                    inputRef={answerBox}
-                    value={state.draft}
-                    onChange={onDraftChange}
-                    inputId="answer"
-                    storageKey="feedback-evaluator.mathBar.answer"
-                    maxLength={MAX_ANSWER_LENGTH}
-                    defaultOpen={mathDefault}
-                  />
-                </div>
-                <textarea
+                    word count see a formula the same way. */}
+                <MathInput
                   id="answer"
-                  ref={answerBox}
+                  label={t('qp.writtenAnswer')}
                   className="qp-answer"
+                  toolsClassName="qp-math"
                   value={state.draft}
+                  onChange={onDraftChange}
                   spellCheck="true"
                   placeholder={
                     question.markable
                       ? t('qp.placeholderMarkable')
                       : t('qp.placeholderUnmarked')
                   }
-                  onChange={(event) => onDraftChange(event.target.value)}
+                  maxLength={MAX_ANSWER_LENGTH}
+                  storageKey="feedback-evaluator.mathBar.answer"
+                  defaultOpen={mathDefault}
                 />
                 {question.workingExpected ? (
                   <p className="qp-mode-nudge">{t('qp.workingNudge')}</p>
