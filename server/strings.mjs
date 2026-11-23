@@ -78,8 +78,8 @@ const USE = /\bt\(\s*['"]([\w.-]+)['"]/g
  *
  * A key does not have to be written inside the call that reads it: the console
  * nav holds `{ key: 'teacher.activities' }` in a table, TopBar takes
- * `homeKey="nav.studentView"` as a prop, and QuestionPanel keeps a `{ write:
- * 'common.words' }` lookup. None of those are a `t(...)` and all of them are
+ * `homeKey="nav.studentView"` as a prop, and QuestionPanel keeps a `{ draw:
+ * 'common.strokes' }` lookup. None of those are a `t(...)` and all of them are
  * real uses, so they count towards "is this key read anywhere" — but not
  * towards "does this key exist", which only a literal call can be sure of.
  */

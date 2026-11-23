@@ -25,7 +25,6 @@ const answerBox = (page) => page.getByRole('main').getByLabel('Your written answ
 const answerToggle = (page) => page.getByRole('main').getByRole('button', { name: 'Maths', exact: true })
 const chatToggle = (page) => tutorPane(page).getByRole('button', { name: 'Maths', exact: true })
 const answerRow = (page) => page.getByRole('main').getByRole('toolbar', { name: 'Maths symbols' })
-const nextBlank = (page) => page.getByRole('main').getByRole('button', { name: 'Next blank' })
 
 async function start(page, options = { title: 'Fractions', questions: MATHS_QUESTIONS }) {
   const { studentNumber } = await seedClass(options)
@@ -129,18 +128,18 @@ test.describe('maths tools', () => {
     await expect(answerBox(page)).toHaveAttribute('data-value', 'Half is  exactly.')
   })
 
-  test('an integral with "Next blank": lower limit, upper limit, body, then out', async ({ page }) => {
+  test('an integral with Tab: lower limit, upper limit, body, then out', async ({ page }) => {
     await start(page)
     const box = answerBox(page)
     await box.click()
     await page.keyboard.type('Area ')
     await answerRow(page).getByRole('button', { name: 'Integral' }).click()
     await page.keyboard.type('0')
-    await nextBlank(page).click()
+    await page.keyboard.press('Tab')
     await page.keyboard.type('1')
-    await nextBlank(page).click()
+    await page.keyboard.press('Tab')
     await page.keyboard.type('x')
-    await nextBlank(page).click()
+    await page.keyboard.press('Tab')
     await expect(box).toBeFocused()
     await page.keyboard.type(' units')
     await expect(box).toHaveAttribute('data-value', /^Area \$\\int_\{?0\}?\^\{?1\}?\{?x\}?\\,dx\$ units$/)

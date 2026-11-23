@@ -7,6 +7,8 @@
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   cursor: text;
+  /* The sentence's caret in the pen colour, like the formula's. */
+  caret-color: var(--pen);
   -webkit-user-select: text;
   user-select: text;
 }
@@ -29,7 +31,8 @@
   display: inline-block;
   vertical-align: middle;
   max-width: 100%;
-  margin: 0 1px;
+  margin: 0 2px;
+  border-radius: 4px;
   white-space: normal;
 }
 
@@ -43,19 +46,32 @@
   padding: 0 2px;
   font-size: 1.05em;
   vertical-align: middle;
-  /* The empty boxes and the caret in the pen colour. */
+  /* Read inside the field's own styles (src/lib/mathlive.js): the caret, the
+     box being filled in, and a selection, all in the pen colour. */
   --caret-color: var(--pen);
-  --selection-background-color: var(--pen-soft);
-  --placeholder-color: var(--pen);
-  --placeholder-opacity: 0.55;
+  --mi-active-ring: var(--pen);
+  --mi-active-box: color-mix(in srgb, var(--pen) 24%, transparent);
+  --selection-background-color: color-mix(in srgb, var(--pen) 24%, transparent);
+  --selection-color: var(--ink);
+  --placeholder-color: var(--graphite);
+  --placeholder-opacity: 0.7;
   --contains-highlight-background-color: transparent;
   --smart-fence-color: currentColor;
 }
 
-/* The formula being edited is outlined, so it is clear where typing goes. */
-.mi-chip math-field:focus-within {
+/* The formula being edited: a pen outline, so it is clear typing goes in it.
+   Its box being filled in is ringed more strongly still (mathlive.js). */
+.mi-chip.mi-active math-field {
   border-color: var(--pen);
-  background: var(--pen-soft);
+  background: color-mix(in srgb, var(--pen) 6%, transparent);
+}
+
+/* Marked by a first Backspace: the whole formula in the pen colour; the next
+   Backspace (or "Remove formula" on the row) removes it. */
+.mi-chip.mi-armed {
+  outline: 2px solid var(--pen);
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--pen) 22%, transparent);
 }
 
 /* MathLive's own keyboard and menu buttons: the row above replaces both. */
@@ -66,6 +82,14 @@
 
 .mi-chip math-field::part(content) {
   padding: 2px 0;
+}
+
+/* A finger needs bigger boxes to land in. */
+@media (pointer: coarse) {
+  .mi-chip math-field {
+    font-size: 1.3em;
+    padding: 2px 4px;
+  }
 }
 
 /* Before MathLive has loaded: the same formula, drawn by KaTeX. */

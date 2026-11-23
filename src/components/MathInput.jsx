@@ -57,6 +57,7 @@ export default function MathInput({
   const [choice, setChoice] = useState(() => readChoice(storageKey))
   const open = choice ?? Boolean(defaultOpen)
   const [plain, setPlain] = useState(() => !canUseMathEditor())
+  const [formula, setFormula] = useState(false)
   const editor = useRef(null)
   const labelId = useId()
 
@@ -79,7 +80,8 @@ export default function MathInput({
             controls={id}
             onToggle={toggle}
             onInsert={(buttonId) => editor.current?.insert(buttonId)}
-            onNext={() => editor.current?.nextBlank()}
+            canRemove={formula}
+            onRemove={() => editor.current?.removeFormula()}
           />
         </div>
       )}
@@ -117,6 +119,7 @@ export default function MathInput({
             onEnter={onEnter}
             spellCheck={spellCheck}
             wantMath={open}
+            onFormula={setFormula}
             onUnavailable={() => setPlain(true)}
           />
         )}

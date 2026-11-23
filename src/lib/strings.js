@@ -46,8 +46,6 @@ const en = {
     dismiss: 'Dismiss',
     questions_one: '{count} question',
     questions_other: '{count} questions',
-    words_one: '{count} word',
-    words_other: '{count} words',
     strokes_one: '{count} stroke',
     strokes_other: '{count} strokes',
     files_one: '{count} file',
@@ -360,8 +358,8 @@ const en = {
     ne: 'Not equal to',
     times: 'Multiply',
     divide: 'Divide',
-    nextBlank: 'Next blank',
-    nextBlankHint: 'Jump to the next blank (Tab)',
+    /** On the row while a formula is being edited — see MathTools.jsx. */
+    remove: 'Remove formula',
   },
 
   wb: {
@@ -968,8 +966,6 @@ const tr = {
     dismiss: 'Kapat',
     questions_one: '{count} soru',
     questions_other: '{count} soru',
-    words_one: '{count} kelime',
-    words_other: '{count} kelime',
     strokes_one: '{count} çizgi',
     strokes_other: '{count} çizgi',
     files_one: '{count} dosya',
@@ -1264,8 +1260,7 @@ const tr = {
     ne: 'Eşit değil',
     times: 'Çarpı',
     divide: 'Bölü',
-    nextBlank: 'Sonraki boşluk',
-    nextBlankHint: 'Sonraki boşluğa geç (Tab)',
+    remove: 'Formülü sil',
   },
 
   wb: {

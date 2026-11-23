@@ -41,7 +41,7 @@ const kindKey = {
 }
 
 /** How much is in the answer, in the unit that mode is measured in. */
-const countKey = { write: 'common.words', draw: 'common.strokes', upload: 'common.files' }
+const countKey = { draw: 'common.strokes', upload: 'common.files' }
 
 export default function QuestionPanel({
   question,
@@ -260,9 +260,11 @@ export default function QuestionPanel({
           <section className="qp-answer-block">
             <div className="qp-answer-head">
               <span className="eyebrow">{t('qp.yourAnswer')}</span>
-              <span className="qp-words mono">
-                {t(countKey[state.mode], { count: contentCount(state) })}
-              </span>
+              {state.mode !== 'write' ? (
+                <span className="qp-words mono">
+                  {t(countKey[state.mode], { count: contentCount(state) })}
+                </span>
+              ) : null}
             </div>
 
             {/* One answer per question: choosing a method replaces the others. */}
@@ -313,8 +315,8 @@ export default function QuestionPanel({
 
             {state.mode === 'write' ? (
               <>
-                {/* Through onDraftChange like typing, so the autosave and the
-                    word count see a formula the same way. */}
+                {/* Through onDraftChange like typing, so the autosave sees a
+                    formula the same way. */}
                 <MathInput
                   id="answer"
                   label={t('qp.writtenAnswer')}

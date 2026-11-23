@@ -37,7 +37,7 @@ export function hasContent(state, mode = state.mode) {
  * whiteboard (12 strokes)" ready to print, which put English in a file the API
  * imports and made the same sentence impossible to say in Turkish. The counting
  * is the shared part; the wording belongs to whoever is showing it — see
- * `common.words`, `common.strokes`, `common.files` and `qp.discard*` in
+ * `common.strokes`, `common.files` and `qp.discard*` in
  * src/lib/strings.js.
  */
 export function contentCount(state, mode = state.mode) {

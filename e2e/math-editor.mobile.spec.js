@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { seedClass } from './support/seed.mjs'
 import { openActivity, signInFirstTime, tutorPane } from './support/student.mjs'
+import { tapAfter, tapEmptyBox } from './support/math-editing.mjs'
 
 /**
  * The maths editor on a phone — run by the `android` (Pixel 7, Chromium) and
@@ -29,12 +30,12 @@ const inView = (locator) =>
     return box.top >= 0 && box.bottom <= window.innerHeight
   })
 
-test('answer box: an integral and a fraction mid-sentence, filled with taps, saved and restored', async ({ page }) => {
+test('answer box: an integral and a fraction mid-sentence, filled by tapping their boxes, saved and restored', async ({ page }) => {
   await start(page)
   const main = page.getByRole('main')
   const box = main.getByLabel('Your written answer')
   const row = main.getByRole('toolbar', { name: 'Maths symbols' })
-  const next = main.getByRole('button', { name: 'Next blank' })
+  const formula = (index) => box.locator('math-field').nth(index)
 
   await box.tap()
   await page.keyboard.type('Area is ')
@@ -47,18 +48,19 @@ test('answer box: an integral and a fraction mid-sentence, filled with taps, sav
     ),
   ).toBe('text')
   await page.keyboard.type('0')
-  await next.tap()
+  await tapEmptyBox(page, formula(0), 'highest') // the upper limit
   await page.keyboard.type('1')
-  await next.tap()
+  await tapEmptyBox(page, formula(0), 'rightmost') // what goes inside
   await page.keyboard.type('x')
-  await next.tap()
+  // Out, by tapping the sentence just after the formula (the last thing in the box).
+  await tapAfter(page, box, formula(0))
   await expect(box).toBeFocused()
   await page.keyboard.type(' and half is ')
   await row.getByRole('button', { name: 'Fraction' }).tap()
   await page.keyboard.type('1')
-  await next.tap()
+  await tapEmptyBox(page, formula(1), 'lowest') // the bottom of the fraction
   await page.keyboard.type('2')
-  await next.tap()
+  await tapAfter(page, box, formula(1))
   const saved = page.waitForResponse((response) => isAnswerSave(response) && response.request().postData()?.includes('.'))
   await page.keyboard.type('.')
 
@@ -82,7 +84,7 @@ test('answer box: tap a formula to edit it; Backspace empties it, then removes i
   await page.keyboard.type('It is ')
   await main.getByRole('toolbar', { name: 'Maths symbols' }).getByRole('button', { name: 'Square root' }).tap()
   await page.keyboard.type('9')
-  await main.getByRole('button', { name: 'Next blank' }).tap()
+  await tapAfter(page, box, box.locator('math-field'))
   await expect(box).toHaveAttribute('data-value', 'It is $\\sqrt{9}$')
 
   await box.locator('math-field').tap()
@@ -106,9 +108,9 @@ test('chat: a power in the message, Send stays on screen, the bubble shows it re
   await page.keyboard.type('Is it ')
   await tutor.getByRole('toolbar', { name: 'Maths symbols' }).getByRole('button', { name: 'Power', exact: true }).tap()
   await page.keyboard.type('3')
-  await tutor.getByRole('button', { name: 'Next blank' }).tap()
+  await tapEmptyBox(page, box.locator('math-field'), 'highest') // the exponent
   await page.keyboard.type('2')
-  await tutor.getByRole('button', { name: 'Next blank' }).tap()
+  await tapAfter(page, box, box.locator('math-field'))
   await page.keyboard.type('?')
   await expect(box).toHaveAttribute('data-value', 'Is it $3^2$?')
   expect(await inView(send)).toBe(true)

@@ -14,21 +14,36 @@ import './MathEditor.css'
  *   box. React renders the element and never its children: the DOM is the
  *   working copy, read back into text on every change.
  * - **A formula** is a chip the prose cannot edit into (`contenteditable=false`)
- *   holding a MathLive field (src/lib/mathlive.js). Tap it to edit; its empty
- *   boxes are MathLive placeholders. Before MathLive has loaded, a chip is a
- *   still KaTeX rendering of the same source.
+ *   holding a MathLive field (src/lib/mathlive.js). Tap it — any box in it —
+ *   to edit; the box being filled in is ringed in the pen colour. Before
+ *   MathLive has loaded, a chip is a still KaTeX rendering of the same source.
  * - **The value** that leaves is plain text with `$…$` formulas, exactly what
  *   a textarea held — src/lib/mathDraft.js. A formula nobody edited keeps its
  *   source byte for byte, so loading a draft saves nothing.
  *
- * Keys, inside a formula: Tab / Shift+Tab go to the next / previous box and,
- * past the last, out into the sentence (MathLive's `move-out`); the arrows do
- * the same at the edges; Enter and Escape leave the formula (Enter never sends
- * from inside one — a half-filled formula is not sent by accident); Backspace
- * in an emptied formula removes it. In prose: Enter calls `onEnter` (the chat
- * sends) or, without one, starts a new line; Shift+Enter is always a new line.
+ * Moving: Tab / Shift+Tab and the arrows go from box to box and, past the
+ * last, out into the sentence; Enter and Escape leave the formula (Enter
+ * never sends from inside one); tapping the sentence, or anywhere after a
+ * formula, puts the caret back in the sentence.
  *
- * `ref` exposes `insert(id)`, `nextBlank()` and `focus()` for the maths row.
+ * Deleting — every path also works from `beforeinput`, which is how phone
+ * keyboards send Backspace, not only from the key:
+ * - in the sentence, Backspace (or Delete) next to a formula first marks the
+ *   whole formula, and a second press removes it; it never drops into the
+ *   formula and starts eating its last box;
+ * - inside a formula, Backspace deletes in the current box; in an empty box it
+ *   goes back to the previous box; from the first box it marks the whole
+ *   formula, and once the formula is empty or marked the next press removes
+ *   it and the caret returns to the sentence where it was;
+ * - "Remove formula" on the maths row (`removeFormula()`) removes the formula
+ *   being edited or marked with a tap — on the row, not on the formula, where
+ *   it would cover the exponent or the upper limit a student is aiming for;
+ * - a formula left with every box empty disappears when the student leaves it;
+ * - Ctrl/Cmd+Z right after removing a formula puts it back.
+ *
+ * `ref` exposes `insert(id)`, `removeFormula()`, `preload()` and `focus()`
+ * for the maths row; `onFormula(true | false)` says whether there is a formula
+ * being edited or marked, for the row's "Remove formula".
  * `onUnavailable` is called if MathLive cannot load; the parent then falls
  * back to a plain textarea.
  */
@@ -36,6 +51,18 @@ import './MathEditor.css'
 const ZWSP = '​'
 const isChip = (node) => node?.nodeType === 1 && node.classList.contains('mi-chip')
 const fieldOf = (chip) => chip?.querySelector('math-field') ?? null
+const PLACEHOLDER = /^\\placeholder(?:\[[^\]]*\])?\{\}$/
+
+/** Nothing typed in it: no content at all, or every box as empty as when it was inserted. */
+const isBlank = (chip, field) => !cleanLatex(field.value) || field.value === chip.dataset.blank
+
+/** The deletions a keyboard can ask for, and which way each goes. */
+const DELETIONS = {
+  deleteContentBackward: 'backward',
+  deleteWordBackward: 'backward',
+  deleteContentForward: 'forward',
+  deleteWordForward: 'forward',
+}
 
 export default function MathEditor({
   ref,
@@ -49,6 +76,7 @@ export default function MathEditor({
   onEnter,
   spellCheck,
   wantMath,
+  onFormula,
   onUnavailable,
 }) {
   const root = useRef(null)
@@ -59,11 +87,37 @@ export default function MathEditor({
   const composing = useRef(false)
   // The formula just left, briefly: see leave().
   const leaving = useRef(null)
+  // The formula marked for removal by a first Backspace.
+  const armed = useRef(null)
+  // The formula removed last, for Ctrl/Cmd+Z.
+  const removed = useRef(null)
   // The latest props, for listeners attached once.
   const props = useRef({})
   useEffect(() => {
-    props.current = { onChange, maxLength, onEnter, onUnavailable }
+    props.current = { onChange, maxLength, onEnter, onUnavailable, onFormula }
   })
+
+  /* ── marking a formula for removal ──────────────────────── */
+
+  /** The formula "Remove formula" would take: the marked one, or the one being edited. */
+  const target = () =>
+    root.current?.querySelector('.mi-chip.mi-armed') ?? root.current?.querySelector('.mi-chip.mi-active') ?? null
+
+  /** Tells the row whether there is a formula to remove. */
+  const report = () => props.current.onFormula?.(Boolean(target()))
+
+  function disarm() {
+    armed.current?.chip.classList.remove('mi-armed')
+    armed.current = null
+    report()
+  }
+
+  function arm(chip) {
+    disarm()
+    armed.current = { chip }
+    chip.classList.add('mi-armed')
+    report()
+  }
 
   /* ── building the DOM from text ─────────────────────────── */
 
@@ -76,13 +130,61 @@ export default function MathEditor({
 
   const fieldChip = (chip, latex) => {
     const field = createField(Field.current, latex)
+    // While Backspace walks back out of the first box: see the move-out handler.
+    let backingOut = false
+    let deleteKeyAt = 0
+
+    /** A deletion inside the formula; true when handled here, not by MathLive. */
+    const deleteIn = (direction) => {
+      const [start, end] = field.selection.ranges[0] ?? [0, 0]
+      const wholeSelected = Math.min(start, end) === 0 && Math.max(start, end) >= field.lastOffset && start !== end
+      if (isBlank(chip, field) || wholeSelected) {
+        removeChip(chip)
+        return true
+      }
+      if (direction === 'backward' && start === end && start === 0) {
+        // At the very start there is nothing to delete inside: mark the whole
+        // formula, and the next Backspace removes it.
+        field.select()
+        chip.classList.add('mi-armed')
+        report()
+        return true
+      }
+      if (direction === 'backward' && PLACEHOLDER.test(field.getValue(field.selection))) {
+        // An empty box: go back to the previous one, not unwrap the structure.
+        backingOut = true
+        field.executeCommand(['moveToPreviousPlaceholder'])
+        backingOut = false
+        return true
+      }
+      chip.classList.remove('mi-armed')
+      return false
+    }
+
     field.addEventListener('focusin', () => {
       const left = leaving.current
-      if (left?.chip === chip && performance.now() < left.until) {
-        setTimeout(() => leave(chip, left.side))
+      if ((left?.chip === chip || left?.prose) && performance.now() < left.until) {
+        // Back to the sentence, where the caret was last put there.
+        setTimeout(() => {
+          const range = place.current?.range
+          if (range && root.current.contains(range.startContainer)) caretAt(range.startContainer, range.startOffset)
+          else if (left.chip === chip) leave(chip, left.side)
+        })
         return
       }
+      disarm()
+      chip.classList.add('mi-active')
+      report()
       place.current = { chip }
+    })
+    field.addEventListener('focusout', () => {
+      chip.classList.remove('mi-active', 'mi-armed')
+      report()
+      // A formula left with nothing in it is nothing: it goes. MathLive can
+      // blur and refocus itself in passing, so judge a moment later.
+      setTimeout(() => {
+        if (chip.isConnected && document.activeElement !== field && isBlank(chip, field)) prune(chip)
+      }, 300)
     })
     // A tap or click on the formula is the student choosing it: no guard.
     field.addEventListener(
@@ -92,13 +194,22 @@ export default function MathEditor({
       },
       { capture: true },
     )
-    field.addEventListener('input', () => {
+    const sync = () => {
       chip.dataset.latex = field.value
       chip.dataset.fresh = '1'
       emit()
-    })
+    }
+    field.addEventListener('input', sync)
     field.addEventListener('move-out', (event) => {
       event.preventDefault()
+      if (backingOut) {
+        // Backspace from the first box: mark the whole formula; the next
+        // Backspace removes it.
+        field.select()
+        chip.classList.add('mi-armed')
+        report()
+        return
+      }
       const side = { backward: 'before', forward: 'after' }[event.detail?.direction]
       if (side) leave(chip, side)
     })
@@ -106,14 +217,13 @@ export default function MathEditor({
       'keydown',
       (event) => {
         if (event.ctrlKey || event.metaKey || event.altKey) return
+        if (event.key === 'Backspace' || event.key === 'Delete') deleteKeyAt = performance.now()
         const handled = {
-          Tab: () => field.executeCommand(event.shiftKey ? 'moveToPreviousPlaceholder' : 'moveToNextPlaceholder'),
+          Tab: () => field.executeCommand([event.shiftKey ? 'moveToPreviousPlaceholder' : 'moveToNextPlaceholder']),
           Enter: () => leave(chip, 'after'),
           Escape: () => leave(chip, 'after'),
-          Backspace: () => {
-            if (cleanLatex(field.value)) return false
-            remove(chip)
-          },
+          Backspace: () => deleteIn('backward'),
+          Delete: () => deleteIn('forward'),
         }[event.key]
         if (!handled || handled() === false) return
         event.preventDefault()
@@ -121,6 +231,24 @@ export default function MathEditor({
       },
       { capture: true },
     )
+    // A phone keyboard's Backspace often arrives only as `beforeinput`, which
+    // MathLive does not act on. A real key press already went through keydown.
+    field.addEventListener(
+      'beforeinput',
+      (event) => {
+        const direction = DELETIONS[event.inputType]
+        if (!direction || performance.now() - deleteKeyAt < 100) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (deleteIn(direction)) return
+        // (The array form: MathLive runs the bare string form as a no-op here.)
+        field.executeCommand([direction === 'backward' ? 'deleteBackward' : 'deleteForward'])
+        // A command run from here sends no input event of its own.
+        sync()
+      },
+      { capture: true },
+    )
+
     chip.append(field)
     return field
   }
@@ -140,8 +268,8 @@ export default function MathEditor({
 
   /**
    * A non-empty text node either side of every chip, so the caret has
-   * somewhere to stand — a browser will not put it in an empty one (which is
-   * what splitting a text node to insert a chip leaves behind).
+   * somewhere to stand — before a first formula, between two, and after a
+   * last one — since a browser will not put it in an empty one.
    */
   const anchor = () => {
     for (const chip of root.current.querySelectorAll('.mi-chip')) {
@@ -157,6 +285,7 @@ export default function MathEditor({
 
   const render = (text) => {
     const node = root.current
+    disarm()
     node.replaceChildren()
     for (const segment of parseDraft(text)) {
       if (segment.kind === 'math') {
@@ -176,7 +305,8 @@ export default function MathEditor({
 
   /* ── reading the DOM back into text ─────────────────────── */
 
-  const read = () => {
+  /** Plain text with `$…$` formulas, for the whole box or a copied piece of it. */
+  const read = (from = root.current) => {
     const segments = []
     let text = ''
     const flush = () => {
@@ -199,11 +329,11 @@ export default function MathEditor({
         }
       }
     }
-    walk(root.current)
+    walk(from)
     flush()
     // The browser's own trailing <br> (what makes an empty last line visible)
     // is not a line of its own.
-    const last = [...root.current.childNodes].reverse().find((n) => n.nodeType !== 3 || n.nodeValue.replaceAll(ZWSP, ''))
+    const last = [...from.childNodes].reverse().find((n) => n.nodeType !== 3 || n.nodeValue.replaceAll(ZWSP, ''))
     const tail = segments[segments.length - 1]
     if (last?.nodeName === 'BR' && tail?.kind === 'text' && tail.value.endsWith('\n')) {
       tail.value = tail.value.slice(0, -1)
@@ -244,11 +374,14 @@ export default function MathEditor({
    * Out of a formula, into the sentence beside it. MathLive can take the focus
    * back a moment later (its own focus bookkeeping runs on a timer), so for a
    * quarter of a second a return into this formula that the student did not
-   * tap for is sent straight back out.
+   * tap for is sent straight back to the sentence — to the caret's latest
+   * place there, which may have moved since.
    */
   function leave(chip, side) {
     if (!chip.isConnected) return
     leaving.current = { chip, side, until: performance.now() + 250 }
+    chip.classList.remove('mi-active', 'mi-armed')
+    report()
     fieldOf(chip)?.blur()
     anchor()
     if (side === 'after') {
@@ -260,15 +393,88 @@ export default function MathEditor({
     }
   }
 
-  function remove(chip) {
-    const previous = chip.previousSibling
-    const offset = previous?.nodeType === 3 ? previous.nodeValue.length : 0
+  /** Takes a formula out, leaving the caret in the sentence where it stood. */
+  function removeChip(chip) {
+    if (!chip.isConnected) return
+    disarm()
+    // A live range at the formula's spot: it follows the text nodes merging
+    // around it, where a remembered node and offset would not.
+    const spot = document.createRange()
+    spot.setStartBefore(chip)
+    spot.collapse(true)
+    const { latex, open, close, fresh } = chip.dataset
     chip.remove()
     root.current.normalize()
-    if (previous?.isConnected) caretAt(previous, offset)
-    else caretAt(root.current, 0)
+    removed.current = {
+      segment: { latex, open, close, fresh: fresh === '1' },
+      previous: spot.startContainer,
+      offset: spot.startOffset,
+    }
+    caretAt(spot.startContainer, spot.startOffset)
     anchor()
+    report()
     emit()
+  }
+
+  /** An emptied formula the student has left: gone, without moving their caret. */
+  function prune(chip) {
+    chip.remove()
+    anchor()
+    report()
+    emit()
+  }
+
+  /** Ctrl/Cmd+Z straight after removing a formula: it comes back where it was. */
+  function restore() {
+    const { segment, previous, offset } = removed.current
+    removed.current = null
+    const chip = makeChip(segment)
+    if (previous?.isConnected && previous.nodeType === 3) {
+      previous.splitText(Math.min(offset, previous.nodeValue.length))
+      previous.after(chip)
+    } else root.current.prepend(chip)
+    anchor()
+    leave(chip, 'after')
+    emit()
+  }
+
+  /**
+   * What stands next to the prose caret, `backward` or `forward`, past the
+   * invisible anchors: `{ chip }`, `{ char: { node, index } }`, `{ other }` (a
+   * line break — the browser's to delete) or `{ none }`; `skipped` says
+   * whether anchors were passed on the way.
+   */
+  const besideCaret = (direction) => {
+    const selection = window.getSelection()
+    if (!selection.rangeCount || !selection.isCollapsed) return null
+    const back = direction === 'backward'
+    const step = (node) => (back ? node.previousSibling : node.nextSibling)
+    let skipped = false
+    const scan = (node, from) => {
+      const text = node.nodeValue
+      for (let index = from; index >= 0 && index < text.length; index += back ? -1 : 1) {
+        if (text[index] !== ZWSP) return { char: { node, index }, skipped }
+        skipped = true
+      }
+      return null
+    }
+    let { anchorNode: node, anchorOffset: offset } = selection
+    let current
+    if (node.nodeType === 3) {
+      const found = scan(node, back ? offset - 1 : offset)
+      if (found) return found
+      current = step(node)
+    } else {
+      current = back ? node.childNodes[offset - 1] : node.childNodes[offset]
+    }
+    for (; current; current = step(current)) {
+      if (current.nodeType === 3) {
+        const found = scan(current, back ? current.nodeValue.length - 1 : 0)
+        if (found) return found
+      } else if (isChip(current)) return { chip: current, skipped }
+      else return { other: current, skipped }
+    }
+    return { none: true, skipped }
   }
 
   /** Where prose insertion goes: the saved caret, or the end of the text. */
@@ -315,6 +521,7 @@ export default function MathEditor({
     const focused = root.current.contains(document.activeElement)
     render(text)
     emitted.current = text
+    removed.current = null
     if (focused) caretAt(root.current, 0)
   })
 
@@ -330,12 +537,77 @@ export default function MathEditor({
       if (!event.shiftKey && props.current.onEnter) props.current.onEnter()
       else document.execCommand('insertLineBreak')
     }
+
     const onBeforeInput = (event) => {
       if (insideChip(event)) return
       // No bold, italic or other formatting: this is plain text.
-      if (event.inputType.startsWith('format')) event.preventDefault()
+      if (event.inputType.startsWith('format')) {
+        event.preventDefault()
+        return
+      }
+      if (event.inputType === 'historyUndo' && removed.current) {
+        event.preventDefault()
+        restore()
+        return
+      }
+      const direction = DELETIONS[event.inputType]
+      if (!direction) {
+        disarm()
+        removed.current = null
+        return
+      }
+      const near = besideCaret(direction)
+      if (!near) {
+        // A selection: the browser deletes it, formulas in it included.
+        disarm()
+        return
+      }
+      if (near.chip) {
+        // First press marks the formula, the second removes it.
+        event.preventDefault()
+        if (armed.current?.chip === near.chip) removeChip(near.chip)
+        else arm(near.chip)
+        return
+      }
+      disarm()
+      if (!near.skipped) return
+      // Only invisible anchors before the next real character: delete that
+      // character, so the press is never swallowed.
+      event.preventDefault()
+      if (!near.char) return
+      const selection = window.getSelection()
+      const range = document.createRange()
+      if (direction === 'backward') {
+        range.setStart(near.char.node, near.char.index)
+        range.setEnd(selection.anchorNode, selection.anchorOffset)
+      } else {
+        range.setStart(selection.anchorNode, selection.anchorOffset)
+        range.setEnd(near.char.node, near.char.index + 1)
+      }
+      range.deleteContents()
+      caretAt(range.startContainer, range.startOffset)
+      anchor()
+      emit()
     }
+
     const onInput = () => emit()
+
+    /** Copy and cut give the same `$…$` text a paste turns back into formulas. */
+    const onCopy = (event) => {
+      if (insideChip(event)) return
+      const selection = window.getSelection()
+      if (!selection.rangeCount || selection.isCollapsed) return
+      const holder = document.createElement('div')
+      holder.append(selection.getRangeAt(0).cloneContents())
+      event.clipboardData?.setData('text/plain', read(holder))
+      event.preventDefault()
+      if (event.type === 'cut') {
+        selection.getRangeAt(0).deleteContents()
+        anchor()
+        emit()
+      }
+    }
+
     const onPaste = (event) => {
       if (insideChip(event)) return
       event.preventDefault()
@@ -371,18 +643,33 @@ export default function MathEditor({
     }
     // Only while the prose itself has focus: inside a formula the document's
     // selection points at the chip, and must not be taken for a prose caret.
+    // Moving the caret away also takes back a formula's "marked" state.
     const onSelectionChange = () => {
       const selection = window.getSelection()
       if (document.activeElement !== node || !selection.rangeCount) return
       const range = selection.getRangeAt(0)
       if (node.contains(range.startContainer)) place.current = { range: range.cloneRange() }
+      // The same spot can be written several ways, so ask whether the caret
+      // is still beside the marked formula, not whether it is the same node.
+      const mark = armed.current
+      if (mark && besideCaret('backward')?.chip !== mark.chip && besideCaret('forward')?.chip !== mark.chip) disarm()
+    }
+    // A tap on the sentence is the student leaving any formula; MathLive's
+    // own focus timer must not pull them back into it (see leave()).
+    const onPointerDown = (event) => {
+      if (insideChip(event)) return
+      disarm()
+      leaving.current = { prose: true, until: performance.now() + 250 }
     }
 
     node.addEventListener('keydown', onKeyDown)
     node.addEventListener('beforeinput', onBeforeInput)
     node.addEventListener('input', onInput)
+    node.addEventListener('copy', onCopy)
+    node.addEventListener('cut', onCopy)
     node.addEventListener('paste', onPaste)
     node.addEventListener('drop', onDrop)
+    node.addEventListener('pointerdown', onPointerDown)
     node.addEventListener('compositionstart', onCompositionStart)
     node.addEventListener('compositionend', onCompositionEnd)
     document.addEventListener('selectionchange', onSelectionChange)
@@ -390,8 +677,11 @@ export default function MathEditor({
       node.removeEventListener('keydown', onKeyDown)
       node.removeEventListener('beforeinput', onBeforeInput)
       node.removeEventListener('input', onInput)
+      node.removeEventListener('copy', onCopy)
+      node.removeEventListener('cut', onCopy)
       node.removeEventListener('paste', onPaste)
       node.removeEventListener('drop', onDrop)
+      node.removeEventListener('pointerdown', onPointerDown)
       node.removeEventListener('compositionstart', onCompositionStart)
       node.removeEventListener('compositionend', onCompositionEnd)
       document.removeEventListener('selectionchange', onSelectionChange)
@@ -413,6 +703,9 @@ export default function MathEditor({
     insert(buttonId) {
       const button = MATH_BUTTONS.find((entry) => entry.id === buttonId)
       if (!button || !Field.current) return
+      disarm()
+      // A button is the student choosing the formula: no guard against focus.
+      leaving.current = null
       const boxes = hasBoxes(button)
       const chip = place.current?.chip
       if (chip?.isConnected && fieldOf(chip)) {
@@ -444,31 +737,16 @@ export default function MathEditor({
         focus: true,
         selectionMode: 'placeholder',
       })
+      // How it looks with nothing filled in, to know later whether it still is.
+      if (!selected) created.dataset.blank = field.value
       if (!boxes || !field.value.includes('\\placeholder')) leave(created, 'after')
       emit()
     },
 
-    /** "Next blank →": the next box in this formula, then out; from prose, the next formula with a box. */
-    nextBlank() {
-      const chip = place.current?.chip
-      if (chip?.isConnected && fieldOf(chip)) {
-        fieldOf(chip).executeCommand('moveToNextPlaceholder')
-        return
-      }
-      const range = proseRange()
-      const target = [...root.current.querySelectorAll('.mi-chip')].find(
-        (each) =>
-          fieldOf(each)?.value.includes('\\placeholder') &&
-          range.comparePoint(each, 0) >= 0,
-      )
-      if (!target) {
-        root.current.focus({ preventScroll: true })
-        return
-      }
-      const field = fieldOf(target)
-      field.focus()
-      field.position = 0
-      field.executeCommand('moveToNextPlaceholder')
+    /** "Remove formula" on the row: the formula being edited or marked goes. */
+    removeFormula() {
+      const chip = target()
+      if (chip) removeChip(chip)
     },
 
     focus: () => root.current?.focus(),

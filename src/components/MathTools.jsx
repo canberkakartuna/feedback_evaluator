@@ -31,13 +31,13 @@ const keepFocus = (event) => event.preventDefault()
  * The "Maths" toggle and the row of structure and symbol buttons over a
  * student's text box — MathInput.jsx owns where they start and what they do.
  *
- * - "Next blank →" moves to the formula's next empty box, then out of it: the
- *   same as Tab, for a touch screen that has no Tab.
+ * - "Remove formula" shows on the top line while a formula is being edited or
+ *   marked (by a first Backspace), and takes it out with one tap.
  * - One tab stop for the symbol row, arrow keys along it (a toolbar).
  * - The row is one line that scrolls sideways; the edge with more buttons
  *   beyond it fades. The hovered or focused button's name shows in words.
  */
-export default function MathTools({ open, onToggle, onInsert, onNext, controls }) {
+export default function MathTools({ open, onToggle, onInsert, canRemove, onRemove, controls }) {
   const { t } = useI18n()
   const [focus, setFocus] = useState(0)
   const [named, setNamed] = useState(null)
@@ -93,24 +93,23 @@ export default function MathTools({ open, onToggle, onInsert, onNext, controls }
         >
           {t('math.toggle')}
         </button>
+        {canRemove ? (
+          <button
+            type="button"
+            className="mt-remove"
+            onPointerDown={keepFocus}
+            onMouseDown={keepFocus}
+            onClick={onRemove}
+          >
+            <span aria-hidden="true">×</span> {t('math.remove')}
+          </button>
+        ) : null}
+        {/* The hovered or focused button's name, in words. The buttons carry
+            the same name as their label for screen readers. */}
         {open ? (
-          <>
-            <button
-              type="button"
-              className="mt-next"
-              title={t('math.nextBlankHint')}
-              onPointerDown={keepFocus}
-              onMouseDown={keepFocus}
-              onClick={onNext}
-            >
-              {t('math.nextBlank')} <span aria-hidden="true">→</span>
-            </button>
-            {/* The hovered or focused button's name, in words. The buttons
-                carry the same name as their label for screen readers. */}
-            <span className="mt-name" aria-hidden="true">
-              {named ? t(NAMES[named]) : ''}
-            </span>
-          </>
+          <span className="mt-name" aria-hidden="true">
+            {named ? t(NAMES[named]) : ''}
+          </span>
         ) : null}
       </div>
 

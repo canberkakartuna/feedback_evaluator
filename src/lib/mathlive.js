@@ -39,6 +39,54 @@ export function loadMathLive() {
 }
 
 /**
+ * Where typing goes, made unmistakable — styles inside the field's shadow
+ * root, which the page's own CSS cannot reach.
+ *
+ * MathLive shows no caret in an empty box: it *selects* the box's placeholder
+ * instead, drawn with the selection colour. That colour matched the focused
+ * field's background, so the box being filled in was invisible — the "no
+ * cursor" students saw. Here the selected box gets the pen colour as a fill
+ * and a ring that blinks like a caret, and the real caret (in a box with
+ * something in it) is taller, so it still shows in a small exponent or limit.
+ * The colours come from the page's tokens through `--mi-*` properties set on
+ * the field (MathEditor.css), so they follow the dark theme too. MathLive's
+ * own sheet is adopted after this one, so an override of one of its rules
+ * needs `!important`.
+ */
+const FIELD_CSS = `
+.ML__content.ML__focused .ML__selection {
+  background: var(--mi-active-box) !important;
+  box-shadow: 0 0 0 2px var(--mi-active-ring);
+  border-radius: 3px;
+  animation: mi-ring 1.05s step-end infinite;
+}
+@keyframes mi-ring {
+  50% { box-shadow: 0 0 0 2px transparent; }
+}
+.ML__caret::after,
+.ML__text-caret::after {
+  --_caret-width: 2px;
+  min-height: 16px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ML__caret::after,
+  .ML__text-caret::after,
+  .ML__content.ML__focused .ML__selection {
+    animation: none !important;
+  }
+}
+`
+
+function styleField(field) {
+  const shadow = field.shadowRoot
+  if (!shadow || shadow.querySelector('style[data-mi]')) return
+  const style = document.createElement('style')
+  style.dataset.mi = ''
+  style.textContent = FIELD_CSS
+  shadow.append(style)
+}
+
+/**
  * A formula field set up for a school student:
  *
  * - the phone's own keyboard, never MathLive's on-screen one: the policy is
@@ -62,6 +110,7 @@ export function createField(MathfieldElement, latex) {
     field.inlineShortcuts = {}
     field.menuItems = []
     nativeKeyboard()
+    styleField(field)
   })
   field.addEventListener('focusin', nativeKeyboard)
   if (latex) field.setValue(latex, { silenceNotifications: true })

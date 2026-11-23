@@ -6,8 +6,8 @@
   min-width: 0;
 }
 
-/* Line one: the two controls side by side, then the name of the button under
-   the pointer, quietly filling the rest of the line. */
+/* Line one: the toggle, then the name of the button under the pointer,
+   quietly at the far end. */
 .mt-head {
   display: flex;
   align-items: center;
@@ -15,8 +15,7 @@
   min-width: 0;
 }
 
-.mt-toggle,
-.mt-next {
+.mt-toggle {
   flex: none;
   min-height: 32px;
   border: 1px solid var(--edge);
@@ -34,10 +33,29 @@
 }
 
 .mt-toggle:hover,
-.mt-next:hover,
 .mt-toggle[aria-expanded='true'] {
   border-color: var(--pen);
   color: var(--pen);
+}
+
+/* "Remove formula": only while a formula is being edited or marked. */
+.mt-remove {
+  flex: none;
+  min-height: 32px;
+  border: 1px solid var(--pen);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 4px 10px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pen);
+}
+
+.mt-remove:hover {
+  background: var(--pen);
+  color: var(--paper);
 }
 
 .mt-name {
@@ -107,7 +125,7 @@
   }
 
   .mt-toggle,
-  .mt-next {
+  .mt-remove {
     min-height: 40px;
   }
 }
@@ -119,7 +137,7 @@
 
 .mt-btn:focus-visible,
 .mt-toggle:focus-visible,
-.mt-next:focus-visible {
+.mt-remove:focus-visible {
   outline: 2px solid var(--pen);
   outline-offset: 1px;
 }
