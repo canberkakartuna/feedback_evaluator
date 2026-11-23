@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import StatusMark from './StatusMark'
-import { MARKS, SELF_MARKS, markLabelKey, markShortKey } from '../lib/status'
+import { MARKS, SELF_MARK_CHOICES, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
 import { MODES, boardFile, contentCount, hasContent, uploadedFiles } from '../lib/answer'
 import { PHOTO_ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attachments'
@@ -421,9 +421,8 @@ export default function QuestionPanel({
 
           {/* Doc item 2: the student's own read of how it went. */}
           <section className="qp-selfmark">
-            <span className="eyebrow">{t('qp.howDidItGo')}</span>
-            <div className="qp-selfmark-row">
-              {SELF_MARKS.map((key) => (
+            <div className="qp-selfmark-row" role="group" aria-label={t('qp.howDidItGo')}>
+              {SELF_MARK_CHOICES.map((key) => (
                 <button
                   key={key}
                   type="button"

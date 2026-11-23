@@ -37,7 +37,7 @@ test("an activity's tutor prompt never reaches the student's browser", async ({ 
   const tutor = tutorPane(page)
   await tutor.getByLabel('Message the tutor').fill('What should I do first?')
   await tutor.getByRole('button', { name: 'Send' }).click()
-  await expect(tutor.getByText('9 of 10 questions left')).toBeVisible()
+  await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
   await page.getByLabel('Your written answer').fill('You divide both parts by the common factor, which is two here.')
   await page.getByRole('button', { name: 'Check my answer' }).click()
   await expect(questionList(page).getByRole('button', { name: /^Q1/ })).toContainText('2/2')

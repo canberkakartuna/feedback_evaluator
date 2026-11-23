@@ -1,25 +1,25 @@
 /**
  * How many times a student may write to the tutor about one question.
  *
- * Ten turns, then the chat on that question closes for two hours, then ten
- * more. It caps what one student can spend on the model, and it nudges them
+ * Twenty turns, then the chat on that question closes for two hours, then
+ * twenty more. It caps what one student can spend on the model, and it nudges them
  * to work rather than ask for the answer line by line.
  *
  * Derived from the thread, never stored. A counter on the answer would drift
  * the first time a write half-failed, and the thread is already the record
  * the dataset is built from — so the server (routes/tutor.js, which refuses
- * the eleventh ask) and the workspace (TutorPanel, which shows what is left)
+ * the twenty-first ask) and the workspace (TutorPanel, which shows what is left)
  * both read the same messages through this one function and cannot disagree.
  *
  * Counted per question within a session. A signed-in student is sent back to
  * their existing session when they reopen an activity (routes/sessions.js),
- * so starting over does not hand out a fresh ten.
+ * so starting over does not hand out a fresh twenty.
  *
  * In shared/ because both sides need it; the server's copy is the one that
  * holds.
  */
 
-export const TURN_LIMIT = 10
+export const TURN_LIMIT = 20
 
 export const TURN_LOCK_MS = 2 * 60 * 60 * 1000
 
@@ -28,8 +28,8 @@ export const TURN_LOCK_MS = 2 * 60 * 60 * 1000
  *
  * `messages` is that question's thread, oldest first — the tutor's replies
  * and any client-side notes are skipped, so the panel's own state can be
- * passed in as it is. A window opens on the first ask, closes on the tenth,
- * and stays closed until two hours after that tenth ask; the next ask after
+ * passed in as it is. A window opens on the first ask, closes on the twentieth,
+ * and stays closed until two hours after that twentieth ask; the next ask after
  * that opens a new window.
  *
  * @returns {{ limit: number, used: number, remaining: number, lockedUntil: string | null }}

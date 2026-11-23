@@ -31,6 +31,13 @@ export const STATUS = MARKS
 
 export const SELF_MARKS = ['done', 'unfinished', 'wrong']
 
+/**
+ * The self-marks the student can still pick in the question panel. `wrong` is
+ * no longer offered, but stays in SELF_MARKS above so the API keeps accepting
+ * it and answers already saved with it still show their mark.
+ */
+export const SELF_MARK_CHOICES = ['done', 'unfinished']
+
 export const AUTO_MARKS = ['new', 'draft', 'revise', 'mastered']
 
 /** The two string keys for a mark, so no caller builds them by hand. */

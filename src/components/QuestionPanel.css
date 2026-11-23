@@ -764,12 +764,6 @@
   color: var(--stamp);
 }
 
-.qp-selfmark-btn[aria-pressed='true'][data-mark='wrong'] {
-  border-color: var(--margin);
-  background: var(--margin-soft);
-  color: var(--margin);
-}
-
 /* ── nav ────────────────────────────────────────────────────── */
 
 .qp-nav {

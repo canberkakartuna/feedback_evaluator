@@ -131,6 +131,12 @@ test.describe('status marks and topics', () => {
     const marks = page.getByRole('main')
     const saved = () => page.waitForResponse(isAnswerSave)
 
+    // Two self-marks, no visible heading over them.
+    const choices = marks.getByRole('group', { name: 'How did this one go?' }).getByRole('button')
+    await expect(choices).toHaveText(['Done', 'In progress'])
+    await expect(marks.getByText('How did this one go?')).toHaveCount(0)
+    await expect(marks.getByRole('button', { name: 'Got it wrong' })).toHaveCount(0)
+
     let done = saved()
     await marks.getByRole('button', { name: 'Done' }).click()
     await done
@@ -140,19 +146,14 @@ test.describe('status marks and topics', () => {
 
     await q2.click()
     done = saved()
-    await marks.getByRole('button', { name: 'Not finished' }).click()
+    await marks.getByRole('button', { name: 'In progress' }).click()
     await done
-    await expect(q2).toContainText('Not finished')
-
-    done = saved()
-    await marks.getByRole('button', { name: 'Got it wrong' }).click()
-    await done
-    await expect(q2).toContainText('Got it wrong')
+    await expect(q2).toContainText('In progress')
     await expect(list.getByText('1 of 2')).toBeVisible()
 
     await page.reload()
     await expect(questionList(page).getByRole('button', { name: /^Q1/ })).toContainText('Done')
-    await expect(questionList(page).getByRole('button', { name: /^Q2/ })).toContainText('Got it wrong')
+    await expect(questionList(page).getByRole('button', { name: /^Q2/ })).toContainText('In progress')
     await expect(questionList(page).getByText('1 of 2')).toBeVisible()
 
     // Pressing the same mark again clears it.

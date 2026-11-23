@@ -19,7 +19,7 @@ npm run test:e2e      # the student's critical paths in a real browser (Playwrig
 | API smoke | `npm run test:api` | Every route over real HTTP against the in-memory store: accounts and roles (staff email sign-in, student-number sign-in, annotators kept out of staff areas, the teacher labelling switch, manager scope), consent and withdrawal, sessions, marking, tutor (scripted), uploads, events, labelling and snippet assignment, datasets (create/archive/delete, assigning them to teachers and annotators, picking dialogs into them, browsing by student, and who may do each) ([server/smoke.mjs](server/smoke.mjs)) | ~ 5 s |
 | Strings | `npm run check:strings` | Every `t('…')` key exists in both EN and TR ([server/strings.mjs](server/strings.mjs)) | < 1 s |
 | Build | `npm run build` | The client compiles | ~ 2 s |
-| End to end | `npm run test:e2e` | The student's critical paths in Chromium, through the real screens: sign-in, the three consent pages, answering (typed and photo), marking and self-marks, the topic filter, the tutor's ten-turn limit, EN/TR, a returning student, support, the profile and withdrawing, and that an activity's `tutorPrompt` never reaches the browser ([e2e/](e2e/)) | ~ 10 s |
+| End to end | `npm run test:e2e` | The student's critical paths in Chromium, through the real screens: sign-in, the three consent pages, answering (typed and photo), marking and self-marks, the topic filter, the tutor's twenty-turn limit, EN/TR, a returning student, support, the profile and withdrawing, and that an activity's `tutorPrompt` never reaches the browser ([e2e/](e2e/)) | ~ 10 s |
 | Mongo smoke | `npm run test:api:mongo` | The same smoke assertions against MongoDB | manual |
 | Model check | `npm run check:openai` | One real call to the tutor model — costs money, never in CI | manual |
 | Manual | browser | Screens, layout, mobile, file pickers | manual |
@@ -130,7 +130,7 @@ Reports, traces and screenshots land in `e2e/.report` and `e2e/.results`
 | `sign-in.spec.js` | A listed number signs in; an unlisted one is refused; only 8 digits can be typed |
 | `consent.spec.js` | Sheet → form (six boxes) → notice, in order; Back keeps ticks; a reload restarts at page 1; the next sign-in skips it; TR; staff never see it |
 | `workspace.spec.js` | Questions listed and opened; a typed answer survives a reload; marking (Revise / Mastered); a photo upload survives a reload; a non-photo is refused; self-marks; the topic filter |
-| `tutor.spec.js` | A reply, the turns counter, rating; ten turns then the chat closes, also after a reload |
+| `tutor.spec.js` | A reply, the turns counter, rating; twenty turns then the chat closes, also after a reload |
 | `language.spec.js` | EN/TR changes the workspace (Q1 → Soru 1) and is remembered |
 | `returning.spec.js` | Signing in again: no consent, "continue where you left off", answer, mark and chat still there |
 | `support.spec.js` | Write in, the reply dot, read the reply, answer in the same thread |

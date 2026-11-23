@@ -10,7 +10,7 @@ async function ask(page, text, remainingAfter) {
   const tutor = tutorPane(page)
   await tutor.getByLabel('Message the tutor').fill(text)
   await tutor.getByRole('button', { name: 'Send' }).click()
-  await expect(tutor.getByText(`${remainingAfter} of 10 questions left`)).toBeVisible()
+  await expect(tutor.getByText(`${remainingAfter} of 20 questions left`)).toBeVisible()
 }
 
 test.describe('tutor chat', () => {
@@ -20,51 +20,51 @@ test.describe('tutor chat', () => {
     await openActivity(page, 'Ratio practice')
 
     const tutor = tutorPane(page)
-    await expect(tutor.getByText('10 of 10 questions left')).toBeVisible()
+    await expect(tutor.getByText('20 of 20 questions left')).toBeVisible()
     // The opening line nobody authored is the interface's own.
     await expect(tutor.getByText('Ask me anything you are stuck on.', { exact: false })).toBeVisible()
 
-    await ask(page, 'I do not know where to start.', 9)
+    await ask(page, 'I do not know where to start.', 19)
     await expect(tutor.getByText('I do not know where to start.')).toBeVisible()
     // One reply, which can be rated.
     await expect(tutor.getByText('Did this help?')).toHaveCount(1)
     await tutor.getByRole('button', { name: 'Yes' }).click()
     await expect(tutor.getByText('Marked helpful')).toBeVisible()
 
-    await ask(page, 'Can you give me a hint?', 8)
+    await ask(page, 'Can you give me a hint?', 18)
     await expect(tutor.getByText('Did this help?')).toHaveCount(1) // the first is rated now
     await expect(tutor.locator('article[data-from="tutor"][data-kind="reply"]')).toHaveCount(2)
 
-    // The count is per question: Q2 still has all ten.
+    // The count is per question: Q2 still has all twenty.
     await page.getByRole('complementary', { name: 'Question set' }).getByRole('button', { name: /^Q2/ }).click()
-    await expect(tutor.getByText('10 of 10 questions left')).toBeVisible()
+    await expect(tutor.getByText('20 of 20 questions left')).toBeVisible()
 
     // And it is read from the stored thread, so a reload keeps it.
     await page.reload()
-    await expect(tutorPane(page).getByText('8 of 10 questions left')).toBeVisible()
+    await expect(tutorPane(page).getByText('18 of 20 questions left')).toBeVisible()
     await expect(tutorPane(page).getByText('Can you give me a hint?')).toBeVisible()
   })
 
-  test('after ten questions the chat closes with the come-back-later message', async ({ page }) => {
+  test('after twenty questions the chat closes with the come-back-later message', async ({ page }) => {
     const { studentNumber } = await seedClass()
     await signInFirstTime(page, studentNumber)
     await openActivity(page, 'Ratio practice')
 
-    for (let turn = 1; turn <= 10; turn += 1) {
-      await ask(page, `Question number ${turn}`, 10 - turn)
+    for (let turn = 1; turn <= 20; turn += 1) {
+      await ask(page, `Question number ${turn}`, 20 - turn)
     }
 
     const tutor = tutorPane(page)
     await expect(tutor.getByRole('status')).toContainText(
-      'You have used all 10 questions for this one. Keep working on it yourself, and come back in 2 hours',
+      'You have used all 20 questions for this one. Keep working on it yourself, and come back in 2 hours',
     )
     await expect(tutor.getByLabel('Message the tutor')).toHaveCount(0)
     await expect(tutor.getByRole('button', { name: 'Send' })).toHaveCount(0)
 
     // Still closed after a reload: the server counts the turns, not the page.
     await page.reload()
-    await expect(tutorPane(page).getByText('0 of 10 questions left')).toBeVisible()
-    await expect(tutorPane(page).getByRole('status')).toContainText('You have used all 10 questions')
+    await expect(tutorPane(page).getByText('0 of 20 questions left')).toBeVisible()
+    await expect(tutorPane(page).getByRole('status')).toContainText('You have used all 20 questions')
     await expect(tutorPane(page).getByLabel('Message the tutor')).toHaveCount(0)
   })
 })

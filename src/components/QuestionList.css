@@ -302,35 +302,3 @@
   color: var(--graphite-faint);
   cursor: default;
 }
-
-/* ── key ────────────────────────────────────────────────────── */
-
-.ql-foot {
-  flex: none;
-  border-top: 1px solid var(--edge);
-  padding: var(--s-3) var(--s-4);
-}
-
-.ql-key {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px var(--s-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ql-key-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--f-mono);
-  font-size: var(--t-11);
-  color: var(--graphite);
-}
-
-@media (max-width: 759px) {
-  .ql-foot {
-    display: none;
-  }
-}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { PHOTO_ACCEPT, partitionFiles } from '../lib/attachments'
 import StatusMark from './StatusMark'
-import { AUTO_MARKS, MARKS, markLabelKey, markShortKey } from '../lib/status'
+import { MARKS, markLabelKey, markShortKey } from '../lib/status'
 import { promptFor } from '../../shared/activity'
 import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
@@ -224,17 +224,6 @@ export default function QuestionList({
           </form>
         </section>
       </div>
-
-      <footer className="ql-foot">
-        <ul className="ql-key">
-          {AUTO_MARKS.map((key) => (
-            <li key={key} className="ql-key-item">
-              <StatusMark status={key} size={12} />
-              <span>{t(markShortKey(key))}</span>
-            </li>
-          ))}
-        </ul>
-      </footer>
     </>
   )
 }

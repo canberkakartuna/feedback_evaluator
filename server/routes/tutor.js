@@ -45,7 +45,7 @@ export function tutorRoutes(store, { resolveQuestion }) {
       const history = await store.messages.list(session.id, question.id)
 
       /**
-       * Ten turns per question, then two hours closed — see shared/turns.js.
+       * Twenty turns per question, then two hours closed — see shared/turns.js.
        * Refused before anything is written or the model is called, so a
        * locked question costs nothing. 429 with the state attached, so the
        * client can say when it reopens without a second request.

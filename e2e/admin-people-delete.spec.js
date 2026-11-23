@@ -8,6 +8,10 @@ import { api } from './support/seed.mjs'
  * row's Delete button sits well below the top of the page — the result of the
  * press (done, or refused and why) has to show where the admin is looking, not
  * up at the top of the page they have scrolled away from.
+ *
+ * Delete asks first, in a dialog over the page. It used to ask inside the row,
+ * which doubled the row's height and pushed everything under it down the moment
+ * Delete was pressed; the table must not move at all while the question is open.
  */
 
 async function adminToken() {
@@ -29,6 +33,14 @@ async function createUser(token, body) {
 /** The row for one account in the People table — by its email, since a name also shows under "Reports to". */
 const rowOf = (page, user) => page.getByRole('row').filter({ hasText: user.email })
 
+/** Every row's height, every column's width and the table's scroll width — what a reflow would change. */
+const tableGeometry = (page) =>
+  page.locator('.cs-table').evaluate((table) => ({
+    columns: [...table.tHead.rows[0].cells].map((cell) => cell.getBoundingClientRect().width),
+    rows: [...table.tBodies[0].rows].map((row) => row.getBoundingClientRect().height),
+    scrollWidth: table.parentElement.scrollWidth,
+  }))
+
 test.use({ viewport: { width: 1280, height: 600 } })
 
 test('deleting an account from far down the list: confirm, then the result is in view', async ({ page }) => {
@@ -43,19 +55,38 @@ test('deleting an account from far down the list: confirm, then the result is in
 
   const row = rowOf(page, target)
   await row.scrollIntoViewIfNeeded()
-  await row.getByRole('button', { name: 'Delete' }).click()
-
-  // One press does not delete: it asks first, in the row.
-  await expect(row.getByText(`Delete ${target.name}?`)).toBeVisible()
-  await expect(row).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+  const before = await tableGeometry(page)
   const scrolledTo = await page.evaluate(() => window.scrollY)
+  const deleteButton = row.getByRole('button', { name: 'Delete' })
+  await deleteButton.click()
+
+  // One press does not delete: it asks first, naming the account...
+  await expect(page.getByText(`Delete ${target.name}?`)).toBeVisible()
+  // ...without moving anything in the table under it.
+  expect(await tableGeometry(page)).toEqual(before)
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrolledTo)
+
+  const dialog = page.getByRole('alertdialog', { name: `Delete ${target.name}?` })
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText(target.email)
+  // Focus starts on the harmless answer; Escape puts the question away and
+  // gives focus back to the row's Delete button, with nothing deleted.
+  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(deleteButton).toBeFocused()
+  await expect(rowOf(page, target)).toHaveCount(1)
+
+  await deleteButton.click()
   // A real network takes a moment over the refetch; locally it is too quick to
   // ever paint the in-between state this guards against.
   await page.route('**/api/users', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 400))
     await route.continue()
   })
-  await row.getByRole('button', { name: 'Yes, delete' }).click()
+  await dialog.getByRole('button', { name: 'Yes, delete' }).click()
+  await expect(dialog).toHaveCount(0)
 
   const done = page.getByRole('status')
   await expect(done).toContainText(`${target.name} deleted.`)
@@ -80,7 +111,7 @@ test('a refused delete says why, in the admin language, where the admin can see 
   const row = rowOf(page, manager)
   await row.scrollIntoViewIfNeeded()
   await row.getByRole('button', { name: 'Delete' }).click()
-  await row.getByRole('button', { name: 'Yes, delete' }).click()
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Yes, delete' }).click()
 
   const refusal = page.getByRole('alert')
   await expect(refusal).toContainText(`${manager.name} was not deleted`)

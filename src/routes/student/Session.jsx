@@ -296,7 +296,7 @@ export default function Session() {
    * its feedback appears in the chat without the student having to type.
    * The server sends the whiteboard PNG and the uploads to the model with
    * that ask (services/tutor.js, workForModel). It is a turn like any other,
-   * so it counts against the ten and is skipped once they are used up.
+   * so it counts against the twenty and is skipped once they are used up.
    *
    * A ref because `converse` is declared further down than these handlers.
    */

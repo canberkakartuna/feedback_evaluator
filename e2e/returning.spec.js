@@ -25,7 +25,7 @@ test('a returning student finds their answers, marks and tutor chat waiting', as
   const tutor = tutorPane(page)
   await tutor.getByLabel('Message the tutor').fill('How do I share in a ratio?')
   await tutor.getByRole('button', { name: 'Send' }).click()
-  await expect(tutor.getByText('9 of 10 questions left')).toBeVisible()
+  await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
 
   await signOut(page)
 
@@ -41,5 +41,5 @@ test('a returning student finds their answers, marks and tutor chat waiting', as
 
   await questionList(page).getByRole('button', { name: /^Q2/ }).click()
   await expect(tutorPane(page).getByText('How do I share in a ratio?')).toBeVisible()
-  await expect(tutorPane(page).getByText('9 of 10 questions left')).toBeVisible()
+  await expect(tutorPane(page).getByText('19 of 20 questions left')).toBeVisible()
 })

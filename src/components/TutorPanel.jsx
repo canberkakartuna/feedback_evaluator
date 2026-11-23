@@ -22,7 +22,7 @@ export default function TutorPanel({
 
   /**
    * Turns left on this question, read from the thread exactly as the server
-   * reads it — see shared/turns.js. The server is what refuses the eleventh
+   * reads it — see shared/turns.js. The server is what refuses the twenty-first
    * ask; this only says so before the student types it.
    */
   const turns = turnState(state.messages, clock)

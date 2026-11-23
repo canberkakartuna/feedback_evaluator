@@ -19,7 +19,7 @@ test('switching to Turkish changes the workspace and survives a reload', async (
   await expect(list.getByRole('button', { name: /^Soru 1/ })).toBeVisible()
   await expect(list.getByRole('button', { name: /^Soru 2/ })).toBeVisible()
   await expect(page.getByRole('main').getByText('2:4 oranı neden 1:2 oranına eşittir?')).toBeVisible()
-  await expect(page.getByRole('complementary', { name: 'Yapay zekâ öğretmeni' }).getByText('10 sorudan 10 hakkın kaldı')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Yapay zekâ öğretmeni' }).getByText('20 sorudan 20 hakkın kaldı')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Çıkış yap' })).toBeVisible()
 
   await page.reload()

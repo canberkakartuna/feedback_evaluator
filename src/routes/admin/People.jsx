@@ -8,6 +8,7 @@ import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
 import { isUsername } from '../../../shared/student-number'
 import LabellingSwitch from '../../components/LabellingSwitch'
 import ConsoleNotice from '../../components/ConsoleNotice'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 /**
  * Accounts, and the hierarchy between them.
@@ -48,7 +49,7 @@ export default function People() {
   })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null)
-  /** The account whose delete is waiting for a second press. */
+  /** The account whose delete is waiting to be confirmed, in the dialog. */
   const [confirming, setConfirming] = useState(null)
 
   // Memoised so the lookups below actually cache — see the same note in
@@ -430,35 +431,15 @@ export default function People() {
                         >
                           {entry.active ? t('people.deactivate') : t('people.reactivate')}
                         </button>
-                        {confirming === entry.id ? (
-                          <span
-                            className="cs-actions"
-                            role="group"
-                            aria-label={t('people.confirmDelete', { name: entry.name })}
-                          >
-                            <span className="cs-hint">{t('people.confirmDelete', { name: entry.name })}</span>
-                            <button
-                              type="button"
-                              className="cs-btn cs-btn-sm cs-btn-danger"
-                              disabled={busy}
-                              onClick={() => deleteFor(entry)}
-                            >
-                              {t('people.deleteYes')}
-                            </button>
-                            <button type="button" className="cs-btn cs-btn-sm" onClick={() => setConfirming(null)}>
-                              {t('common.cancel')}
-                            </button>
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="cs-btn cs-btn-sm cs-btn-danger"
-                            disabled={entry.id === actor.id}
-                            onClick={() => setConfirming(entry.id)}
-                          >
-                            {t('people.delete')}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="cs-btn cs-btn-sm cs-btn-danger"
+                          disabled={entry.id === actor.id}
+                          aria-haspopup="dialog"
+                          onClick={() => setConfirming(entry)}
+                        >
+                          {t('people.delete')}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -468,6 +449,19 @@ export default function People() {
           </div>
         )}
       </section>
+
+      {confirming ? (
+        <ConfirmDialog
+          title={t('people.confirmDelete', { name: confirming.name })}
+          detail={confirming.email ?? confirming.studentNumber}
+          body={t('people.confirmDeleteBody')}
+          confirmLabel={busy ? t('people.deleting') : t('people.deleteYes')}
+          cancelLabel={t('common.cancel')}
+          busy={busy}
+          onConfirm={() => deleteFor(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
     </>
   )
 }
