@@ -108,6 +108,7 @@ export default function PreviewActivity() {
               onCheck={() => {}}
               onStep={(delta) => setIndex((at) => Math.min(questions.length - 1, Math.max(0, at + delta)))}
               onOpenTutor={() => {}}
+              mathDefault={Boolean(activity.mathToolsOpen)}
             />
           </div>
         </>

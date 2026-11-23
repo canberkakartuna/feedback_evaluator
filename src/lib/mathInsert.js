@@ -3,7 +3,7 @@
  *
  * Pure so it can be unit-tested without a DOM: given the draft, where the
  * cursor (or selection) is, and which button was pressed, it returns the new
- * draft and where the cursor should land. TutorPanel.jsx only applies it.
+ * draft and where the cursor should land. MathTools.jsx only applies it.
  *
  * - The LaTeX goes in at the cursor. A selection becomes the part of the
  *   formula it most likely is — the base of a power or subscript, the
@@ -18,6 +18,9 @@
  *   delimiter and the result is always something MathText renders. A
  *   selection spanning lines is wrapped in \( … \) instead, since $…$ stays
  *   on one line.
+ * - Every blank to fill is an empty {} — "\frac{}{}", "{}^{}", the limits and
+ *   body of "\int_{}^{}{}\,dx" — so moving between blanks (nextBlank below) and
+ *   showing them in the preview (showBlanks) have one rule to follow.
  * - The cursor lands in the first empty slot. With every slot filled (a
  *   symbol, or a root around a selection) it lands after the formula when one
  *   was opened, so the student carries on writing prose, and after the
@@ -48,8 +51,12 @@ export const MATH_SNIPPETS = [
   { id: 'subscript', label: 'x_{n}', template: `${SELECTION}_{${SLOT}}`, takesBase: true },
   { id: 'fraction', label: String.raw`\dfrac{a}{b}`, template: String.raw`\frac{${SELECTION}}{${SLOT}}` },
   { id: 'sqrt', label: String.raw`\sqrt{x}`, template: String.raw`\sqrt{${SELECTION}}` },
-  { id: 'integral', label: String.raw`\int`, template: String.raw`\int_{${SLOT}}^{${SLOT}}${SELECTION}\,dx` },
-  { id: 'sum', label: String.raw`\sum`, template: String.raw`\sum_{${SLOT}}^{${SLOT}}${SELECTION}` },
+  {
+    id: 'integral',
+    label: String.raw`\int`,
+    template: String.raw`\int_{${SLOT}}^{${SLOT}}{${SELECTION}}\,dx`,
+  },
+  { id: 'sum', label: String.raw`\sum`, template: String.raw`\sum_{${SLOT}}^{${SLOT}}{${SELECTION}}` },
   { id: 'pi', label: 'π', template: 'π' },
   { id: 'infinity', label: '∞', template: '∞' },
   { id: 'le', label: '≤', template: '≤' },
@@ -63,9 +70,9 @@ const BY_ID = new Map(MATH_SNIPPETS.map((snippet) => [snippet.id, snippet]))
 
 /**
  * The [start, end) range of each formula's *inside* — between its
- * delimiters — in the raw text. splitMath covers every character once and a
- * formula's value starts right after its opening delimiter, so the raw
- * offsets can be recovered from the segments.
+ * delimiters — in the raw text, and the length of its delimiter. splitMath
+ * covers every character once and a formula's value starts right after its
+ * opening delimiter, so the raw offsets can be recovered from the segments.
  */
 function mathRanges(text) {
   const ranges = []
@@ -77,7 +84,7 @@ function mathRanges(text) {
     }
     const start = text.indexOf(segment.value, at)
     const open = start - at
-    ranges.push([start, start + segment.value.length])
+    ranges.push([start, start + segment.value.length, open])
     at = start + segment.value.length + open
   }
   return ranges
@@ -116,7 +123,8 @@ export function insertMath(text, selectionStart, selectionEnd, id, maxLength = M
   const selected = draft.slice(start, end)
   // Inside a formula the base of a power is whatever the student wrote before
   // the cursor, so the exponent is the slot to fill.
-  const empty = inMath && snippet.takesBase ? '' : SLOT
+  // Outside one, an empty base is a blank of its own: {}^{}.
+  const empty = snippet.takesBase ? (inMath ? '' : `{${SLOT}}`) : SLOT
   let body = snippet.template.includes(SELECTION)
     ? // A function, so a "$" in the selection is not read as a replacement pattern.
       snippet.template.replace(SELECTION, () => selected || empty)
@@ -141,4 +149,74 @@ export function insertMath(text, selectionStart, selectionEnd, id, maxLength = M
 
   const caret = start + (firstSlot === -1 ? inserted.length : open.length + firstSlot)
   return { text: next, selectionStart: caret, selectionEnd: caret }
+}
+
+/** The formula [start, end] sits in, as [from, to, delimiter length], or undefined. */
+const formulaAt = (text, start, end) =>
+  mathRanges(text).find(([from, to]) => start >= from && end <= to)
+
+/** Positions of the empty, unescaped {} pairs in text[from, to). */
+function blanks(text, from, to) {
+  const found = []
+  for (let at = text.indexOf('{}', from); at !== -1 && at + 1 < to; at = text.indexOf('{}', at + 1)) {
+    if (text[at - 1] !== '\\') found.push(at)
+  }
+  return found
+}
+
+/**
+ * Where Tab (or the "next blank" button) takes the cursor.
+ *
+ * Inside a formula: into the next empty {} after the cursor, and once there is
+ * none left, out past the formula's closing delimiter so the student carries
+ * on writing. Outside a formula: null, so Tab does what it always does and
+ * focus is never trapped. A cursor already in an empty {} moves on to the next
+ * one.
+ *
+ * @returns {{ selectionStart: number, selectionEnd: number } | null}
+ */
+export function nextBlank(text, selectionStart, selectionEnd = selectionStart) {
+  const draft = text ?? ''
+  const formula = formulaAt(draft, selectionStart, selectionEnd)
+  if (!formula) return null
+  const [, to, open] = formula
+  const [blank] = blanks(draft, selectionEnd, to)
+  const caret = blank === undefined ? to + open : blank + 1
+  return { selectionStart: caret, selectionEnd: caret }
+}
+
+/**
+ * Shift+Tab: back into the previous empty {} in the same formula, or null —
+ * nothing to go back to, so Shift+Tab moves focus as usual.
+ */
+export function previousBlank(text, selectionStart, selectionEnd = selectionStart) {
+  const draft = text ?? ''
+  const formula = formulaAt(draft, selectionStart, selectionEnd)
+  if (!formula) return null
+  const [from] = formula
+  // A blank ending before the cursor: not the one the cursor is already in.
+  const earlier = blanks(draft, from, selectionStart).filter((at) => at + 1 < selectionStart)
+  if (!earlier.length) return null
+  const caret = earlier[earlier.length - 1] + 1
+  return { selectionStart: caret, selectionEnd: caret }
+}
+
+/**
+ * The text as the *preview* shows it: every empty {} inside a formula drawn as
+ * a box, so "\frac{2}{}" shows a fraction with a square to fill rather than
+ * nothing under the line. Never applied to what is saved or sent.
+ */
+export function showBlanks(text) {
+  const draft = text ?? ''
+  const ranges = mathRanges(draft)
+  if (!ranges.length) return draft
+  let out = ''
+  let at = 0
+  for (const [from, to] of ranges) {
+    for (const blank of blanks(draft, from, to)) {
+      out += draft.slice(at, blank) + '{\\square}'
+      at = blank + 2
+    }
+  }
+  return out + draft.slice(at)
 }

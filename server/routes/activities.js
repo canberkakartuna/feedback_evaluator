@@ -1,5 +1,5 @@
 import express from 'express'
-import { hasQuestion, publicQuestion } from '../../shared/activity.js'
+import { hasQuestion, mathToolsOpen, publicQuestion } from '../../shared/activity.js'
 import { EXTENSIONS, decodeDataUrl, safeName } from '../lib/attachments.js'
 import { objectKey, storage } from '../lib/storage.js'
 import { removeBytes } from './uploads.js'
@@ -288,6 +288,7 @@ export function activityRoutes(store) {
           questions: questions.map((question, index) =>
             publicQuestion({ ...question, code: displayCode(question, index) }, activity),
           ),
+          mathToolsOpen: mathToolsOpen(activity, questions),
         },
       })
     }),

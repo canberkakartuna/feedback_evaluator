@@ -15,6 +15,7 @@ export default function TutorPanel({
   onRate,
   onClose,
   onCollapse,
+  mathDefault = false,
 }) {
   const { lang, t } = useI18n()
   const [draft, setDraft] = useState('')
@@ -167,6 +168,7 @@ export default function TutorPanel({
             onChange={setDraft}
             inputId="tutor-message"
             storageKey="feedback-evaluator.mathBar.tutor"
+            defaultOpen={mathDefault}
           />
 
           <div className="tp-compose-row">

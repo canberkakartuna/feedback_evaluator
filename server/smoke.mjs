@@ -941,6 +941,61 @@ try {
   check('no hint text survives it', !previewText.includes('Start outside the cell'))
   check('no answer text survives it', !previewText.includes('exerts an opposing pressure'))
   check('no tutor prompt survives it', !previewText.includes('TUTOR-GUIDANCE-MARKER'))
+
+  /**
+   * The maths row's starting state — MATH_TOOLS in shared/activity.js. Stored
+   * as the teacher's choice; a student payload carries only the resulting
+   * yes/no, read from the full questions on the server.
+   */
+  console.log('\nthe maths tools setting')
+  const previewOf = async () =>
+    (await call('GET', `/api/activities/${activity.id}/preview`, { token: teacherToken })).body.activity
+  check('a new activity is on automatic', activity.mathTools === 'auto')
+  check('no maths in these questions, so the row starts closed', preview.body.activity.mathToolsOpen === false)
+  check('the setting itself is not in the preview', !('mathTools' in preview.body.activity))
+  const alwaysOpen = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { mathTools: 'open' },
+  })
+  check('a teacher can set it', alwaysOpen.status === 200 && alwaysOpen.body.activity.mathTools === 'open')
+  check('and "open" opens the row', (await previewOf()).mathToolsOpen === true)
+  await call('PATCH', `/api/activities/${activity.id}`, { token: teacherToken, body: { mathTools: 'closed' } })
+  check('"closed" closes it', (await previewOf()).mathToolsOpen === false)
+  check(
+    'anything else is refused',
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: teacherToken, body: { mathTools: 'always' } }))
+      .status === 400,
+  )
+  const resetMath = await call('PATCH', `/api/activities/${activity.id}`, {
+    token: teacherToken,
+    body: { mathTools: null },
+  })
+  check('null puts it back on automatic', resetMath.body.activity.mathTools === 'auto')
+  const mathsHint = await call('POST', `/api/activities/${activity.id}/questions`, {
+    token: teacherToken,
+    body: {
+      kind: 'Calculate',
+      prompt: 'Work it out.',
+      tutor: { hints: ['MATHS-HINT-MARKER $\\frac{1}{2}$'] },
+    },
+  })
+  const mathsPreview = await previewOf()
+  check('on automatic, maths in a hidden hint opens the row', mathsPreview.mathToolsOpen === true)
+  check('without the hint reaching the preview', !JSON.stringify(mathsPreview).includes('MATHS-HINT-MARKER'))
+  await call('DELETE', `/api/activities/${activity.id}/questions/${mathsHint.body.question.id}`, { token: teacherToken })
+  check('and it closes again once that question is gone', (await previewOf()).mathToolsOpen === false)
+  const createdOpen = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Maths on', mathTools: 'open' },
+  })
+  check('it can be given at creation', createdOpen.body.activity.mathTools === 'open')
+  await call('DELETE', `/api/activities/${createdOpen.body.activity.id}`, { token: teacherToken })
+  check(
+    "another teacher cannot set it on someone else's activity",
+    (await call('PATCH', `/api/activities/${activity.id}`, { token: otherTeacherToken, body: { mathTools: 'open' } }))
+      .status === 404,
+  )
+
   check('criteria are counted, not listed', preview.body.activity.questions[0].criteriaCount === 3)
   check('and the count is honest', preview.body.activity.questions[0].points === 3)
   check('an unmarked question says so', preview.body.activity.questions[1].markable === false)
@@ -1011,6 +1066,7 @@ try {
     body: { consent: true, code: activity.code.toLowerCase() },
   })
   check('a student can start from a code alone', codeSession.status === 201)
+  check('the session says where the maths row starts', typeof codeSession.body.activity?.mathToolsOpen === 'boolean')
   check('and lands in the right activity', codeSession.body.session.activityId === activity.id)
   check('with consent still recorded', codeSession.body.session.consent.given === true)
   // Removed again: the assertions further down count sessions.

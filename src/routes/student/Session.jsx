@@ -449,30 +449,6 @@ export default function Session() {
     [activeId, fail, patch, progress, sessionId],
   )
 
-  const addOwnQuestion = useCallback(
-    async (prompt, photo = null) => {
-      if (!prompt.trim() && !photo) return
-      try {
-        const image = photo ? { name: photo.name, dataUrl: await readAsDataUrl(photo) } : null
-        const { question } = await api.addOwnQuestion(sessionId, prompt, image)
-        const entry = {
-          ...question,
-          isOwnQuestion: true,
-          markable: false,
-          number: questions.filter((existing) => existing.isOwnQuestion).length + 1,
-        }
-
-        setLoaded((prev) => ({ ...prev, questions: [...prev.questions, entry] }))
-        setProgress((prev) => ({ ...prev, [entry.id]: toState(entry, null, []) }))
-        setActiveId(entry.id)
-        setMobileView('problem')
-      } catch (error) {
-        fail(error)
-      }
-    },
-    [fail, questions, sessionId],
-  )
-
   const revealTutor = useCallback(() => {
     setTutorCollapsed(false)
     setTutorOpen(true)
@@ -632,7 +608,6 @@ export default function Session() {
             activeId={active.id}
             tally={tally}
             onSelect={selectQuestion}
-            onAskOwn={addOwnQuestion}
             onCollapse={() => setListCollapsed(true)}
           />
         </div>
@@ -654,6 +629,7 @@ export default function Session() {
           onCheck={checkAnswer}
           onStep={step}
           onOpenTutor={revealTutor}
+          mathDefault={Boolean(loaded.activity?.mathToolsOpen)}
         />
       </main>
 
@@ -699,6 +675,7 @@ export default function Session() {
             onRate={rateMessage}
             onClose={() => setTutorOpen(false)}
             onCollapse={() => setTutorCollapsed(true)}
+            mathDefault={Boolean(loaded.activity?.mathToolsOpen)}
           />
         </div>
       </aside>

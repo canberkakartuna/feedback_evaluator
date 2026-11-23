@@ -267,11 +267,6 @@ const en = {
     withTeacher: 'With your teacher',
     markedScore: '{mark} · {earned}/{total}',
     pictureQuestion: 'Question as a picture',
-    askOwn: 'Ask your own',
-    ownLabel: 'Your own question',
-    ownPlaceholder: 'Stuck on something else? Type that question here and work on it with the tutor.',
-    ownAdd: 'Add to my list',
-    ownPhoto: 'Or add a photo of it',
     points: '{count} pts',
   },
 
@@ -298,7 +293,7 @@ const en = {
     boardMeta: '{strokes} · saved as {size}',
     boardHint: 'Squared paper · pen, eraser, undo',
     aPng: 'a PNG',
-    addFile: 'Add a photo',
+    addFile: 'Choose a photo to upload',
     replaceFile: 'Upload a new photo',
     addFileMeta: 'Drop a photo here or paste it · JPG or PNG · 10 MB',
     rejected: 'Not added: {list}. Fix the file and attach it again.',
@@ -366,6 +361,32 @@ const en = {
     ne: 'Not equal to',
     times: 'Multiply',
     divide: 'Divide',
+    nextBlank: 'Next blank',
+    nextBlankHint: 'Jump to the next blank (Tab)',
+    help: 'How to write maths',
+    /** The short guide on the row — shown once, reopened with "?". */
+    tutorial: {
+      title: 'How to write maths',
+      step: 'Step {current} of {total}',
+      back: 'Back',
+      next: 'Next',
+      done: 'Got it',
+      close: 'Close the guide',
+      youType: 'You type',
+      theySee: 'Everyone sees',
+      fractionTitle: 'Make a fraction',
+      fractionText:
+        'Press the fraction button. Type the top number, press Tab (or Next blank) to jump to the bottom, then type that one.',
+      powerTitle: 'Make a power',
+      powerText:
+        'Type the number or letter first, then press the power button and type the power. Press Tab to carry on writing after it.',
+      blanksTitle: 'Fill in every blank',
+      blanksText:
+        'Some buttons have more than one blank. An integral has a bottom, a top and what goes inside. An empty blank shows as a little box in the preview. Tab or Next blank takes you to the next one.',
+      previewTitle: 'Check the preview',
+      previewText:
+        'The box shows your maths as code, which can look strange. The preview shows it the way your tutor and your teacher will see it. Check it before you send.',
+    },
   },
 
   wb: {
@@ -480,6 +501,12 @@ const en = {
     topicLabel: 'Topic',
     topicHint: 'What students and teachers filter the list by.',
     topicSaving: 'Saving…',
+    /** Where the maths row starts for students — MATH_TOOLS in shared/activity.js. */
+    mathToolsLabel: 'Maths tools for students',
+    mathToolsAuto: 'Automatic — open when a question has maths',
+    mathToolsOpen: 'Always open',
+    mathToolsClosed: 'Hidden until a student opens them',
+    mathToolsHint: 'The row of maths buttons over the answer and chat boxes. A student who opens or closes it themselves keeps their choice.',
     shareHead: 'How students get in',
     shareCode: 'Class code',
     shareLink: 'Direct link',
@@ -1178,11 +1205,6 @@ const tr = {
     withTeacher: 'Öğretmeninizde',
     markedScore: '{mark} · {earned}/{total}',
     pictureQuestion: 'Soru bir görsel',
-    askOwn: 'Kendi sorunu sor',
-    ownLabel: 'Kendi sorunuz',
-    ownPlaceholder: 'Başka bir yerde mi takıldınız? O soruyu buraya yazın ve öğretmenle üzerinde çalışın.',
-    ownAdd: 'Listeme ekle',
-    ownPhoto: 'Ya da fotoğrafını ekle',
     points: '{count} puan',
   },
 
@@ -1209,7 +1231,7 @@ const tr = {
     boardMeta: '{strokes} · {size} olarak kaydedildi',
     boardHint: 'Kareli kâğıt · kalem, silgi, geri al',
     aPng: 'PNG',
-    addFile: 'Fotoğraf ekle',
+    addFile: 'Yüklenecek fotoğrafı seçin',
     replaceFile: 'Yeni fotoğraf yükle',
     addFileMeta: 'Fotoğrafı buraya bırakın ya da yapıştırın · JPG veya PNG · 10 MB',
     rejected: 'Eklenmedi: {list}. Dosyayı düzeltip yeniden ekleyin.',
@@ -1268,6 +1290,31 @@ const tr = {
     ne: 'Eşit değil',
     times: 'Çarpı',
     divide: 'Bölü',
+    nextBlank: 'Sonraki boşluk',
+    nextBlankHint: 'Sonraki boşluğa geç (Tab)',
+    help: 'Matematik nasıl yazılır',
+    tutorial: {
+      title: 'Matematik nasıl yazılır',
+      step: 'Adım {current} / {total}',
+      back: 'Geri',
+      next: 'İleri',
+      done: 'Anladım',
+      close: 'Rehberi kapat',
+      youType: 'Sen yazarsın',
+      theySee: 'Herkes görür',
+      fractionTitle: 'Kesir yaz',
+      fractionText:
+        'Kesir düğmesine bas. Üstteki sayıyı yaz, alta geçmek için Tab’a (ya da Sonraki boşluk’a) bas, sonra alttakini yaz.',
+      powerTitle: 'Üs yaz',
+      powerText:
+        'Önce sayıyı ya da harfi yaz, sonra üs düğmesine bas ve üssü yaz. Ardından yazmaya devam etmek için Tab’a bas.',
+      blanksTitle: 'Her boşluğu doldur',
+      blanksText:
+        'Bazı düğmelerde birden fazla boşluk var. İntegralde alt sınır, üst sınır ve içindeki ifade var. Boş kalan yer önizlemede küçük bir kutu olarak görünür. Tab ya da Sonraki boşluk seni bir sonrakine götürür.',
+      previewTitle: 'Önizlemeye bak',
+      previewText:
+        'Kutu matematiğini kod olarak gösterir, bu garip görünebilir. Önizleme onu öğretmeninin göreceği gibi gösterir. Göndermeden önce kontrol et.',
+    },
   },
 
   wb: {
@@ -1382,6 +1429,11 @@ const tr = {
     topicLabel: 'Konu',
     topicHint: 'Öğrencilerin ve öğretmenlerin listeyi süzdüğü ölçüt.',
     topicSaving: 'Kaydediliyor…',
+    mathToolsLabel: 'Öğrenciler için matematik araçları',
+    mathToolsAuto: 'Otomatik — bir soruda matematik varsa açık',
+    mathToolsOpen: 'Her zaman açık',
+    mathToolsClosed: 'Öğrenci açana kadar gizli',
+    mathToolsHint: 'Cevap ve sohbet kutularının üstündeki matematik düğmeleri. Kendisi açıp kapatan öğrencinin tercihi korunur.',
     shareHead: 'Öğrenciler nasıl girer',
     shareCode: 'Sınıf kodu',
     shareLink: 'Doğrudan bağlantı',

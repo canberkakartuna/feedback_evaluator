@@ -433,9 +433,55 @@
   background: var(--pen-soft);
 }
 
-.qp-way:has(input:focus-visible) {
+/* The file input sits just before the upload slot (it stays mounted in every
+   mode so the Upload tab can open it), so its focus ring is drawn here. */
+.qp-file-input:focus-visible + .qp-upload .qp-way {
   outline: 2px solid var(--pen);
   outline-offset: 2px;
+}
+
+/* Upload chosen, no photo yet: the slot is the next thing to press, so it
+   reads as a real target — tall, centred, inked — not a faint placeholder.
+   Students took the Upload tab above for the button and stopped there. */
+.qp-drop {
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 112px;
+  border: 2px dashed var(--pen);
+  border-radius: var(--r-2);
+  background: var(--pen-soft);
+  padding: var(--s-5) var(--s-4);
+  text-align: center;
+  color: var(--pen);
+}
+
+.qp-drop .qp-way-text {
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.qp-drop .qp-way-main {
+  font-size: var(--t-16);
+}
+
+.qp-drop .qp-way-sub {
+  color: var(--graphite);
+}
+
+.qp-drop:hover,
+.qp-drop[data-dragging] {
+  border-style: solid;
+  border-color: var(--pen-deep);
+  background: color-mix(in srgb, var(--pen) 16%, var(--pen-soft));
+}
+
+.qp-drop:active {
+  background: color-mix(in srgb, var(--pen) 22%, var(--pen-soft));
+}
+
+.qp-drop-icon {
+  flex: none;
 }
 
 .qp-way-text {

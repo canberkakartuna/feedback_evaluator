@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import StatusMark from './StatusMark'
 import { MARKS, SELF_MARK_CHOICES, markLabelKey, markShortKey } from '../lib/status'
 import { answerKey } from '../lib/evaluate'
@@ -7,6 +7,7 @@ import { PHOTO_ACCEPT, formatBytes, isImage, partitionFiles } from '../lib/attac
 import { promptFor, textFor } from '../../shared/activity'
 import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
+import { opensPicker } from '../lib/uploadPicker'
 import MathText from './MathText'
 import MathTools from './MathTools'
 import { MAX_ANSWER_LENGTH } from '../lib/mathInsert'
@@ -57,6 +58,7 @@ export default function QuestionPanel({
   onCheck,
   onStep,
   onOpenTutor,
+  mathDefault = false,
 }) {
   const { lang, t } = useI18n()
   const prompt = promptFor(question, lang)
@@ -73,6 +75,12 @@ export default function QuestionPanel({
   const [rejected, setRejected] = useState([])
   const [boardOpen, setBoardOpen] = useState(false)
   const [pendingMode, setPendingMode] = useState(null)
+  // Always mounted, so the Upload tab can open the picker inside its own click.
+  const fileInput = useRef(null)
+  const fileInputId = useId()
+  // The last mode switch, still saving. The server clears attachments when the
+  // mode changes (routes/answers.js), so a photo must not land before it.
+  const switching = useRef(null)
 
   const files = uploadedFiles(state)
   const board = boardFile(state)
@@ -89,12 +97,21 @@ export default function QuestionPanel({
   // One photo per hand-in: a new one replaces the photo shown on the answer
   // (the server keeps every earlier one — routes/uploads.js), so taking
   // several at once would show only the last of them.
-  const takeFiles = (fileList) => {
+  const takeFiles = async (fileList) => {
     const { accepted, rejected: refused } = partitionFiles(Array.from(fileList ?? []).slice(0, 1), {
       photosOnly: true,
     })
     setRejected(refused)
-    if (accepted.length) onAttach(accepted)
+    if (!accepted.length) return
+    // A photo picked straight after the switch into Upload waits for that
+    // switch to be saved, or the switch would wipe it.
+    await switching.current
+    onAttach(accepted)
+  }
+
+  /** Start a switch, remembering it until it is saved (see `switching`). */
+  const switchMode = (next) => {
+    switching.current = Promise.resolve(onModeChange(next)).catch(() => {})
   }
 
   /** Paste an image straight in — only while Upload is the chosen method. */
@@ -112,7 +129,14 @@ export default function QuestionPanel({
 
   /** Ask before a switch throws work away; switch straight off if empty. */
   const requestMode = (next) => {
-    if (next === state.mode) return
+    // Students took the Upload tab for the upload button, so that click opens
+    // the picker when nothing is in the way (lib/uploadPicker.js). It has to
+    // happen here, inside the click: browsers refuse a picker opened later.
+    const pick = opensPicker(state, next)
+    if (next === state.mode) {
+      if (pick) fileInput.current?.click()
+      return
+    }
     setRejected([])
 
     if (hasContent(state)) {
@@ -121,7 +145,8 @@ export default function QuestionPanel({
     }
 
     setPendingMode(null)
-    onModeChange(next)
+    switchMode(next)
+    if (pick) fileInput.current?.click()
   }
 
   return (
@@ -274,7 +299,7 @@ export default function QuestionPanel({
                     type="button"
                     className="qp-btn qp-btn-danger"
                     onClick={() => {
-                      onModeChange(pendingMode)
+                      switchMode(pendingMode)
                       setPendingMode(null)
                     }}
                   >
@@ -302,6 +327,7 @@ export default function QuestionPanel({
                     inputId="answer"
                     storageKey="feedback-evaluator.mathBar.answer"
                     maxLength={MAX_ANSWER_LENGTH}
+                    defaultOpen={mathDefault}
                   />
                 </div>
                 <textarea
@@ -346,10 +372,27 @@ export default function QuestionPanel({
               </div>
             ) : null}
 
+            {/* Mounted in every mode so the Upload tab can open it in the same
+                click (requestMode); out of reach until Upload is chosen. */}
+            <input
+              ref={fileInput}
+              id={fileInputId}
+              type="file"
+              className="sr-only qp-file-input"
+              accept={PHOTO_ACCEPT}
+              tabIndex={state.mode === 'upload' ? undefined : -1}
+              aria-hidden={state.mode === 'upload' ? undefined : true}
+              onChange={(event) => {
+                takeFiles(event.target.files)
+                event.target.value = ''
+              }}
+            />
+
             {state.mode === 'upload' ? (
               <div className="qp-upload">
                 <label
-                  className="qp-way"
+                  htmlFor={fileInputId}
+                  className={files.length ? 'qp-way' : 'qp-way qp-drop'}
                   data-dragging={dragging || undefined}
                   onDragOver={(event) => {
                     event.preventDefault()
@@ -362,15 +405,24 @@ export default function QuestionPanel({
                     takeFiles(event.dataTransfer.files)
                   }}
                 >
-                  <input
-                    type="file"
-                    className="sr-only"
-                    accept={PHOTO_ACCEPT}
-                    onChange={(event) => {
-                      takeFiles(event.target.files)
-                      event.target.value = ''
-                    }}
-                  />
+                  {files.length ? null : (
+                    <svg
+                      className="qp-drop-icon"
+                      viewBox="0 0 24 24"
+                      width="28"
+                      height="28"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 15V4" />
+                      <path d="m7 9 5-5 5 5" />
+                      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+                    </svg>
+                  )}
                   <span className="qp-way-text">
                     <span className="qp-way-main">
                       {files.length ? t('qp.replaceFile') : t('qp.addFile')}

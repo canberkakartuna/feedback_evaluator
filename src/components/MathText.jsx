@@ -21,20 +21,35 @@ import { splitMath } from '../lib/latex'
  * two-line preview such as the student's question list.
  */
 export default function MathText({ text, inline = false }) {
-  const segments = useMemo(() => splitMath(text ?? ''), [text])
+  /**
+   * Rendered once per text, not once per render. React re-sets innerHTML
+   * whenever the `dangerouslySetInnerHTML` object is a new one, so building it
+   * inline replaced every formula's DOM on each re-render of the parent — a
+   * keystroke in the tutor's box redrew the whole thread, and a click whose
+   * mousedown landed on a formula that got replaced was dropped.
+   */
+  const segments = useMemo(
+    () =>
+      splitMath(text ?? '').map((segment) =>
+        segment.kind === 'math'
+          ? {
+              ...segment,
+              html: {
+                __html: katex.renderToString(segment.value, {
+                  throwOnError: false,
+                  displayMode: segment.display && !inline,
+                }),
+              },
+            }
+          : segment,
+      ),
+    [text, inline],
+  )
 
   return segments.map((segment, index) =>
     segment.kind === 'math' ? (
-      <span
-        key={index}
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{
-          __html: katex.renderToString(segment.value, {
-            throwOnError: false,
-            displayMode: segment.display && !inline,
-          }),
-        }}
-      />
+      // eslint-disable-next-line react/no-danger
+      <span key={index} dangerouslySetInnerHTML={segment.html} />
     ) : (
       <span key={index}>{segment.value}</span>
     ),

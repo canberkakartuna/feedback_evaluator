@@ -84,11 +84,11 @@ export const DEFAULT_QUESTIONS = [
 
 export async function createActivity(
   teacher,
-  { title = 'Ratio practice', topic = 'ratio', questions = DEFAULT_QUESTIONS, tutorPrompt, publish = true } = {},
+  { title = 'Ratio practice', topic = 'ratio', questions = DEFAULT_QUESTIONS, tutorPrompt, mathTools, publish = true } = {},
 ) {
   const { activity } = await api('POST', '/api/activities', {
     token: teacher.token,
-    body: { title, topic, ...(tutorPrompt ? { tutorPrompt } : {}) },
+    body: { title, topic, ...(tutorPrompt ? { tutorPrompt } : {}), ...(mathTools ? { mathTools } : {}) },
   })
   for (const question of questions) {
     await api('POST', `/api/activities/${activity.id}/questions`, { token: teacher.token, body: question })

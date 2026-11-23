@@ -52,7 +52,7 @@ test.describe('tutor chat', () => {
 
     const tutor = tutorPane(page)
     const box = tutor.getByLabel('Message the tutor')
-    const toggle = tutor.getByRole('button', { name: 'Maths' })
+    const toggle = tutor.getByRole('button', { name: 'Maths', exact: true })
 
     // Hidden until asked for.
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')

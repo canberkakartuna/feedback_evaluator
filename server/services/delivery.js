@@ -1,4 +1,4 @@
-import { publicQuestion } from '../../shared/activity.js'
+import { mathToolsOpen, publicQuestion } from '../../shared/activity.js'
 import { withFallbacks } from '../../shared/tutor-scripts.js'
 import { displayCode } from './activities.js'
 import { notFound } from '../lib/http.js'
@@ -47,6 +47,12 @@ export function publicActivity(activity, questions) {
     status: activity.status,
     questionCount: questions.length,
     questions: questions.map((question) => publicQuestion(question, activity)),
+    /**
+     * Whether the maths row starts open — the teacher's setting, or under
+     * `auto` whether any question has maths in it. Read from the full
+     * questions here, so only the yes/no travels, never the hidden text.
+     */
+    mathToolsOpen: mathToolsOpen(activity, questions),
   }
 }
 

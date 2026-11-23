@@ -7,7 +7,7 @@
  * has to take.
  *
  *   activity  { id, code, title, titleByLang{}, blurb, topic, level, ownerId,
- *               status, tutorPrompt, createdAt, updatedAt }
+ *               status, tutorPrompt, mathTools, createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
  *               stimulus, answer, answerImage, workingExpected, rubric[],
  *               tutor{}, position, ... }
@@ -48,9 +48,66 @@
  * copy that holds.
  */
 
+import { hasMath } from './latex.js'
+
 export const ACTIVITY_STATUSES = ['draft', 'published']
 
 export const isActivityStatus = (value) => ACTIVITY_STATUSES.includes(value)
+
+/**
+ * Whether the maths row over a student's text boxes (src/components/MathTools.jsx)
+ * starts open on this activity. The teacher picks:
+ *
+ *   auto    open when any question has maths in it — see activityHasMath
+ *   open    always open
+ *   closed  closed until the student opens it
+ *
+ * Absent means `auto`: every activity saved before this setting existed reads
+ * that way, so nothing has to be migrated. A student's own open/close choice
+ * still wins over whichever default this gives — the setting only decides
+ * where the row starts before they have chosen.
+ */
+export const MATH_TOOLS = ['auto', 'open', 'closed']
+
+export const isMathTools = (value) => MATH_TOOLS.includes(value)
+
+/** Every piece of authored text on a question, hidden parts included. */
+function questionTexts(question) {
+  const tutor = question?.tutor ?? {}
+  const table = question?.stimulus
+  return [
+    question?.prompt,
+    ...Object.values(question?.promptByLang ?? {}),
+    question?.answer,
+    ...(question?.rubric ?? []).flatMap((criterion) => [criterion.label, criterion.coach]),
+    tutor.opening,
+    ...(tutor.hints ?? []),
+    tutor.concept,
+    tutor.example,
+    tutor.misconception,
+    table?.caption,
+    ...(table?.columns ?? []),
+    ...(table?.rows ?? []).flat(),
+  ]
+}
+
+/**
+ * Whether any question in the activity has maths in it, anywhere a teacher
+ * typed — the answer and hints included. Server side, from the full questions:
+ * only the resulting yes/no reaches a student, never the text it was read from.
+ */
+export const activityHasMath = (questions) =>
+  (questions ?? []).some((question) =>
+    questionTexts(question).some((text) => typeof text === 'string' && hasMath(text)),
+  )
+
+/** The `mathToolsOpen` a student payload carries — see MATH_TOOLS. */
+export function mathToolsOpen(activity, questions) {
+  const setting = isMathTools(activity?.mathTools) ? activity.mathTools : 'auto'
+  if (setting === 'open') return true
+  if (setting === 'closed') return false
+  return activityHasMath(questions)
+}
 
 /**
  * The label above a question. Free text would fragment into "Explain",

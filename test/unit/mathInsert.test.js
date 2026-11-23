@@ -7,11 +7,14 @@ import {
   MAX_MESSAGE_LENGTH,
   insertMath,
   insideMath,
+  nextBlank,
+  previousBlank,
+  showBlanks,
 } from '../../src/lib/mathInsert.js'
 
 /**
- * The tutor's maths row — src/lib/mathInsert.js. `|` in a comment marks the
- * cursor.
+ * The maths row — src/lib/mathInsert.js. `|` in a comment or an expected
+ * string marks the cursor.
  */
 
 const at = (result) => result.text.slice(0, result.selectionStart) + '|' + result.text.slice(result.selectionStart)
@@ -23,13 +26,13 @@ test('an empty box gets a wrapped formula with the cursor in its first slot', ()
   assert.equal(result.selectionStart, result.selectionEnd)
 })
 
-test('a power with nothing before it puts the cursor on the base', () => {
-  assert.equal(at(insertMath('', 0, 0, 'power')), '$|^{}$')
+test('a power with nothing before it puts the cursor in a blank base', () => {
+  assert.equal(at(insertMath('', 0, 0, 'power')), '${|}^{}$')
 })
 
-test('an integral and a sum start at the lower limit', () => {
-  assert.equal(at(insertMath('', 0, 0, 'integral')), '$\\int_{|}^{}\\,dx$')
-  assert.equal(at(insertMath('', 0, 0, 'sum')), '$\\sum_{|}^{}$')
+test('an integral and a sum start at the lower limit, every part a blank', () => {
+  assert.equal(at(insertMath('', 0, 0, 'integral')), '$\\int_{|}^{}{}\\,dx$')
+  assert.equal(at(insertMath('', 0, 0, 'sum')), '$\\sum_{|}^{}{}$')
 })
 
 test('mid-text, the formula goes in at the cursor and the rest is kept', () => {
@@ -49,7 +52,7 @@ test('a selection becomes the numerator, the cursor goes to the denominator', ()
 
 test('a selection becomes the base of a power, the integrand, the root', () => {
   assert.equal(at(insertMath('e', 0, 1, 'power')), '$e^{|}$')
-  assert.equal(at(insertMath('x^2', 0, 3, 'integral')), '$\\int_{|}^{}x^2\\,dx$')
+  assert.equal(at(insertMath('x^2', 0, 3, 'integral')), '$\\int_{|}^{}{x^2}\\,dx$')
   assert.equal(at(insertMath('2', 0, 1, 'sqrt')), '$\\sqrt{2}$|')
 })
 
@@ -65,8 +68,8 @@ test('spaces at the edges of a selection stay outside the formula', () => {
 test('with no selection, the letters or digits just typed become the base', () => {
   assert.equal(at(insertMath('it is 2', 7, 7, 'power')), 'it is $2^{|}$')
   assert.equal(at(insertMath('a', 1, 1, 'subscript')), '$a_{|}$')
-  // A space before the cursor: nothing to take.
-  assert.equal(at(insertMath('it is ', 6, 6, 'power')), 'it is $|^{}$')
+  // A space before the cursor: nothing to take, so the base is a blank.
+  assert.equal(at(insertMath('it is ', 6, 6, 'power')), 'it is ${|}^{}$')
   // Only powers and subscripts take one.
   assert.equal(at(insertMath('x', 1, 1, 'fraction')), 'x$\\frac{|}{}$')
 })
@@ -141,4 +144,63 @@ test('the answer box passes its own, longer limit', () => {
   assert.ok(insertMath(long, 0, 0, 'pi', MAX_ANSWER_LENGTH))
   const full = 'x'.repeat(MAX_ANSWER_LENGTH - 2)
   assert.equal(insertMath(full, 0, 0, 'pi', MAX_ANSWER_LENGTH), null)
+})
+
+/** Applies a caret move to the text, for reading with `at`. */
+const moved = (text, move) => move && at({ text, ...move })
+
+test('Tab goes to the next blank, then out of the formula', () => {
+  const text = 'so $\\frac{1}{}$ ok'
+  // "so $\frac{1|}{}$ ok" → the denominator
+  assert.equal(moved(text, nextBlank(text, 11)), 'so $\\frac{1}{|}$ ok')
+  // From the last blank → just past the closing "$"
+  assert.equal(moved(text, nextBlank(text, 14)), 'so $\\frac{1}{}$| ok')
+})
+
+test('an integral walks lower limit, upper limit, body, then out', () => {
+  const text = '$\\int_{}^{}{}\\,dx$ and'
+  const first = nextBlank(text, 7) // in the lower limit
+  assert.equal(moved(text, first), '$\\int_{}^{|}{}\\,dx$ and')
+  assert.equal(moved(text, nextBlank(text, first.selectionStart)), '$\\int_{}^{}{|}\\,dx$ and')
+  assert.equal(moved(text, nextBlank(text, 13)), '$\\int_{}^{}{}\\,dx$| and')
+})
+
+test('Tab leaves display maths past both dollar signs', () => {
+  assert.equal(moved('$$x^{2}$$!', nextBlank('$$x^{2}$$!', 6)), '$$x^{2}$$|!')
+})
+
+test('outside a formula Tab is left alone', () => {
+  assert.equal(nextBlank('plain text', 3), null)
+  assert.equal(nextBlank('$x$ then', 5), null)
+  assert.equal(previousBlank('plain', 2), null)
+})
+
+test('Shift+Tab goes back a blank, and is left alone with none behind', () => {
+  const text = '$\\frac{}{}$'
+  assert.equal(moved(text, previousBlank(text, 9)), '$\\frac{|}{}$')
+  assert.equal(previousBlank(text, 7), null)
+})
+
+test('an escaped brace is not a blank', () => {
+  assert.equal(moved('$\\{}x$', nextBlank('$\\{}x$', 1)), '$\\{}x$|')
+  assert.equal(showBlanks('$\\{}$'), '$\\{}$')
+})
+
+test('the preview shows each blank as a box, only inside formulas', () => {
+  assert.equal(showBlanks('a {} $\\frac{2}{}$'), 'a {} $\\frac{2}{\\square}$')
+  assert.equal(showBlanks('${}^{}$ and $x$'), '${\\square}^{\\square}$ and $x$')
+  assert.equal(showBlanks('no maths'), 'no maths')
+  assert.equal(showBlanks(''), '')
+})
+
+test('every inserted formula can be filled by Tab and left', () => {
+  for (const { id } of MATH_SNIPPETS) {
+    let state = insertMath('', 0, 0, id)
+    for (let step = 0; step < 5; step += 1) {
+      const move = nextBlank(state.text, state.selectionStart)
+      if (!move) break
+      state = { ...state, ...move }
+    }
+    assert.equal(state.selectionStart, state.text.length, `${id}: Tab ends after the formula`)
+  }
 })

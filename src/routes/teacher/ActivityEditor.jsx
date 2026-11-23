@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { LIMITS, PROMPT_LANGS, TOPICS, promptFor, titleFor } from '../../../shared/activity'
+import { LIMITS, PROMPT_LANGS, TOPICS, isMathTools, promptFor, titleFor } from '../../../shared/activity'
 import BilingualField from '../../components/BilingualField'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
@@ -241,6 +241,28 @@ export default function ActivityEditor() {
             }}
           />
           <p className="cs-hint">{t('activities.levelHint')}</p>
+        </div>
+
+        {/* Where the maths row over the student's answer and chat boxes starts —
+            MATH_TOOLS in shared/activity.js. Saved on change, like the topic. */}
+        <div className="cs-field" style={{ maxWidth: '320px' }}>
+          <label className="cs-label" htmlFor="activity-math-tools">
+            {t('editor.mathToolsLabel')}
+          </label>
+          <select
+            id="activity-math-tools"
+            className="cs-select"
+            disabled={busy}
+            value={isMathTools(activity.mathTools) ? activity.mathTools : 'auto'}
+            onChange={(event) =>
+              act(() => api.updateActivity(activity.id, { mathTools: event.target.value })).catch(() => {})
+            }
+          >
+            <option value="auto">{t('editor.mathToolsAuto')}</option>
+            <option value="open">{t('editor.mathToolsOpen')}</option>
+            <option value="closed">{t('editor.mathToolsClosed')}</option>
+          </select>
+          <p className="cs-hint">{t('editor.mathToolsHint')}</p>
         </div>
         </div>
 

@@ -1,14 +1,25 @@
-/* The maths row and preview over a student's text box — MathTools.jsx. */
+/* The maths row, its guide and the preview over a student's text box — MathTools.jsx. */
 
 .mt-tools {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* Line one: the toggle, the name of the button under the pointer, then
+   "Next blank" and "?" — the controls that must never scroll out of view. */
+.mt-head {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   min-width: 0;
 }
 
-.mt-toggle {
+.mt-toggle,
+.mt-next,
+.mt-help {
   flex: none;
+  min-height: 32px;
   border: 1px solid var(--edge);
   border-radius: var(--r-1);
   background: var(--paper-raise);
@@ -23,24 +34,60 @@
     color 0.14s ease;
 }
 
+.mt-help {
+  width: 32px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: var(--t-13);
+  letter-spacing: 0;
+}
+
 .mt-toggle:hover,
-.mt-toggle[aria-expanded='true'] {
+.mt-next:hover,
+.mt-help:hover,
+.mt-toggle[aria-expanded='true'],
+.mt-help[aria-expanded='true'] {
   border-color: var(--pen);
   color: var(--pen);
 }
 
-/* One line that scrolls sideways on a narrow screen, rather than wrapping
-   into a tall block over the box. */
-.mt-bar {
-  display: flex;
+.mt-name {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-12);
+  color: var(--graphite);
+}
+
+/* Line two: every symbol, one line that scrolls sideways rather than wrapping
+   into a tall block. Whichever end still has buttons beyond it fades out, so
+   it reads as "there is more this way". */
+.mt-bar-wrap {
+  min-width: 0;
+}
+
+.mt-bar-wrap[data-more-right='true'] .mt-bar {
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+
+.mt-bar-wrap[data-more-left='true'] .mt-bar {
+  mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent);
+}
+
+.mt-bar-wrap[data-more-left='true'][data-more-right='true'] .mt-bar {
+  mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent);
+}
+
+.mt-bar {
+  display: flex;
   gap: 4px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  padding: 2px 0;
+  padding: 2px 0 4px;
 }
 
 .mt-btn {
@@ -48,18 +95,36 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 34px;
-  height: 34px;
+  min-width: 40px;
+  height: 40px;
   border: 1px solid var(--edge);
   border-radius: var(--r-1);
   background: var(--paper-raise);
   padding: 0 6px;
-  font-size: var(--t-13);
+  font-size: var(--t-14);
   line-height: 1;
   color: var(--ink);
   transition:
     border-color 0.14s ease,
     color 0.14s ease;
+}
+
+/* A finger needs a little more than a pointer. */
+@media (pointer: coarse) {
+  .mt-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .mt-toggle,
+  .mt-next {
+    min-height: 40px;
+  }
+
+  .mt-help {
+    width: 40px;
+    min-height: 40px;
+  }
 }
 
 .mt-btn:hover {
@@ -68,7 +133,10 @@
 }
 
 .mt-btn:focus-visible,
-.mt-toggle:focus-visible {
+.mt-toggle:focus-visible,
+.mt-next:focus-visible,
+.mt-help:focus-visible,
+.mt-guide button:focus-visible {
   outline: 2px solid var(--pen);
   outline-offset: 1px;
 }
@@ -78,12 +146,141 @@
   font-size: 1em;
 }
 
-/* Clicks land on the button itself, never on the formula inside it: pressing a
-   button re-renders the row, and Chromium drops a click whose mousedown target
-   was a node that got replaced in between. */
+/* Clicks land on the button itself, never on the formula inside it. */
 .mt-btn > * {
   pointer-events: none;
 }
+
+/* ── the guide ─────────────────────────────────────────────── */
+
+.mt-guide {
+  min-width: 0;
+  border: 1px solid var(--pen);
+  border-left-width: 3px;
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: var(--s-2) var(--s-3) var(--s-3);
+  font-size: var(--t-13);
+  line-height: 1.5;
+}
+
+.mt-guide-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.mt-guide-step {
+  margin: 0;
+  font-size: var(--t-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pen);
+}
+
+.mt-guide-x {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: var(--t-18);
+  line-height: 1;
+  color: var(--graphite);
+}
+
+.mt-guide-x:hover {
+  color: var(--pen);
+}
+
+.mt-guide-title {
+  margin: 2px 0 4px;
+  font-family: var(--f-display);
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.mt-guide-title:focus {
+  outline: none;
+}
+
+.mt-guide-text {
+  margin: 0;
+  color: var(--ink);
+}
+
+/* What is typed beside what is seen: the whole point of the guide. */
+.mt-guide-example {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.mt-guide-example > div {
+  min-width: 0;
+  border: 1px dashed var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-sunk);
+  padding: 4px var(--s-2) 6px;
+}
+
+.mt-guide-label {
+  margin: 0;
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--graphite-faint);
+}
+
+.mt-guide-code {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: var(--t-12);
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}
+
+.mt-guide-seen {
+  margin: 0;
+  overflow-x: auto;
+  font-size: var(--t-18);
+  line-height: 1.4;
+}
+
+.mt-guide-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.mt-guide-btn {
+  min-height: 34px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 4px 14px;
+  font-family: var(--f-display);
+  font-size: var(--t-13);
+  font-weight: 600;
+  color: var(--graphite);
+}
+
+.mt-guide-primary {
+  border-color: var(--pen);
+  background: var(--pen);
+  color: var(--paper);
+}
+
+.mt-guide-primary:hover {
+  background: var(--pen-deep);
+  border-color: var(--pen-deep);
+}
+
+/* ── the preview ───────────────────────────────────────────── */
 
 .mt-preview {
   min-width: 0;

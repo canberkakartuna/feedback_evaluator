@@ -1,10 +1,12 @@
 import {
   LIMITS,
+  MATH_TOOLS,
   PROMPT_LANGS,
   QUESTION_KINDS,
   TOPIC_IDS,
   blankTutor,
   isActivityStatus,
+  isMathTools,
   isQuestionKind,
   isTopic,
 } from '../../shared/activity.js'
@@ -376,6 +378,17 @@ export function parseActivityInput(body, { forCreate } = {}) {
     }
   }
 
+  /**
+   * Whether the maths row starts open for students — see MATH_TOOLS in
+   * shared/activity.js. `null` resets it to `auto`, the default.
+   */
+  if (body?.mathTools !== undefined) {
+    if (body.mathTools === null) patch.mathTools = 'auto'
+    else if (!isMathTools(body.mathTools)) {
+      throw badRequest(`"mathTools" must be one of: ${MATH_TOOLS.join(', ')}`)
+    } else patch.mathTools = body.mathTools
+  }
+
   if (body?.status !== undefined) {
     if (!isActivityStatus(body.status)) throw badRequest('"status" must be "draft" or "published"')
     patch.status = body.status
@@ -447,7 +460,7 @@ export async function ensureClassCode(store, activity) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', tutorPrompt = '', code, ownerId, status = 'draft' }) {
+export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', tutorPrompt = '', mathTools = 'auto', code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
@@ -458,6 +471,7 @@ export function newActivity({ title, titleByLang = {}, blurb = '', topic = null,
     topic,
     level,
     tutorPrompt,
+    mathTools,
     ownerId,
     status,
     createdAt: at,

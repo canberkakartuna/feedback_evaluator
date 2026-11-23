@@ -52,7 +52,7 @@ test.describe('working on an activity', () => {
 
     const main = page.getByRole('main')
     const answer = main.getByLabel('Your written answer')
-    const toggle = main.getByRole('button', { name: 'Maths' })
+    const toggle = main.getByRole('button', { name: 'Maths', exact: true })
 
     await expect(toggle).toHaveAttribute('aria-expanded', 'false')
     await toggle.click()
@@ -114,7 +114,7 @@ test.describe('working on an activity', () => {
     const uploaded = page.waitForResponse(
       (response) => response.request().method() === 'POST' && /\/uploads$/.test(response.url()),
     )
-    await page.getByLabel(/Add a photo/).setInputFiles({
+    await page.getByLabel(/Choose a photo to upload/).setInputFiles({
       name: 'my-working.png',
       mimeType: 'image/png',
       buffer: TINY_PNG,
@@ -151,7 +151,7 @@ test.describe('working on an activity', () => {
     const uploaded = page.waitForResponse(
       (response) => response.request().method() === 'POST' && /\/uploads$/.test(response.url()),
     )
-    await page.getByLabel(/Add a photo/).setInputFiles({
+    await page.getByLabel(/Choose a photo to upload/).setInputFiles({
       name: 'my-working.png',
       mimeType: 'image/png',
       buffer: TINY_PNG,
@@ -181,12 +181,65 @@ test.describe('working on an activity', () => {
     await openActivity(page, 'Ratio practice')
 
     await page.getByRole('button', { name: /^Upload/ }).click()
-    await page.getByLabel(/Add a photo/).setInputFiles({
+    await page.getByLabel(/Choose a photo to upload/).setInputFiles({
       name: 'notes.txt',
       mimeType: 'text/plain',
       buffer: Buffer.from('not a photo'),
     })
     await expect(page.getByRole('alert')).toContainText('notes.txt is not a photo')
+  })
+
+  test('the Upload tab itself opens the file picker, and the photo it picks is kept', async ({ page }) => {
+    const { studentNumber } = await seedClass()
+    await signInFirstTime(page, studentNumber)
+    await openActivity(page, 'Ratio practice')
+    await questionList(page).getByRole('button', { name: /^Q2/ }).click()
+    const main = page.getByRole('main')
+    // The file input is a button too once it is labelled "Upload a new photo".
+    const uploadTab = main.getByRole('group', { name: 'How to answer' }).getByRole('button', { name: /^Upload/ })
+
+    // From an empty answer: one click switches to Upload and opens the picker.
+    const chooser = page.waitForEvent('filechooser')
+    await uploadTab.click()
+    const uploaded = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && /\/uploads$/.test(response.url()),
+    )
+    await (await chooser).setFiles({ name: 'tab-pick.png', mimeType: 'image/png', buffer: TINY_PNG })
+    expect((await uploaded).ok()).toBe(true)
+    await expect(main.getByRole('button', { name: 'Remove tab-pick.png' })).toBeVisible()
+
+    // With a photo attached, clicking the tab again does not prompt a replace.
+    let opened = false
+    page.on('filechooser', () => {
+      opened = true
+    })
+    await uploadTab.click()
+    await page.waitForTimeout(300)
+    expect(opened).toBe(false)
+
+    // The switch saved before the photo did, so it survives a reload.
+    await page.reload()
+    await questionList(page).getByRole('button', { name: /^Q2/ }).click()
+    await expect(page.getByRole('main').getByRole('button', { name: 'Remove tab-pick.png' })).toBeVisible()
+  })
+
+  test('the Upload tab does not open the picker while the discard warning is shown', async ({ page }) => {
+    const { studentNumber } = await seedClass()
+    await signInFirstTime(page, studentNumber)
+    await openActivity(page, 'Ratio practice')
+
+    const saved = page.waitForResponse(isAnswerSave)
+    await page.getByLabel('Your written answer').fill('Divide both by 2.')
+    await saved
+
+    let opened = false
+    page.on('filechooser', () => {
+      opened = true
+    })
+    await page.getByRole('button', { name: /^Upload/ }).click()
+    await expect(page.getByRole('button', { name: 'Discard and switch' })).toBeVisible()
+    await page.waitForTimeout(300)
+    expect(opened).toBe(false)
   })
 })
 
