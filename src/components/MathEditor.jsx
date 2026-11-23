@@ -178,7 +178,10 @@ export default function MathEditor({
       place.current = { chip }
     })
     field.addEventListener('focusout', () => {
-      chip.classList.remove('mi-active', 'mi-armed')
+      chip.classList.remove('mi-active')
+      // A mark made inside the formula ends with it; one made from the
+      // sentence (a first Backspace there) is the sentence's to clear.
+      if (armed.current?.chip !== chip) chip.classList.remove('mi-armed')
       report()
       // A formula left with nothing in it is nothing: it goes. MathLive can
       // blur and refocus itself in passing, so judge a moment later.
