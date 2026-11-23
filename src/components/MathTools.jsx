@@ -144,7 +144,11 @@ export default function MathTools({ open, onToggle, onInsert, canRemove, onRemov
                 onBlur={() => setNamed(null)}
                 onMouseEnter={() => setNamed(button.id)}
                 onMouseLeave={() => setNamed(null)}
-                onClick={() => onInsert(button.id)}
+                onClick={() => {
+                  // A finger never "leaves" the button, so its name goes now.
+                  setNamed(null)
+                  onInsert(button.id)
+                }}
               >
                 <span aria-hidden="true">
                   <MathText text={`$${button.label}$`} />

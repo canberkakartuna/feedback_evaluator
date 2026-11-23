@@ -66,6 +66,13 @@
   background: color-mix(in srgb, var(--pen) 6%, transparent);
 }
 
+/* That outline is the focus mark; MathLive's own focus ring (the system's
+   blue) on top of it would be a second one. */
+.mi-chip math-field:focus,
+.mi-chip math-field:focus-within {
+  outline: none;
+}
+
 /* Marked by a first Backspace: the whole formula in the pen colour; the next
    Backspace (or "Remove formula" on the row) removes it. */
 .mi-chip.mi-armed {
