@@ -51,7 +51,7 @@ the client and the API never disagree about which value won.
 | --- | --- | --- |
 | `PORT` | `4000` | |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:5174` | CORS allow-list. The deployment is same-origin and needs no entry. |
-| `UPLOAD_DIR` | `server/.uploads`, or the temp dir when serverless | Photos and whiteboard exports |
+| `UPLOAD_DIR` | `feedback-evaluator-uploads` in the system temp dir | Disk fallback for photos and whiteboard exports, used only when Spaces is not configured |
 | `MAX_UPLOAD_BYTES` | `10485760` | 10 MB per file |
 | `RESEARCH_TOKEN` | *unset* | **Researcher endpoints return 503 until this is set.** No default on purpose — these read every student's transcript. |
 | `AUTH_TOKEN_TTL_DAYS` | `30` | How long a login lasts. |
@@ -517,9 +517,10 @@ The store was one of them and no longer is. What remains:
 **Uploads need object storage, and now have it.** `lib/storage.js` has two
 backends behind one interface, the same shape as the store: set `SPACES_KEY` and
 `SPACES_SECRET` and files go to S3-compatible object storage (AWS S3 in
-production), leave them unset and they go to local disk. Disk on a serverless host is data loss — the temp directory is
-per-instance and cleared — so `/api/health` warns while that combination is
-live. `npm run setup:spaces` creates the bucket and proves a round trip works.
+production), leave them unset and they go to local disk. Disk in the deployed
+container is data loss — it is replaced on every deploy — so production must
+have both set; `/api/health` reports which backend is in use as `uploads`
+(`spaces` or `disk`). `npm run setup:spaces` creates the bucket and proves a round trip works.
 `npm run test:api` always uses the temp disk, whatever `.env.local` holds (it
 blanks `SPACES_KEY`/`SPACES_SECRET`); the Spaces read path that annotators'
 files go through (`stream`, GetObject) is covered by
@@ -529,15 +530,15 @@ real bucket.
 **Objects are private.** These are photographs of student work collected under a
 consent notice, so the bucket is created private, every object is written
 `ACL: private`, and `GET /api/uploads/:id` mints a short-lived signed URL and
-redirects rather than proxying the bytes through the function. The setup script
+redirects rather than proxying the bytes through the API. The setup script
 fetches an object *without* a signature and fails if it comes back 200.
 
 **`POST /api/auth/login` is not rate-limited.** scrypt makes each attempt cost
 about 60 ms of CPU, which is a brake on guessing but not a lock. Nothing here
-counts failures, and a per-instance counter would not be one on a serverless host
-where the next attempt may land elsewhere — it needs shared state (a
-`loginAttempts` collection keyed by email and IP, or Vercel Firewall rate-limiting
-on the path). Worth doing before this is open to the internet with real accounts
+counts failures, and an in-process counter resets on every restart and is not
+shared once more than one container answers — it needs shared state (a
+`loginAttempts` collection keyed by email and IP, or rate-limiting on the path
+in a firewall or proxy in front of the app). Worth doing before this is open to the internet with real accounts
 in it.
 
 Sessions themselves now survive. The failure this section used to describe —
@@ -580,7 +581,7 @@ Three things about `store/mongo.js` worth knowing before editing it:
   callers see exactly what `memory.js` returns.
 - **Connecting is lazy**, so `createApp()` stays synchronous and one instance
   holds one pool. A failed handshake is not cached — a DNS blip at boot would
-  otherwise poison a serverless instance for its whole life.
+  otherwise poison the process for its whole life.
 - **`sessions.code` is not a unique index.** `shortCode()` is random and the
   memory store lets a repeat overwrite the older entry rather than fail; a unique
   index would turn a one-in-a-billion collision into a 500. Both stores answer

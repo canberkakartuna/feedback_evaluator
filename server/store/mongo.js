@@ -20,8 +20,7 @@ import { DEFAULT_DATASET_ID } from '../../shared/datasets.js'
  * - **Connecting is lazy.** createMongoStore() returns synchronously, so
  *   createApp() stays synchronous and one instance holds one pool; the first
  *   operation awaits the handshake. A failed handshake is not cached — a DNS
- *   blip at boot would otherwise poison a serverless instance for its whole
- *   life.
+ *   blip at boot would otherwise poison the process for its whole life.
  * - **`messages.seq` is allocated here**, from a per-session counter document,
  *   because a module-level counter hands out the same numbers on every
  *   instance. memory.js keeps a counter per session for the same reason.

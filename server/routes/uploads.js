@@ -201,8 +201,8 @@ export async function readBytes(upload) {
  *
  * On Spaces the object itself is private, so this hands out a short-lived
  * signed URL and redirects to it rather than proxying the bytes through the
- * function — a 10 MB photo streamed through a serverless invocation is paid
- * for twice and slower both times. On disk there is no such thing, so the file
+ * API — a 10 MB photo streamed through this process is paid for twice and
+ * slower both times. On disk there is no such thing, so the file
  * is streamed directly.
  */
 export function uploadFileRoutes(store) {

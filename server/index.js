@@ -10,13 +10,12 @@ const store = api.locals.store
 
 /**
  * Serves the built client too when `dist/` exists (the Docker image), so one
- * process answers both the site and `/api`. On Vercel the CDN serves `dist/`
- * and api/index.js serves the API, so none of this runs there. In development
- * Vite serves the client and there is usually no `dist/`, which leaves this
- * the plain API server it was.
+ * process answers both the site and `/api` — this is how production runs on
+ * Lightsail. In development Vite serves the client and there is usually no
+ * `dist/`, which leaves this the plain API server.
  *
- * The rules mirror vercel.json: hashed `/assets/*` cache forever, and any
- * other non-API GET falls back to index.html for client-side routing.
+ * Hashed `/assets/*` cache forever, and any other non-API GET falls back to
+ * index.html for client-side routing.
  */
 const dist = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 const serveClient = fs.existsSync(path.join(dist, 'index.html'))

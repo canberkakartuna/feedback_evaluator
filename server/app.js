@@ -43,10 +43,9 @@ export function createApp({ store = createStore() } = {}) {
   })
 
   /**
-   * The API is served from the same origin as the site, so its responses pass
-   * through the same CDN. Vercel's default `public, max-age=0, must-revalidate`
-   * is the wrong signal for per-session data: nothing here should ever sit in a
-   * shared cache, so say so explicitly.
+   * The API is served from the same origin as the site, and its responses are
+   * per-session data: nothing here should ever sit in a browser or shared
+   * cache, so say so explicitly.
    */
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0')
@@ -84,9 +83,9 @@ export function createApp({ store = createStore() } = {}) {
   const deps = { resolveQuestion }
 
   /**
-   * `ok` means this instance is answering. `ready` means it is safe to point
-   * students at — which on a serverless host it is not until the store and the
-   * upload target are both external. A deploy check should gate on `ready`.
+   * `ok` means this process is answering. `ready` means it is safe to point
+   * students at: every warning below is cleared. A deploy check should gate on
+   * `ready` (scripts/deploy-aws.sh does).
    */
   app.get(
     '/api/health',
@@ -94,11 +93,7 @@ export function createApp({ store = createStore() } = {}) {
       const warnings = []
 
       if (store.kind === 'memory') {
-        warnings.push(
-          config.serverless
-            ? 'In-memory store on a serverless host: every instance has its own copy and loses it on recycle, so sessions will disappear at random. Set MONGODB_URI before real use.'
-            : 'In-memory store: everything is lost when the process restarts.',
-        )
+        warnings.push('In-memory store: everything is lost when the process restarts.')
       }
 
       // Configured is not the same as reachable, and `ready` is what a deploy
@@ -109,20 +104,15 @@ export function createApp({ store = createStore() } = {}) {
       }
 
       /**
-       * Uploads outlive the instance only when they leave it. Disk is fine
-       * locally and is a data-loss bug on a serverless host, where the temp
-       * directory is per-instance and cleared without warning — so the same
-       * backend is a note in one place and a warning in the other.
+       * Which backend takes uploads is reported as `uploads` below rather than
+       * warned about; only object storage that is configured but unreachable
+       * is a warning.
        */
       const files = storage()
       const filesReachable = await files.check()
 
       if (!filesReachable.ok) {
         warnings.push(`Upload storage is configured but unreachable: ${filesReachable.error}`)
-      } else if (files.kind === 'disk' && config.serverless) {
-        warnings.push(
-          'Uploads are going to the instance temp directory and will not survive. Set SPACES_KEY and SPACES_SECRET.',
-        )
       }
 
       if (!config.researchToken) {
@@ -164,7 +154,6 @@ export function createApp({ store = createStore() } = {}) {
         persistent: store.kind !== 'memory',
         database: store.database ?? null,
         databaseReachable: database ? database.ok : null,
-        serverless: config.serverless,
         uploads: files.kind,
         uploadsReachable: filesReachable.ok,
         /** Which of the two writes the tutor's replies — see services/tutor.js. */

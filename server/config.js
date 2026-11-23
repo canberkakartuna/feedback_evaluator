@@ -8,17 +8,17 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(here, '..')
 
 /**
- * Config comes from `.env.local` and then `.env` — **in development only** —
- * and is loaded before anything below is read.
+ * Config comes from `.env.local` and then `.env`, when they exist, and is
+ * loaded before anything below is read.
  *
  * Precedence runs left to right and the first setter of a key wins, so:
  * real environment variables beat `.env.local`, which beats `.env`.
  *
  * The merge exists so local development can keep credentials such as
  * OPENAI_API_KEY in the gitignored `.env.local` (`*.local`) while the shared
- * knobs stay in the committed `.env`. On Vercel neither file is read: the
- * deployment is configured entirely from the project's environment settings
- * (Vercel → Project → Settings → Environment Variables).
+ * knobs stay in the committed `.env`. The deployed image contains neither
+ * file (`.dockerignore` keeps every `.env*` out), so production is configured
+ * entirely from the Lightsail container service's environment variables.
  *
  * Vite applies the same two files in the same order to VITE_-prefixed keys, so
  * the client and the API never disagree about which value won.
@@ -38,26 +38,19 @@ export const envFile = (() => {
   let applied = 0
   let skipped = 0
 
-  // Development only. On Vercel the deployment is configured by the host's
-  // environment settings, never by files baked into the bundle.
-  if (!process.env.VERCEL) {
-    // Deduplicated: run from the repo root and both candidates for a name are
-    // the same file, which would otherwise be counted twice.
-    for (const candidate of new Set(candidates)) {
-      const result = loadEnvFile(candidate)
-      if (!result.loaded) continue
+  // Deduplicated: run from the repo root and both candidates for a name are
+  // the same file, which would otherwise be counted twice.
+  for (const candidate of new Set(candidates)) {
+    const result = loadEnvFile(candidate)
+    if (!result.loaded) continue
 
-      files.push(candidate)
-      applied += result.applied
-      skipped += result.skipped
-    }
+    files.push(candidate)
+    applied += result.applied
+    skipped += result.skipped
   }
 
   return { loaded: files.length > 0, applied, skipped, files }
 })()
-
-/** Vercel and friends: read-only filesystem, no instance affinity. */
-const serverless = Boolean(process.env.VERCEL)
 
 /**
  * The tutor's model: OpenAI, through the Chat Completions API.
@@ -69,10 +62,10 @@ const serverless = Boolean(process.env.VERCEL)
  * two is answering.
  *
  * The key lives in `.env.local`, so it has never been committed. Note what
- * that costs: env files are read in development only, so a deployment
- * answers scripted until `OPENAI_API_KEY` is set in the host's own
- * environment settings (Vercel → Project → Settings → Environment
- * Variables). Everything else here is a knob and belongs in `.env`.
+ * that costs: the deployed image carries no env files, so a deployment
+ * answers scripted until `OPENAI_API_KEY` is set in the Lightsail container
+ * service's environment variables. Everything else here is a knob and belongs
+ * in `.env`.
  *
  * **Two of the knobs depend on which model family is named**, and the API
  * turns a mismatch into a 400 on every call — which the tutor masks as its
@@ -149,7 +142,6 @@ function snippetHandleKey() {
 }
 
 export const config = {
-  serverless,
   port: Number(process.env.PORT ?? 4000),
 
   /** Where the browser runs in development, for CORS. */
