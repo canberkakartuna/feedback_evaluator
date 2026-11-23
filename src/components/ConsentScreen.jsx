@@ -45,6 +45,9 @@ export default function ConsentScreen() {
   const [ticks, setTicks] = useState(() => Array(CONSENT_STATEMENT_COUNT).fill(false))
   const tick = (index, checked) =>
     setTicks((current) => current.map((value, at) => (at === index ? checked : value)))
+  // Page 3: the box confirming no personal information is shared in the chat.
+  // Unlike the others it starts unticked every time the page is shown (see goTo).
+  const [noticeConfirmed, setNoticeConfirmed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -64,9 +67,10 @@ export default function ConsentScreen() {
     headingRef.current?.focus()
   }, [step])
 
-  const canContinue = canLeaveStep(step, { sheetRead, ticks })
+  const canContinue = canLeaveStep(step, { sheetRead, ticks, noticeConfirmed })
   const goTo = (next) => {
     setError(null)
+    setNoticeConfirmed(false)
     setStep(next)
   }
 
@@ -176,9 +180,14 @@ export default function ConsentScreen() {
             <h1 className="en-title" lang={lang} ref={headingRef} tabIndex={-1}>
               {notice.title}
             </h1>
-            <p className="en-lede" lang={lang}>
-              {notice.body}
-            </p>
+            <label className="en-agree" lang={lang}>
+              <input
+                type="checkbox"
+                checked={noticeConfirmed}
+                onChange={(event) => setNoticeConfirmed(event.target.checked)}
+              />
+              <span>{notice.confirm}</span>
+            </label>
 
             {error ? (
               <p className="en-warn" role="alert" style={{ marginTop: 'var(--s-4)' }}>
@@ -186,8 +195,8 @@ export default function ConsentScreen() {
               </p>
             ) : null}
 
-            {/* Pressing this is the acceptance — no box of its own — and it is
-                what records consent and lets the person in. */}
+            {/* Opens once the box above is ticked; pressing it is what records
+                consent and lets the person in. */}
             <div className="en-actions">
               <button type="button" className="en-btn" disabled={busy} onClick={() => goTo(2)}>
                 {t('common.back')}

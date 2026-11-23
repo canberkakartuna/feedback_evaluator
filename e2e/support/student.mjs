@@ -10,6 +10,8 @@ export const CONSENT = {
   sheetBox: 'I have read the Participant Information Sheet.',
   formHeading: 'Consent Form for Online Participants',
   noticeHeading: 'Do not share personal information in the chat!',
+  noticeBox:
+    'I confirm that, when chatting with the AI tutor, I do not share any personal information about myself or anyone else, such as names, student ID numbers, email addresses or phone numbers.',
   accept: 'I understand',
 }
 
@@ -33,6 +35,7 @@ export async function completeConsent(page) {
   await page.getByRole('button', { name: 'Continue' }).click()
 
   await expect(page.getByRole('heading', { name: CONSENT.noticeHeading })).toBeVisible()
+  await page.getByLabel(CONSENT.noticeBox).check()
   await page.getByRole('button', { name: CONSENT.accept }).click()
   await expect(page.getByRole('heading', { name: 'What are you working on?' })).toBeVisible()
 }

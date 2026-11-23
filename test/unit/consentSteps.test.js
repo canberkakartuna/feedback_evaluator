@@ -34,14 +34,23 @@ test('page 2 is left only once all six statements are ticked', () => {
   assert.equal(canLeaveStep(2, { sheetRead: true }), false)
 })
 
-test('page 3 has no box: its button is the acceptance', () => {
-  assert.equal(canLeaveStep(3, {}), true)
-  assert.equal(canLeaveStep(3), true)
+test('page 3 is left only once the no-personal-information box is ticked', () => {
+  assert.equal(canLeaveStep(3, { noticeConfirmed: true }), true)
+  assert.equal(canLeaveStep(3, { noticeConfirmed: false }), false)
+  assert.equal(canLeaveStep(3, {}), false)
+  assert.equal(canLeaveStep(3), false)
+  assert.equal(canLeaveStep(3, { noticeConfirmed: 'yes' }), false)
+  // The earlier pages' boxes do not open page 3.
+  assert.equal(canLeaveStep(3, { sheetRead: true, ticks: Array(6).fill(true) }), false)
 })
 
 test('pages outside 1–3 are never passable', () => {
   for (const step of [0, 4, -1, undefined, '1']) {
-    assert.equal(canLeaveStep(step, { sheetRead: true, ticks: Array(6).fill(true) }), false, String(step))
+    assert.equal(
+      canLeaveStep(step, { sheetRead: true, ticks: Array(6).fill(true), noticeConfirmed: true }),
+      false,
+      String(step),
+    )
   }
 })
 

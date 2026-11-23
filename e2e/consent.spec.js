@@ -37,10 +37,18 @@ test.describe('consent flow', () => {
     await boxes.nth(2).check()
     await continueButton.click()
 
-    // Page 3: the notice. Pressing "I understand" is the acceptance.
+    // Page 3: the notice. "I understand" waits for the confirmation box.
     await expect(page.getByText('Step 3 of 3 · Before you continue')).toBeVisible()
     await expect(page.getByRole('heading', { name: CONSENT.noticeHeading })).toBeVisible()
-    await page.getByRole('button', { name: CONSENT.accept }).click()
+    const acceptButton = page.getByRole('button', { name: CONSENT.accept })
+    await expect(page.getByLabel(CONSENT.noticeBox)).not.toBeChecked()
+    await expect(acceptButton).toBeDisabled()
+    await page.getByLabel(CONSENT.noticeBox).check()
+    await expect(acceptButton).toBeEnabled()
+    await page.getByLabel(CONSENT.noticeBox).uncheck()
+    await expect(acceptButton).toBeDisabled()
+    await page.getByLabel(CONSENT.noticeBox).check()
+    await acceptButton.click()
 
     await expect(page.getByRole('heading', { name: 'What are you working on?' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Ratio practice/ })).toBeVisible()
@@ -58,6 +66,7 @@ test.describe('consent flow', () => {
     await expect(page.getByRole('heading', { name: CONSENT.noticeHeading })).toBeVisible()
 
     // Back from the notice: all six are still ticked.
+    await page.getByLabel(CONSENT.noticeBox).check()
     await page.getByRole('button', { name: 'Back' }).click()
     await expect(page.getByRole('heading', { name: CONSENT.formHeading })).toBeVisible()
     for (let index = 0; index < 6; index += 1) await expect(boxes.nth(index)).toBeChecked()
@@ -69,6 +78,11 @@ test.describe('consent flow', () => {
     // And forward again without re-ticking anything.
     await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled()
+
+    // Except the notice's box, which is asked afresh every time it is shown.
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(page.getByLabel(CONSENT.noticeBox)).not.toBeChecked()
+    await expect(page.getByRole('button', { name: CONSENT.accept })).toBeDisabled()
   })
 
   test('reloading part-way starts again at page 1, with nothing recorded', async ({ page }) => {
@@ -120,6 +134,11 @@ test.describe('consent flow', () => {
     await page.getByRole('button', { name: 'Devam et' }).click()
 
     await expect(page.getByRole('heading', { name: 'Sohbette kişisel bilgi paylaşmayın!' })).toBeVisible()
+    await page
+      .getByLabel(
+        'Yapay zekâ eğitmeniyle sohbet ederken ad, soyad, öğrenci numarası, e-posta adresi veya telefon numarası gibi kendime ya da başkalarına ait kişisel bilgileri paylaşmadığımı onaylıyorum.',
+      )
+      .check()
     await page.getByRole('button', { name: 'Anladım' }).click()
     await expect(page.getByRole('heading', { name: 'Ne üzerinde çalışıyorsunuz?' })).toBeVisible()
   })

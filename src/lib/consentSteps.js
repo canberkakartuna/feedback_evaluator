@@ -13,11 +13,11 @@ export const CONSENT_STEP_COUNT = CONSENT_STEPS.length
 
 /**
  * Whether the person may move on from `step` (1-based), given what they have
- * ticked so far: `sheetRead` (the "I have read the sheet" box on page 1) and
- * `ticks` (one boolean per consent statement on page 2). The last page has no
- * box — pressing its button is the acceptance — so it is always passable.
+ * ticked so far: `sheetRead` (the "I have read the sheet" box on page 1),
+ * `ticks` (one boolean per consent statement on page 2) and `noticeConfirmed`
+ * (the "I confirm I do not share personal information" box on page 3).
  */
-export function canLeaveStep(step, { sheetRead, ticks } = {}) {
+export function canLeaveStep(step, { sheetRead, ticks, noticeConfirmed } = {}) {
   if (!Number.isInteger(step)) return false
   switch (CONSENT_STEPS[step - 1]) {
     case 'sheet':
@@ -25,7 +25,7 @@ export function canLeaveStep(step, { sheetRead, ticks } = {}) {
     case 'form':
       return allStatementsTicked(ticks)
     case 'notice':
-      return true
+      return noticeConfirmed === true
     default:
       return false
   }
