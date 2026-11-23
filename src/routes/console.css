@@ -824,6 +824,18 @@
   white-space: pre-wrap;
 }
 
+/* Display maths in a transcript turn cannot wrap, so a wide formula scrolls
+   inside its turn instead of pushing the page sideways. */
+.cs-msg-text .katex-display,
+.cs-turn-text .katex-display {
+  max-width: 100%;
+  margin: 0.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--s-1);
+  scrollbar-width: thin;
+}
+
 @media (max-width: 900px) {
   .cs {
     grid-template-columns: 1fr;

@@ -8,6 +8,8 @@ import { promptFor, textFor } from '../../shared/activity'
 import { questionName } from '../lib/questionName'
 import { useI18n } from '../lib/i18n'
 import MathText from './MathText'
+import MathTools from './MathTools'
+import { MAX_ANSWER_LENGTH } from '../lib/mathInsert'
 import QuestionFile from './QuestionFile'
 import Whiteboard from './Whiteboard'
 import './QuestionPanel.css'
@@ -66,6 +68,7 @@ export default function QuestionPanel({
   // The photo is the whole question, so the card becomes the photo.
   const pictureOnly = Boolean(picture) && !prompt && !question.stimulus
   const sheet = useRef(null)
+  const answerBox = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [rejected, setRejected] = useState([])
   const [boardOpen, setBoardOpen] = useState(false)
@@ -289,8 +292,21 @@ export default function QuestionPanel({
                 <label className="sr-only" htmlFor="answer">
                   {t('qp.writtenAnswer')}
                 </label>
+                {/* Through onDraftChange like typing, so the autosave and the
+                    word count see a button's text the same way. */}
+                <div className="qp-math">
+                  <MathTools
+                    inputRef={answerBox}
+                    value={state.draft}
+                    onChange={onDraftChange}
+                    inputId="answer"
+                    storageKey="feedback-evaluator.mathBar.answer"
+                    maxLength={MAX_ANSWER_LENGTH}
+                  />
+                </div>
                 <textarea
                   id="answer"
+                  ref={answerBox}
                   className="qp-answer"
                   value={state.draft}
                   spellCheck="true"

@@ -1,0 +1,121 @@
+/* The maths row and preview over a student's text box — MathTools.jsx. */
+
+.mt-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.mt-toggle {
+  flex: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 4px 10px;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--graphite);
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.mt-toggle:hover,
+.mt-toggle[aria-expanded='true'] {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+/* One line that scrolls sideways on a narrow screen, rather than wrapping
+   into a tall block over the box. */
+.mt-bar {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding: 2px 0;
+}
+
+.mt-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-raise);
+  padding: 0 6px;
+  font-size: var(--t-13);
+  line-height: 1;
+  color: var(--ink);
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.mt-btn:hover {
+  border-color: var(--pen);
+  color: var(--pen);
+}
+
+.mt-btn:focus-visible,
+.mt-toggle:focus-visible {
+  outline: 2px solid var(--pen);
+  outline-offset: 1px;
+}
+
+/* The face is a small rendered formula: keep KaTeX's sizing in the button. */
+.mt-btn .katex {
+  font-size: 1em;
+}
+
+/* Clicks land on the button itself, never on the formula inside it: pressing a
+   button re-renders the row, and Chromium drops a click whose mousedown target
+   was a node that got replaced in between. */
+.mt-btn > * {
+  pointer-events: none;
+}
+
+.mt-preview {
+  min-width: 0;
+  border: 1px dashed var(--edge);
+  border-radius: var(--r-1);
+  background: var(--paper-sunk);
+  padding: 6px var(--s-3);
+}
+
+.mt-preview-label {
+  margin: 0 0 2px;
+  font-size: var(--t-11);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--graphite-faint);
+}
+
+.mt-preview-text {
+  margin: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: var(--t-13);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Display maths cannot wrap: a wide formula scrolls inside the preview. */
+.mt-preview-text .katex-display {
+  max-width: 100%;
+  margin: 0.4em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}

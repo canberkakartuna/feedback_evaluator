@@ -348,6 +348,26 @@ const en = {
       'You have used all {limit} questions for this one. Keep working on it yourself, and come back in 2 hours if you still want help — the chat reopens at {time}.',
   },
 
+  /** The maths row over the tutor's message box and the answer box — see src/components/MathTools.jsx. */
+  math: {
+    toggle: 'Maths',
+    bar: 'Maths symbols',
+    preview: 'Preview',
+    power: 'Power',
+    subscript: 'Subscript',
+    fraction: 'Fraction',
+    sqrt: 'Square root',
+    integral: 'Integral',
+    sum: 'Sum',
+    pi: 'Pi',
+    infinity: 'Infinity',
+    le: 'Less than or equal to',
+    ge: 'Greater than or equal to',
+    ne: 'Not equal to',
+    times: 'Multiply',
+    divide: 'Divide',
+  },
+
   wb: {
     title: 'Whiteboard',
     forQuestion: 'Whiteboard for {code}',
@@ -1229,6 +1249,25 @@ const tr = {
     turnsLeft: '{limit} sorudan {remaining} hakkın kaldı',
     locked:
       'Bu soru için {limit} soru hakkının hepsini kullandın. Kendi başına çalışmaya devam et; hâlâ yardım istersen 2 saat sonra tekrar gel — sohbet saat {time} itibarıyla yeniden açılacak.',
+  },
+
+  math: {
+    toggle: 'Matematik',
+    bar: 'Matematik sembolleri',
+    preview: 'Önizleme',
+    power: 'Üs',
+    subscript: 'Alt simge',
+    fraction: 'Kesir',
+    sqrt: 'Karekök',
+    integral: 'İntegral',
+    sum: 'Toplam',
+    pi: 'Pi',
+    infinity: 'Sonsuz',
+    le: 'Küçük veya eşit',
+    ge: 'Büyük veya eşit',
+    ne: 'Eşit değil',
+    times: 'Çarpı',
+    divide: 'Bölü',
   },
 
   wb: {

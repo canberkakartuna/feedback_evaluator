@@ -291,12 +291,16 @@ export default function Session() {
   )
 
   /**
-   * Work handed in through Draw or Upload goes straight to the tutor: once a
-   * board is saved or files are uploaded, the tutor is asked to check it and
-   * its feedback appears in the chat without the student having to type.
-   * The server sends the whiteboard PNG and the uploads to the model with
-   * that ask (services/tutor.js, workForModel). It is a turn like any other,
-   * so it counts against the twenty and is skipped once they are used up.
+   * A saved whiteboard goes straight to the tutor: once a board is saved, the
+   * tutor is asked to check it and its feedback appears in the chat without
+   * the student having to type. The server sends the whiteboard PNG to the
+   * model with that ask (services/tutor.js, workForModel). It is a turn like
+   * any other, so it counts against the twenty and is skipped once they are
+   * used up.
+   *
+   * Uploaded files do not: like a typed answer, they wait until the student
+   * starts the chat themselves. Every turn they then take still carries the
+   * uploads to the model (workForModel), so the tutor sees them when asked.
    *
    * A ref because `converse` is declared further down than these handlers.
    */
@@ -304,7 +308,6 @@ export default function Session() {
 
   const attach = useCallback(
     async (files) => {
-      let uploadedAny = false
       for (const file of files) {
         try {
           const dataUrl = await readAsDataUrl(file)
@@ -314,12 +317,10 @@ export default function Session() {
             source: 'file',
           })
           applyAnswer(activeId, answer)
-          uploadedAny = true
         } catch (error) {
           fail(error)
         }
       }
-      if (uploadedAny) reviewWork.current?.()
     },
     [activeId, applyAnswer, fail, sessionId],
   )

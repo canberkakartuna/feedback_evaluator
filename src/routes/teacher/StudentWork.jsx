@@ -118,7 +118,9 @@ export default function StudentWork() {
             {question.answer?.draft ? (
               <div className="cs-turn" data-from="student">
                 <p className="cs-turn-who eyebrow">{t('transcript.theirAnswer')}</p>
-                <p className="cs-turn-text">{question.answer.draft}</p>
+                <p className="cs-turn-text">
+                  <MathText text={question.answer.draft} />
+                </p>
               </div>
             ) : null}
 
@@ -146,7 +148,9 @@ export default function StudentWork() {
                     · {clock(message.createdAt, lang)}
                     {message.rating ? ` · ${t('transcript.rated', { rating: message.rating })}` : ''}
                   </p>
-                  <p className="cs-msg-text">{message.text}</p>
+                  <p className="cs-msg-text">
+                    <MathText text={message.text} />
+                  </p>
                 </div>
               ))}
             </div>

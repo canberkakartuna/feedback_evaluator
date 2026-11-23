@@ -148,6 +148,17 @@
   tab-size: 2;
 }
 
+/* Display maths cannot wrap, so a formula wider than the bubble scrolls inside
+   it instead of pushing the thread sideways — on a phone too. */
+.tp-msg-text .katex-display {
+  max-width: 100%;
+  margin: 0.5em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--s-1);
+  scrollbar-width: thin;
+}
+
 /* Quiet until it is useful: rating sits under the reply, not on top of it. */
 .tp-rate {
   display: flex;
@@ -221,12 +232,20 @@
 
 .tp-composer {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: var(--s-2);
   flex: none;
+  min-width: 0;
   border-top: 1px solid var(--edge);
   padding: var(--s-3) var(--s-4);
   padding-bottom: max(var(--s-3), env(safe-area-inset-bottom));
+}
+
+/* The message box and Send, under the maths row and its preview. */
+.tp-compose-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
 }
 
 .tp-locked {

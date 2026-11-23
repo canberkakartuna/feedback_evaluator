@@ -42,6 +42,13 @@ test('house rules, the question and the task all follow, in that order', () => {
   assert.doesNotMatch(text, /secret-keyword/, 'rubric keywords never reach the model')
 })
 
+test('house rules ask for maths as LaTeX and keep the prose rules', () => {
+  const text = systemInstruction({ ...base, systemPrompt: 'Global.' })
+  assert.match(text, /Plain prose, at most 120 words, no markdown/)
+  assert.match(text, /mathematical expression as LaTeX: inline as \$\.\.\.\$, a formula on its own\s+line as \$\$\.\.\.\$\$/)
+  assert.match(text, /Never use \$ for money/)
+})
+
 test('the fallback language follows the interface', () => {
   assert.match(systemInstruction({ ...base, lang: 'tr' }), /failing that Turkish/)
 })

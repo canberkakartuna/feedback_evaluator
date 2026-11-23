@@ -107,6 +107,9 @@ const HOUSE_RULES = `Rules for this reply, which override anything above that co
   a formula), use the language of their earlier messages, and failing that {{language}},
   the language their interface is set to.
 - Plain prose, at most 120 words, no markdown, no headings, no bullet points.
+- Write every mathematical expression as LaTeX: inline as $...$, a formula on its own
+  line as $$...$$. Formulas are welcome within the word limit. Never use $ for money;
+  write the currency as a word.
 - One reply, in the second person, addressed to this student.
 - Do not reveal the mark scheme or the teacher's answer, and do not list what either is
   looking for. They are here so you know what "correct" means, not so you can read them out.

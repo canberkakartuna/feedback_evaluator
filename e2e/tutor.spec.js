@@ -45,6 +45,53 @@ test.describe('tutor chat', () => {
     await expect(tutorPane(page).getByText('Can you give me a hint?')).toBeVisible()
   })
 
+  test('the maths row writes a formula, previews it and sends it rendered', async ({ page }) => {
+    const { studentNumber } = await seedClass()
+    await signInFirstTime(page, studentNumber)
+    await openActivity(page, 'Ratio practice')
+
+    const tutor = tutorPane(page)
+    const box = tutor.getByLabel('Message the tutor')
+    const toggle = tutor.getByRole('button', { name: 'Maths' })
+
+    // Hidden until asked for.
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(tutor.getByRole('toolbar', { name: 'Maths symbols' })).toHaveCount(0)
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const row = tutor.getByRole('toolbar', { name: 'Maths symbols' })
+
+    // "Is it " then a fraction: the cursor lands in the numerator.
+    await box.fill('Is it ')
+    await row.getByRole('button', { name: 'Fraction' }).click()
+    await expect(box).toBeFocused()
+    await expect(box).toHaveValue('Is it $\\frac{}{}$')
+    await page.keyboard.type('1')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.type('2')
+    await expect(box).toHaveValue('Is it $\\frac{1}{2}$')
+
+    // A rendered preview, before sending.
+    const preview = tutor.locator('.mt-preview')
+    await expect(preview.getByText('Preview')).toBeVisible()
+    await expect(preview.locator('.katex')).toHaveCount(1)
+
+    await tutor.getByRole('button', { name: 'Send' }).click()
+    await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
+    await expect(box).toHaveValue('')
+    await expect(preview).toHaveCount(0)
+
+    const sent = tutor.locator('article[data-from="student"]').last()
+    await expect(sent.locator('.katex')).toHaveCount(1)
+    await expect(sent).toContainText('Is it')
+
+    // The row stays open after a reload: the choice is remembered.
+    await page.reload()
+    await expect(tutorPane(page).getByRole('toolbar', { name: 'Maths symbols' })).toBeVisible()
+    await expect(tutorPane(page).locator('article[data-from="student"]').last().locator('.katex')).toHaveCount(1)
+  })
+
   test('after twenty questions the chat closes with the come-back-later message', async ({ page }) => {
     const { studentNumber } = await seedClass()
     await signInFirstTime(page, studentNumber)

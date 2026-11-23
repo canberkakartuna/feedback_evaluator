@@ -324,7 +324,11 @@ function Context({ snippet, lang, t }) {
       </p>
       {answer ? (
         <div className="cs-context-body">
-          {answer.draft?.trim() ? <p className="cs-context-text cs-turn-text">{answer.draft}</p> : null}
+          {answer.draft?.trim() ? (
+            <p className="cs-context-text cs-turn-text">
+              <MathText text={answer.draft} />
+            </p>
+          ) : null}
           {board ? (
             <ContextFile
               file={board}
@@ -1162,7 +1166,9 @@ export default function Labelling() {
                       {t('labelling.studentAsked')}
                       <When iso={snippet.student.at} lang={lang} />
                     </p>
-                    <p className="cs-turn-text">{snippet.student.text}</p>
+                    <p className="cs-turn-text">
+                      <MathText text={snippet.student.text} />
+                    </p>
                   </div>
 
                   <div className="cs-turn" data-from="tutor">
@@ -1173,7 +1179,9 @@ export default function Labelling() {
                         : ''}
                       <When iso={snippet.tutor.at} lang={lang} />
                     </p>
-                    <p className="cs-turn-text">{snippet.tutor.text}</p>
+                    <p className="cs-turn-text">
+                      <MathText text={snippet.tutor.text} />
+                    </p>
                   </div>
 
                   {/* Inside a dataset: which datasets it is in, for staff. Picking

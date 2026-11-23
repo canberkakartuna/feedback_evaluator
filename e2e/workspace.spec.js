@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { createActivity, seedClass } from './support/seed.mjs'
-import { TINY_PNG, openActivity, questionList, signInFirstTime } from './support/student.mjs'
+import { TINY_PNG, openActivity, questionList, signInFirstTime, tutorPane } from './support/student.mjs'
 
 const isAnswerSave = (response) =>
   response.request().method() === 'PUT' && /\/api\/sessions\/[^/]+\/answers\//.test(response.url())
@@ -43,6 +43,40 @@ test.describe('working on an activity', () => {
 
     await page.reload()
     await expect(page.getByLabel('Your written answer')).toHaveValue('Two to four simplifies to one to two.')
+  })
+
+  test('the maths row writes into the answer, previews it, and the answer is saved', async ({ page }) => {
+    const { studentNumber } = await seedClass()
+    await signInFirstTime(page, studentNumber)
+    await openActivity(page, 'Ratio practice')
+
+    const main = page.getByRole('main')
+    const answer = main.getByLabel('Your written answer')
+    const toggle = main.getByRole('button', { name: 'Maths' })
+
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await toggle.click()
+    const row = main.getByRole('toolbar', { name: 'Maths symbols' })
+
+    // "x" then the power button: x becomes the base, the cursor the exponent.
+    await answer.fill('It is x')
+    await row.getByRole('button', { name: 'Power' }).click()
+    await expect(answer).toBeFocused()
+    const saved = page.waitForResponse(
+      (response) => isAnswerSave(response) && response.request().postData()?.includes('x^{2}'),
+    )
+    await page.keyboard.type('2')
+    await expect(answer).toHaveValue('It is $x^{2}$')
+
+    const preview = main.locator('.mt-preview')
+    await expect(preview.getByText('Preview')).toBeVisible()
+    await expect(preview.locator('.katex')).toHaveCount(1)
+
+    // Through the same autosave as typing: it is there after a reload.
+    expect((await saved).ok()).toBe(true)
+    await page.reload()
+    await expect(page.getByLabel('Your written answer')).toHaveValue('It is $x^{2}$')
+    await expect(page.getByRole('main').locator('.mt-preview .katex')).toHaveCount(1)
   })
 
   test('checking a written answer marks it against the rubric', async ({ page }) => {
@@ -98,6 +132,47 @@ test.describe('working on an activity', () => {
     await expect(page.getByRole('main').getByRole('button', { name: 'Remove my-working.png' })).toBeVisible()
     const image = page.getByRole('main').getByRole('link', { name: 'Open my-working.png in a new tab' }).locator('img')
     await expect(image).toHaveJSProperty('naturalWidth', 1)
+  })
+
+  test('an uploaded photo does not start the tutor; the student starts it, with the photo', async ({ page }) => {
+    const { studentNumber } = await seedClass()
+    await signInFirstTime(page, studentNumber)
+    await openActivity(page, 'Ratio practice')
+    await questionList(page).getByRole('button', { name: /^Q2/ }).click()
+
+    const tutorCalls = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && /\/questions\/[^/]+\/messages$/.test(request.url())) {
+        tutorCalls.push(request.postDataJSON())
+      }
+    })
+
+    await page.getByRole('button', { name: /^Upload/ }).click()
+    const uploaded = page.waitForResponse(
+      (response) => response.request().method() === 'POST' && /\/uploads$/.test(response.url()),
+    )
+    await page.getByLabel(/Add a photo/).setInputFiles({
+      name: 'my-working.png',
+      mimeType: 'image/png',
+      buffer: TINY_PNG,
+    })
+    expect((await uploaded).ok()).toBe(true)
+    await expect(page.getByRole('main').getByRole('button', { name: 'Remove my-working.png' })).toBeVisible()
+
+    // Nothing was asked of the tutor on the student's behalf.
+    const tutor = tutorPane(page)
+    await page.waitForTimeout(500)
+    expect(tutorCalls).toEqual([])
+    await expect(tutor.getByText('20 of 20 questions left')).toBeVisible()
+    await expect(tutor.locator('article[data-from="tutor"][data-kind="reply"]')).toHaveCount(0)
+
+    // When the student does start it, it answers, and the photo is still on the answer.
+    await tutor.getByLabel('Message the tutor').fill('Is my working right?')
+    await tutor.getByRole('button', { name: 'Send' }).click()
+    await expect(tutor.getByText('19 of 20 questions left')).toBeVisible()
+    await expect(tutor.locator('article[data-from="tutor"][data-kind="reply"]')).toHaveCount(1)
+    expect(tutorCalls).toEqual([{ text: 'Is my working right?', lang: 'en' }])
+    await expect(page.getByRole('main').getByRole('button', { name: 'Remove my-working.png' })).toBeVisible()
   })
 
   test('a file that is not a photo is refused with a reason', async ({ page }) => {

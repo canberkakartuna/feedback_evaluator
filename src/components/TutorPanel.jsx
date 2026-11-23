@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { turnState } from '../../shared/turns'
 import { useI18n } from '../lib/i18n'
 import { questionName } from '../lib/questionName'
+import MathText from './MathText'
+import MathTools from './MathTools'
 import './TutorPanel.css'
 
 export default function TutorPanel({
@@ -19,6 +21,7 @@ export default function TutorPanel({
   const [clock, setClock] = useState(() => Date.now())
   const thread = useRef(null)
   const closeButton = useRef(null)
+  const input = useRef(null)
 
   /**
    * Turns left on this question, read from the thread exactly as the server
@@ -101,7 +104,7 @@ export default function TutorPanel({
                 reply already written in the language they asked in — all shown
                 exactly as they came, none of it translated here. */}
             <p className="tp-msg-text">
-              {message.text || (message.kind === 'opening' ? t('tp.opening') : null)}
+              <MathText text={message.text || (message.kind === 'opening' ? t('tp.opening') : null)} />
             </p>
 
             {/* Doc item 5: was this feedback any use? */}
@@ -158,23 +161,34 @@ export default function TutorPanel({
         </p>
       ) : (
         <form className="tp-composer" onSubmit={submit}>
-          <label className="sr-only" htmlFor="tutor-message">
-            {t('tp.messageLabel')}
-          </label>
-          <textarea
-            id="tutor-message"
-            className="tp-input"
-            rows={1}
+          <MathTools
+            inputRef={input}
             value={draft}
-            placeholder={t('tp.placeholder')}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) submit(event)
-            }}
+            onChange={setDraft}
+            inputId="tutor-message"
+            storageKey="feedback-evaluator.mathBar.tutor"
           />
-          <button type="submit" className="tp-send" disabled={!draft.trim() || pending}>
-            {t('tp.send')}
-          </button>
+
+          <div className="tp-compose-row">
+            <label className="sr-only" htmlFor="tutor-message">
+              {t('tp.messageLabel')}
+            </label>
+            <textarea
+              id="tutor-message"
+              ref={input}
+              className="tp-input"
+              rows={1}
+              value={draft}
+              placeholder={t('tp.placeholder')}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) submit(event)
+              }}
+            />
+            <button type="submit" className="tp-send" disabled={!draft.trim() || pending}>
+              {t('tp.send')}
+            </button>
+          </div>
         </form>
       )}
     </>

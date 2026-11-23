@@ -217,7 +217,11 @@ export default function SelectionStudent() {
                 </p>
                 {answer ? (
                   <>
-                    {answer.draft?.trim() ? <p className="cs-turn-text">{answer.draft}</p> : null}
+                    {answer.draft?.trim() ? (
+                      <p className="cs-turn-text">
+                        <MathText text={answer.draft} />
+                      </p>
+                    ) : null}
                     {board ? (
                       <a className="cs-context-file" href={board.url} target="_blank" rel="noreferrer">
                         <img src={board.url} alt={t('labelling.answerBoard')} />
@@ -254,7 +258,9 @@ export default function SelectionStudent() {
                         {t('transcript.student')}
                         <When iso={dialog.student.at} lang={lang} />
                       </p>
-                      <p className="cs-msg-text">{dialog.student.text}</p>
+                      <p className="cs-msg-text">
+                        <MathText text={dialog.student.text} />
+                      </p>
                     </div>
                     <div className="cs-msg" data-from="tutor">
                       <p className="eyebrow">
@@ -262,7 +268,9 @@ export default function SelectionStudent() {
                         {dialog.rating ? ` · ${t('transcript.rated', { rating: dialog.rating })}` : ''}
                         <When iso={dialog.tutor.at} lang={lang} />
                       </p>
-                      <p className="cs-msg-text">{dialog.tutor.text}</p>
+                      <p className="cs-msg-text">
+                        <MathText text={dialog.tutor.text} />
+                      </p>
                     </div>
                     <DatasetToggle
                       snippet={dialog}
