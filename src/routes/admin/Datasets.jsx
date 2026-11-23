@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import { datasetName } from '../../lib/datasets'
 import { roleStringKey, useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
+import ConsoleNotice from '../../components/ConsoleNotice'
 
 /**
  * Datasets, and who labels each one.
@@ -101,11 +102,7 @@ export default function Datasets() {
         </div>
       </header>
 
-      {notice ? (
-        <p className="cs-note" data-tone={notice.tone} role="alert">
-          {notice.text}
-        </p>
-      ) : null}
+      <ConsoleNotice notice={notice} onDismiss={() => setNotice(null)} />
 
       <section className="cs-card" style={{ marginTop: 'var(--s-4)' }}>
         <h2 className="cs-section-head">{t('datasets.add')}</h2>

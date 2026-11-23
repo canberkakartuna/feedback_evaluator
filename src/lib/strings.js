@@ -920,6 +920,10 @@ const en = {
     nowActive: '{name} is now active.',
     nowInactive: '{name} is now inactive.',
     deleted: '{name} deleted.',
+    confirmDelete: 'Delete {name}?',
+    deleteYes: 'Yes, delete',
+    deleteHasChildren: '{name} was not deleted: {names} still report to them. Move them to someone else first, or deactivate this account instead.',
+    deleteHasSessions: '{name} was not deleted: they have recorded work sessions, which are research data. Deactivate the account instead.',
   },
 }
 
@@ -1796,6 +1800,10 @@ const tr = {
     nowActive: '{name} artık etkin.',
     nowInactive: '{name} artık pasif.',
     deleted: '{name} silindi.',
+    confirmDelete: '{name} silinsin mi?',
+    deleteYes: 'Evet, sil',
+    deleteHasChildren: '{name} silinmedi: {names} hâlâ bu hesaba bağlı. Önce onları başka birine bağlayın ya da bu hesabı pasifleştirin.',
+    deleteHasSessions: '{name} silinmedi: kayıtlı çalışma oturumları var ve bunlar araştırma verisidir. Bunun yerine hesabı pasifleştirin.',
   },
 }
 

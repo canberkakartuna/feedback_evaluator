@@ -418,6 +418,40 @@
   color: var(--ink);
 }
 
+/* An action's result on the admin pages (components/ConsoleNotice): pinned
+   under the fixed navbar, so it is in view however far down the table the
+   button was. Same footing as the workspace's .ws-problem-banner. */
+.cs-notice-float {
+  position: fixed;
+  top: calc(var(--nb-h) + var(--s-3));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  width: max-content;
+  max-width: min(600px, calc(100vw - 2 * var(--s-4)));
+  font-size: var(--t-14);
+  border-width: 1px 1px 1px 4px;
+  box-shadow: var(--shade);
+}
+
+.cs-notice-float > span {
+  flex: 1;
+}
+
+.cs-notice-close {
+  flex-shrink: 0;
+  padding: 0 var(--s-1);
+  background: none;
+  border: none;
+  font-size: var(--t-18);
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+
 .cs-empty {
   padding: var(--s-7) var(--s-4);
   text-align: center;

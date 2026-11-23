@@ -7,6 +7,7 @@ import { MANAGEABLE, PARENT } from '../../../shared/roles'
 import { MIN_PASSWORD_LENGTH } from '../../../shared/password'
 import { isUsername } from '../../../shared/student-number'
 import LabellingSwitch from '../../components/LabellingSwitch'
+import ConsoleNotice from '../../components/ConsoleNotice'
 
 /**
  * Accounts, and the hierarchy between them.
@@ -47,6 +48,8 @@ export default function People() {
   })
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState(null)
+  /** The account whose delete is waiting for a second press. */
+  const [confirming, setConfirming] = useState(null)
 
   // Memoised so the lookups below actually cache — see the same note in
   // routes/student/Session.jsx.
@@ -109,7 +112,7 @@ export default function People() {
     }
   }
 
-  const act = async (work, success) => {
+  const act = async (work, success, describeFailure) => {
     setNotice(null)
     try {
       await work()
@@ -118,10 +121,39 @@ export default function People() {
     } catch (failure) {
       setNotice({
         tone: 'bad',
-        text: failure.details?.children
-          ? `${failure.message}: ${failure.details.children.map((child) => child.name ?? child.id).join(', ')}`
-          : failure.message,
+        text:
+          describeFailure?.(failure) ??
+          (failure.details?.children
+            ? `${failure.message}: ${failure.details.children.map((child) => child.name ?? child.id).join(', ')}`
+            : failure.message),
       })
+    }
+  }
+
+  /**
+   * The two refusals a delete normally meets (routes/users.js), said in the
+   * admin's language: people still report to them, or they have work sessions.
+   * Anything else falls through to the server's own message.
+   */
+  const deleteRefusal = (target) => (failure) => {
+    if (failure.status !== 409) return null
+    const children = failure.details?.children
+    if (children?.length) {
+      return t('people.deleteHasChildren', {
+        name: target.name,
+        names: children.map((child) => child.name ?? child.id).join(', '),
+      })
+    }
+    return t('people.deleteHasSessions', { name: target.name })
+  }
+
+  const deleteFor = async (target) => {
+    setBusy(true)
+    try {
+      await act(() => api.deleteUser(target.id), t('people.deleted', { name: target.name }), deleteRefusal(target))
+    } finally {
+      setConfirming(null)
+      setBusy(false)
     }
   }
 
@@ -148,11 +180,7 @@ export default function People() {
         </div>
       </header>
 
-      {notice ? (
-        <p className="cs-note" data-tone={notice.tone} role="alert">
-          {notice.text}
-        </p>
-      ) : null}
+      <ConsoleNotice notice={notice} onDismiss={() => setNotice(null)} />
 
       <section className="cs-card" style={{ marginTop: 'var(--s-4)' }}>
         <h2 className="cs-section-head">{t('people.add')}</h2>
@@ -321,7 +349,9 @@ export default function People() {
           <p className="cs-note" data-tone="bad">
             {error.message}
           </p>
-        ) : loading ? (
+        ) : loading && !data ? (
+          // First load only. The refetch after a row action keeps the table up,
+          // or the page collapses to one line and the window jumps to the top.
           <p className="cs-note">{t('common.loading')}</p>
         ) : (
           <div className="cs-scroll-x">
@@ -400,16 +430,35 @@ export default function People() {
                         >
                           {entry.active ? t('people.deactivate') : t('people.reactivate')}
                         </button>
-                        <button
-                          type="button"
-                          className="cs-btn cs-btn-sm cs-btn-danger"
-                          disabled={entry.id === actor.id}
-                          onClick={() =>
-                            act(() => api.deleteUser(entry.id), t('people.deleted', { name: entry.name }))
-                          }
-                        >
-                          {t('people.delete')}
-                        </button>
+                        {confirming === entry.id ? (
+                          <span
+                            className="cs-actions"
+                            role="group"
+                            aria-label={t('people.confirmDelete', { name: entry.name })}
+                          >
+                            <span className="cs-hint">{t('people.confirmDelete', { name: entry.name })}</span>
+                            <button
+                              type="button"
+                              className="cs-btn cs-btn-sm cs-btn-danger"
+                              disabled={busy}
+                              onClick={() => deleteFor(entry)}
+                            >
+                              {t('people.deleteYes')}
+                            </button>
+                            <button type="button" className="cs-btn cs-btn-sm" onClick={() => setConfirming(null)}>
+                              {t('common.cancel')}
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="cs-btn cs-btn-sm cs-btn-danger"
+                            disabled={entry.id === actor.id}
+                            onClick={() => setConfirming(entry.id)}
+                          >
+                            {t('people.delete')}
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
