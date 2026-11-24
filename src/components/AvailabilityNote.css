@@ -29,3 +29,21 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* The due-date line ("Due date … · N days left"), in either variant: bold, in
+   the normal text colour rather than the muted one, so it is seen at a glance.
+   Mono ships 400–600 here (index.html), so 600 is its real bold; the note's
+   body face ships up to 700. Close to the end it keeps the warn colour. */
+.av-inline.av-due {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.av-inline.av-due[data-tone='warn'] {
+  color: var(--stamp);
+}
+
+.cs-note.av-due {
+  font-weight: 700;
+  color: var(--ink);
+}

@@ -9,7 +9,7 @@ const SOON = 3
 /**
  * What an activity's availability range means right now, in one line.
  *
- *   open, with an end date   "Available until 30 Nov 2026 · 6 days left" / "· last day"
+ *   open, with an end date   "Due date 30 Nov 2026 · 6 days left" / "· last day"
  *   upcoming                 "Opens on 1 Dec 2026"   (teachers only)
  *   ended                    "Ended on 20 Nov 2026"  (teachers only)
  *
@@ -43,15 +43,22 @@ export default function AvailabilityNote({
 
   let text = null
   let tone = null
+  // The due-date line is the one students act on, so it is set bold
+  // (.av-due in ./AvailabilityNote.css); "Opens on" / "Ended on" are not.
+  let due = false
 
   if (state === 'open' && range.availableUntil) {
     const days = daysLeft(range.availableUntil, now)
-    const date = formatDay(range.availableUntil, lang)
-    text =
-      days <= 0
-        ? t('availability.untilLastDay', { date })
-        : t('availability.untilDays', { date, count: days })
-    if (days <= SOON) tone = 'warn'
+    // null is an end date that does not parse: nothing to count, so nothing said.
+    if (days !== null) {
+      const date = formatDay(range.availableUntil, lang)
+      text =
+        days <= 0
+          ? t('availability.untilLastDay', { date })
+          : t('availability.untilDays', { date, count: days })
+      if (days <= SOON) tone = 'warn'
+      due = true
+    }
   } else if (audience === 'teacher' && state === 'upcoming') {
     text = t('availability.opensOn', { date: formatDay(range.availableFrom, lang) })
   } else if (audience === 'teacher' && state === 'ended') {
@@ -61,9 +68,11 @@ export default function AvailabilityNote({
 
   if (!text) return null
 
+  const classes = (base) => [base, due ? 'av-due' : '', className].filter(Boolean).join(' ')
+
   if (variant === 'inline') {
     return (
-      <span className={`av-inline ${className}`.trim()} data-tone={tone ?? undefined} style={style}>
+      <span className={classes('av-inline')} data-tone={tone ?? undefined} style={style}>
         {text}
       </span>
     )
@@ -71,7 +80,7 @@ export default function AvailabilityNote({
 
   return (
     <p
-      className={`cs-note ${className}`.trim()}
+      className={classes('cs-note')}
       data-tone={tone ?? undefined}
       role="status"
       style={style}

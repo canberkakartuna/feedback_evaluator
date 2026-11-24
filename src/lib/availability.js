@@ -26,6 +26,17 @@ function localDay(value) {
   return date
 }
 
+/**
+ * Whether a date input's value is a whole day worth saving: a real day in a
+ * year from 2000 to 2100, the range the server accepts. Typing a year digit by
+ * digit makes some browsers report 0002, 0020 and 0202 on the way to 2026, and
+ * each of those is a real day; this is what keeps them from being sent.
+ */
+export function isSavableDay(value) {
+  const date = localDay(value)
+  return Boolean(date) && date.getFullYear() >= 2000 && date.getFullYear() <= 2100
+}
+
 /** A date input's value → the ISO instant `availableFrom` stores: 00:00:00.000 local. */
 export function fromInputToIso(value) {
   const date = localDay(value)

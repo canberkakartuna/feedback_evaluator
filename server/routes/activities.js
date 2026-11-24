@@ -308,7 +308,11 @@ export function activityRoutes(store) {
 
       const patch = parseActivityInput(req.body)
       if (!Object.keys(patch).length) throw badRequest('Nothing to update')
-      assertAvailabilityRange({ ...activity, ...patch })
+      // Only when a date is being changed: a range already stored the wrong
+      // way round must not lock the title, status or anything else.
+      if ('availableFrom' in patch || 'availableUntil' in patch) {
+        assertAvailabilityRange({ ...activity, ...patch })
+      }
 
       /**
        * Publishing an empty activity is refused rather than allowed and left to

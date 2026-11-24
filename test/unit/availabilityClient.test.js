@@ -4,6 +4,7 @@ import {
   availabilityRefusal,
   formatDay,
   fromInputToIso,
+  isSavableDay,
   isoToInput,
   liveState,
   untilInputToIso,
@@ -60,6 +61,13 @@ test('empty and null read as no date', () => {
 test('a value that is not a real day is no date', () => {
   assert.equal(fromInputToIso('2026-02-31'), null)
   assert.equal(untilInputToIso('30/11/2026'), null)
+})
+
+test('isSavableDay: a whole real day from 2000 to 2100, not a year still being typed', () => {
+  for (const day of ['2026-11-30', '2000-01-01', '2100-12-31', '2028-02-29']) assert.equal(isSavableDay(day), true, day)
+  for (const day of ['', '0002-11-30', '0020-11-30', '0202-11-30', '1999-12-31', '2101-01-01', '2026-02-31', '2026-11', null]) {
+    assert.equal(isSavableDay(day), false, String(day))
+  }
 })
 
 test('formatDay writes the day in the reader’s language', () => {

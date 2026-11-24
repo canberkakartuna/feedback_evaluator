@@ -401,7 +401,7 @@ export function parseActivityInput(body, { forCreate } = {}) {
     if (value === undefined) continue
     if (value === null || value === '') {
       patch[field] = null
-    } else if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    } else if (!isIsoInstant(value)) {
       throw badRequest(`"${field}" must be null or a date`)
     } else {
       patch[field] = new Date(value).toISOString()
@@ -434,6 +434,26 @@ export function parseActivityInput(body, { forCreate } = {}) {
 }
 
 /**
+ * A date the availability range will take: a full ISO-8601 instant with an
+ * explicit zone (`Z` or `±hh:mm`), naming a day that exists, in a year from
+ * 2000 to 2100. `Date.parse` alone would take "1", "Dec 1", a zone-less time
+ * read in the server's own zone, and 31 February rolled into March — none of
+ * which the authoring form sends, and all of which would be stored as some
+ * other instant than the one meant.
+ */
+const ISO_INSTANT = /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/
+
+export function isIsoInstant(value) {
+  if (typeof value !== 'string') return false
+  const match = ISO_INSTANT.exec(value)
+  if (!match || Number.isNaN(Date.parse(value))) return false
+  const [year, month, day] = match.slice(1, 4).map(Number)
+  if (year < 2000 || year > 2100) return false
+  const calendar = new Date(Date.UTC(year, month - 1, day))
+  return calendar.getUTCMonth() === month - 1 && calendar.getUTCDate() === day
+}
+
+/**
  * An availability range has to end after it starts. Takes the activity as it
  * will be stored — on a patch, what was there merged with what was sent — so
  * moving one side past the other is caught whichever side moved.
@@ -441,7 +461,10 @@ export function parseActivityInput(body, { forCreate } = {}) {
 export function assertAvailabilityRange(activity) {
   const { availableFrom, availableUntil } = activity ?? {}
   if (availableFrom && availableUntil && Date.parse(availableUntil) <= Date.parse(availableFrom)) {
-    throw badRequest('"availableUntil" must be after "availableFrom"')
+    // `details.code` is what the authoring form translates from.
+    throw badRequest('"availableUntil" must be after "availableFrom"', {
+      code: 'availability_range_invalid',
+    })
   }
 }
 

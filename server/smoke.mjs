@@ -1124,6 +1124,28 @@ try {
     'so is a date that is not a string',
     (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: 12 } })).status === 400,
   )
+  // Only a full ISO instant with a zone, on a real day, in 2000–2100.
+  for (const [label, value] of [
+    ['a bare number in a string', '1'],
+    ['a day that does not exist', '2026-02-31T00:00:00.000Z'],
+    ['a time without a zone', '2026-12-01T09:00:00'],
+    ['a year outside 2000–2100', '3000-01-01T00:00:00.000Z'],
+    ['a loose phrase Date.parse would take', 'Dec 1 2026'],
+  ]) {
+    const refused = await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: value } })
+    check(`${label} is a 400`, refused.status === 400 && refused.body.error?.message === '"availableUntil" must be null or a date')
+  }
+  check(
+    'a number is a 400 with the same message',
+    (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableFrom: 1764547200000 } })).body.error
+      ?.message === '"availableFrom" must be null or a date',
+  )
+  const offsetDate = await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableUntil: '2026-12-31T23:59:59.999+03:00' },
+  })
+  check('an offset instant is accepted and stored in UTC', offsetDate.status === 200 && offsetDate.body.activity.availableUntil === '2026-12-31T20:59:59.999Z')
+  await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: null } })
   check(
     'an end equal to the start is refused in one patch',
     (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableFrom: future, availableUntil: future } })).status === 400,
@@ -1134,6 +1156,23 @@ try {
   })
   check('and an end before the stored start is refused on its own', endBeforeStored.status === 400)
   check('with a message that says so', /availableUntil/.test(endBeforeStored.body.error?.message ?? ''))
+  check('and a code the form translates', endBeforeStored.body.error?.details?.code === 'availability_range_invalid')
+
+  // A range stored the wrong way round (two overlapping saves, or data from
+  // before the check) must not lock every other field of the activity.
+  const validTitle = await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { title: 'Ranged activity' } })
+  check('a title-only patch on a dated activity succeeds', validTitle.status === 200)
+  await app.locals.store.activities.update(rangedId, {
+    availableFrom: '2026-12-10T00:00:00.000Z',
+    availableUntil: '2026-12-05T00:00:00.000Z',
+  })
+  const invertedTitle = await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { title: 'Ranged activity' } })
+  check('with an inverted range stored, a title-only patch still succeeds', invertedTitle.status === 200)
+  check(
+    'but a date patch that leaves it inverted is still refused',
+    (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: '2026-12-06T00:00:00.000Z' } })).status === 400,
+  )
+  await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: null } })
   const cleared = await call('PATCH', `/api/activities/${rangedId}`, {
     token: teacherToken,
     body: { availableFrom: '' },

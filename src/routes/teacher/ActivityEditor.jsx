@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { LIMITS, PROMPT_LANGS, TOPICS, isMathTools, promptFor, titleFor } from '../../../shared/activity'
 import AvailabilityNote from '../../components/AvailabilityNote'
 import BilingualField from '../../components/BilingualField'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
-import { fromInputToIso, isoToInput, liveState, untilInputToIso } from '../../lib/availability'
+import { fromInputToIso, isSavableDay, isoToInput, liveState, untilInputToIso } from '../../lib/availability'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import { initialNames } from '../../lib/wording'
@@ -68,14 +68,46 @@ const LIVE_LABEL = {
 }
 
 /**
- * One end of the availability range: a native date input, saved when it loses
- * focus rather than on every change. Typing a date fires a change per digit in
- * some browsers (year 0002, 0020, 0202, 2026), and each of those is a valid
- * date the server would store. Keyed by the stored value where it is used, so
- * a reload after saving shows what the server kept; an empty box clears it.
+ * One end of the availability range: a native date input and, once a date is
+ * stored, a Clear button. Keyed by the stored value where it is used, so a
+ * reload after saving starts it afresh from what the server kept.
+ *
+ * - **Saved as soon as it is a whole day** — on change, on Enter, and on blur
+ *   as a backstop. "Whole" is isSavableDay: typing a year digit by digit makes
+ *   some browsers report 0002, 0020, 0202 on the way to 2026, and those are
+ *   never sent.
+ * - **Never cleared by an empty box.** Deleting one part of the date empties
+ *   the value in Chrome; leaving the box then puts the stored date back rather
+ *   than opening the activity indefinitely. Clearing is the button, only.
+ * - **A refused save puts the stored date back**, so the box never shows a
+ *   date the server did not keep (the reason is in the notice above).
+ * - **One save per value.** Change and blur can both fire for the same pick;
+ *   the value in flight is not sent again, and only the latest save may reset
+ *   the box when it fails.
  */
-function DateField({ id, label, hint, stored, toIso, min, max, busy, onSave }) {
-  const [value, setValue] = useState(() => isoToInput(stored))
+function DateField({ id, label, hint, clearLabel, stored, toIso, min, max, busy, onSave }) {
+  const { t } = useI18n()
+  const storedValue = isoToInput(stored)
+  const [value, setValue] = useState(storedValue)
+  const inFlight = useRef(null)
+  const latest = useRef(0)
+
+  const save = (candidate) => {
+    if (candidate === storedValue || candidate === inFlight.current) return
+    const attempt = ++latest.current
+    inFlight.current = candidate
+    onSave(candidate === '' ? null : toIso(candidate))
+      .catch(() => {
+        if (attempt === latest.current) setValue(storedValue)
+      })
+      .finally(() => {
+        if (attempt === latest.current) inFlight.current = null
+      })
+  }
+
+  const saveIfWhole = (candidate) => {
+    if (isSavableDay(candidate)) save(candidate)
+  }
 
   return (
     // alignContent: a longer hint beside it must not stretch this box taller.
@@ -83,21 +115,42 @@ function DateField({ id, label, hint, stored, toIso, min, max, busy, onSave }) {
       <label className="cs-label" htmlFor={id}>
         {label}
       </label>
-      <input
-        id={id}
-        type="date"
-        className="cs-input"
-        disabled={busy}
-        min={min || undefined}
-        max={max || undefined}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onBlur={() => {
-          const next = toIso(value)
-          if (value === isoToInput(stored) || (value && !next)) return
-          onSave(next)
-        }}
-      />
+      <div style={{ display: 'flex', gap: 'var(--s-2)', alignItems: 'center' }}>
+        <input
+          id={id}
+          type="date"
+          className="cs-input"
+          disabled={busy}
+          min={min || undefined}
+          max={max || undefined}
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value)
+            saveIfWhole(event.target.value)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              saveIfWhole(value)
+            }
+          }}
+          onBlur={() => {
+            if (isSavableDay(value)) save(value)
+            else if (!inFlight.current) setValue(storedValue)
+          }}
+        />
+        {stored ? (
+          <button
+            type="button"
+            className="cs-btn cs-btn-sm"
+            disabled={busy}
+            aria-label={clearLabel}
+            onClick={() => save('')}
+          >
+            {t('editor.clearDate')}
+          </button>
+        ) : null}
+      </div>
       <p className="cs-hint">{hint}</p>
     </div>
   )
@@ -152,7 +205,12 @@ export default function ActivityEditor() {
       await work()
       await reload()
     } catch (failure) {
-      setNotice({ tone: 'bad', text: failure.message })
+      // The one refusal said in the teacher's language; every other as the server put it.
+      const text =
+        failure.details?.code === 'availability_range_invalid'
+          ? t('editor.rangeInvalid')
+          : failure.message
+      setNotice({ tone: 'bad', text })
       throw failure
     } finally {
       setBusy(false)
@@ -335,26 +393,24 @@ export default function ActivityEditor() {
             id="activity-available-from"
             label={t('editor.availableFromLabel')}
             hint={t('editor.availableFromHint')}
+            clearLabel={t('editor.clearFromLabel')}
             stored={availableFrom}
             toIso={fromInputToIso}
             max={isoToInput(availableUntil)}
             busy={busy}
-            onSave={(next) =>
-              act(() => api.updateActivity(activity.id, { availableFrom: next })).catch(() => {})
-            }
+            onSave={(next) => act(() => api.updateActivity(activity.id, { availableFrom: next }))}
           />
           <DateField
             key={`until-${availableUntil ?? ''}`}
             id="activity-available-until"
             label={t('editor.availableUntilLabel')}
             hint={t('editor.availableUntilHint')}
+            clearLabel={t('editor.clearUntilLabel')}
             stored={availableUntil}
             toIso={untilInputToIso}
             min={isoToInput(availableFrom)}
             busy={busy}
-            onSave={(next) =>
-              act(() => api.updateActivity(activity.id, { availableUntil: next })).catch(() => {})
-            }
+            onSave={(next) => act(() => api.updateActivity(activity.id, { availableUntil: next }))}
           />
         </div>
         <AvailabilityNote activity={activity} audience="teacher" style={{ marginTop: 'var(--s-3)' }} />
