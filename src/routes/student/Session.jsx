@@ -9,6 +9,7 @@ import { readAsDataUrl } from '../../lib/attachments'
 import { numberQuestions, questionName } from '../../lib/questionName'
 import { useI18n } from '../../lib/i18n'
 import { useMediaQuery } from '../../lib/useMediaQuery'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import QuestionList from '../../components/QuestionList'
 import QuestionPanel from '../../components/QuestionPanel'
 import TopBar from '../../components/TopBar'
@@ -555,6 +556,14 @@ export default function Session() {
           <h1 className="ws-head-title">
             {(loaded.activity && titleFor(loaded.activity, lang)) || t('ws.questionsFallback')}
           </h1>
+          {/* How long it stays open, while it is. A session carried on after the
+              end date shows nothing: the student audience never says "ended". */}
+          <AvailabilityNote
+            activity={loaded.activity}
+            audience="student"
+            variant="inline"
+            className="ws-head-due"
+          />
           {identity ? (
             <>
               <span className="ws-head-sep" aria-hidden="true">

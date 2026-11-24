@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import { api } from '../../lib/api'
 import { DEFAULT_MODE } from '../../lib/answer'
 import { useI18n } from '../../lib/i18n'
@@ -73,6 +74,8 @@ export default function PreviewActivity() {
           <p className="cs-lede">{t('preview.lede')}</p>
         </div>
       </header>
+
+      <AvailabilityNote activity={activity} audience="teacher" style={{ marginBottom: 'var(--s-3)' }} />
 
       {!question ? (
         <p className="cs-empty">{t('editor.noQuestions')}</p>

@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { useAuth } from '../../lib/auth'
+import { availabilityRefusal } from '../../lib/availability'
 import { useI18n } from '../../lib/i18n'
 import { titleFor } from '../../../shared/activity'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import TopicFilter from '../../components/TopicFilter'
 import { matchesTopic } from '../../lib/topics'
 
@@ -51,7 +53,7 @@ export default function StudentEntry() {
       .catch((failure) => {
         if (!alive) return
         setActivities([])
-        setError(failure.message)
+        setError(failure)
       })
 
     return () => {
@@ -70,10 +72,15 @@ export default function StudentEntry() {
       })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
-      setError(failure.message)
+      setError(failure)
       setBusy(false)
     }
   }
+
+  // Kept as the failure rather than its message, so an activity whose dates
+  // ran out while the list was open is said in the student's language (and
+  // follows the EN/TR switch). Anything else reads as the server put it.
+  const errorText = error ? (availabilityRefusal(error, t, lang) ?? error.message) : null
 
   const shown = (activities ?? []).filter((activity) => matchesTopic(activity, topic))
 
@@ -84,9 +91,9 @@ export default function StudentEntry() {
       {/* Nothing under the title for a signed-in student (3 Nov 2026 doc). */}
       {signedIn ? null : <p className="en-lede">{t('entry.pick.ledeAnon')}</p>}
 
-      {error ? (
+      {errorText ? (
         <p className="cs-note" data-tone="bad" role="alert">
-          {error}
+          {errorText}
         </p>
       ) : null}
 
@@ -116,7 +123,10 @@ export default function StudentEntry() {
                   disabled={busy}
                   onClick={() => begin(activity.id)}
                 >
-                  <span className="en-topic-name">{titleFor(activity, lang)}</span>
+                  <span className="en-topic-name">
+                    {titleFor(activity, lang)}
+                    <AvailabilityNote activity={activity} audience="student" variant="inline" />
+                  </span>
                   <span className="en-topic-meta mono">
                     {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
                     {activity.level ? `${activity.level} · ` : ''}

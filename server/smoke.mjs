@@ -1084,6 +1084,153 @@ try {
     secondActivity.body.activity.code !== activity.code,
   )
 
+  /**
+   * The availability range narrows publishing; it does not replace it. A
+   * published activity outside its dates is refused down the same doors a
+   * draft is, with a code the client can translate. Its own activity, so the
+   * counts further down are untouched, and its sessions are removed at the
+   * end for the same reason.
+   */
+  console.log('\nthe availability range narrows publishing')
+  const DAY = 86_400_000
+  const past = new Date(Date.now() - 3 * DAY).toISOString()
+  const yesterday = new Date(Date.now() - DAY).toISOString()
+  const tomorrow = new Date(Date.now() + DAY).toISOString()
+  const future = new Date(Date.now() + 3 * DAY).toISOString()
+
+  const ranged = await call('POST', '/api/activities', {
+    token: teacherToken,
+    body: { title: 'Ranged activity', availableFrom: '2026-12-01T05:00:00Z', availableUntil: null },
+  })
+  check('create accepts the range', ranged.status === 201)
+  check('and stores the dates normalised', ranged.body.activity.availableFrom === '2026-12-01T05:00:00.000Z')
+  check('a side sent as null is null', ranged.body.activity.availableUntil === null)
+  const rangedId = ranged.body.activity.id
+  const rangedCode = ranged.body.activity.code
+
+  const unranged = await call('POST', '/api/activities', { token: teacherToken, body: { title: 'No range' } })
+  check('a new activity without dates has both as null', unranged.body.activity.availableFrom === null && unranged.body.activity.availableUntil === null)
+  await call('DELETE', `/api/activities/${unranged.body.activity.id}`, { token: teacherToken })
+
+  check(
+    'create refuses an end before the start',
+    (await call('POST', '/api/activities', { token: teacherToken, body: { title: 'Backwards', availableFrom: future, availableUntil: past } })).status === 400,
+  )
+  check(
+    'an invalid date is a 400',
+    (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableFrom: 'next tuesday-ish' } })).status === 400,
+  )
+  check(
+    'so is a date that is not a string',
+    (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableUntil: 12 } })).status === 400,
+  )
+  check(
+    'an end equal to the start is refused in one patch',
+    (await call('PATCH', `/api/activities/${rangedId}`, { token: teacherToken, body: { availableFrom: future, availableUntil: future } })).status === 400,
+  )
+  const endBeforeStored = await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableUntil: '2026-11-30T05:00:00Z' },
+  })
+  check('and an end before the stored start is refused on its own', endBeforeStored.status === 400)
+  check('with a message that says so', /availableUntil/.test(endBeforeStored.body.error?.message ?? ''))
+  const cleared = await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableFrom: '' },
+  })
+  check('an empty string clears a side', cleared.status === 200 && cleared.body.activity.availableFrom === null)
+
+  await call('POST', `/api/activities/${rangedId}/questions`, {
+    token: teacherToken,
+    body: { kind: 'Explain', prompt: 'What does the range do?' },
+  })
+  const notYet = await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { status: 'published', availableFrom: tomorrow, availableUntil: future },
+  })
+  check('a published activity can open tomorrow', notYet.status === 200 && notYet.body.activity.availableFrom === tomorrow)
+
+  const isListed = async () =>
+    (await call('GET', '/api/activities/available')).body.activities.some((entry) => entry.id === rangedId)
+
+  check('before it opens it is not listed', !(await isListed()))
+  const upcomingByCode = await call('GET', `/api/activities/code/${rangedCode}`)
+  check('its code is refused like a draft', upcomingByCode.status === 400)
+  check('with a code the client can translate', upcomingByCode.body.error.details?.code === 'activity_not_started')
+  check(
+    'and both dates',
+    upcomingByCode.body.error.details.availableFrom === tomorrow && upcomingByCode.body.error.details.availableUntil === future,
+  )
+  const upcomingStart = await call('POST', '/api/sessions', { body: { consent: true, activityId: rangedId } })
+  check('it cannot be started', upcomingStart.status === 400 && upcomingStart.body.error.details?.code === 'activity_not_started')
+  const upcomingCodeStart = await call('POST', '/api/sessions', { body: { consent: true, code: rangedCode } })
+  check('nor started by its code', upcomingCodeStart.status === 400)
+  check(
+    'the teacher still reads it, and its preview',
+    (await call('GET', `/api/activities/${rangedId}`, { token: teacherToken })).status === 200 &&
+      (await call('GET', `/api/activities/${rangedId}/preview`, { token: teacherToken })).body.activity.availableFrom === tomorrow,
+  )
+
+  await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableFrom: past, availableUntil: yesterday },
+  })
+  check('after it closes it is not listed', !(await isListed()))
+  const endedByCode = await call('GET', `/api/activities/code/${rangedCode}`)
+  check('its code is refused', endedByCode.status === 400 && endedByCode.body.error.details?.code === 'activity_ended')
+  check('carrying the end date', endedByCode.body.error.details.availableUntil === yesterday)
+  check(
+    'it cannot be started',
+    (await call('POST', '/api/sessions', { body: { consent: true, activityId: rangedId } })).body.error?.details?.code === 'activity_ended',
+  )
+
+  await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableFrom: yesterday, availableUntil: future },
+  })
+  const openEntry = (await call('GET', '/api/activities/available')).body.activities.find((entry) => entry.id === rangedId)
+  check('inside the range it is listed', Boolean(openEntry))
+  check('with both dates', openEntry?.availableFrom === yesterday && openEntry?.availableUntil === future)
+  const openByCode = await call('GET', `/api/activities/code/${rangedCode}`)
+  check('its code resolves with both dates', openByCode.status === 200 && openByCode.body.activity.availableFrom === yesterday && openByCode.body.activity.availableUntil === future)
+  const rangedSession = await call('POST', '/api/sessions', { body: { consent: true, activityId: rangedId } })
+  check('it can be started', rangedSession.status === 201)
+  check(
+    'and the session carries both dates',
+    rangedSession.body.activity?.availableFrom === yesterday && rangedSession.body.activity?.availableUntil === future,
+  )
+
+  await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableUntil: new Date(Date.now() - 60_000).toISOString() },
+  })
+  const afterClose = await call('GET', `/api/sessions/${rangedSession.body.session.id}`)
+  check('a session started while open still loads after it closes', afterClose.status === 200)
+  check('with its activity', afterClose.body.activity?.id === rangedId)
+
+  const reopened = await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { availableFrom: null, availableUntil: null },
+  })
+  check('clearing both dates', reopened.body.activity.availableFrom === null && reopened.body.activity.availableUntil === null)
+  check('restores it to the list', await isListed())
+  check('and to its code', (await call('GET', `/api/activities/code/${rangedCode}`)).status === 200)
+
+  await call('PATCH', `/api/activities/${rangedId}`, {
+    token: teacherToken,
+    body: { status: 'draft', availableFrom: yesterday, availableUntil: future },
+  })
+  check('a draft inside its range is still not listed', !(await isListed()))
+  const draftInRange = await call('GET', `/api/activities/code/${rangedCode}`)
+  check(
+    'and is refused as a draft',
+    draftInRange.status === 400 && draftInRange.body.error.message === 'That activity is not open yet' && !draftInRange.body.error.details,
+  )
+
+  // Removed again: the assertions further down count sessions and activities.
+  await call('DELETE', `/api/sessions/${rangedSession.body.session.id}`)
+  check('and it is tidied away', (await call('DELETE', `/api/activities/${rangedId}`, { token: teacherToken })).status === 200)
+
   /* ================================================================== student */
 
   console.log('\nconsent gate')

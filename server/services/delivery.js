@@ -1,7 +1,7 @@
-import { mathToolsOpen, publicQuestion } from '../../shared/activity.js'
+import { availabilityState, mathToolsOpen, publicQuestion } from '../../shared/activity.js'
 import { withFallbacks } from '../../shared/tutor-scripts.js'
 import { displayCode } from './activities.js'
-import { notFound } from '../lib/http.js'
+import { badRequest, notFound } from '../lib/http.js'
 
 /**
  * What a student receives, as opposed to what a teacher authors.
@@ -45,6 +45,8 @@ export function publicActivity(activity, questions) {
     titleByLang: activity.titleByLang ?? {},
     blurb: activity.blurb,
     status: activity.status,
+    availableFrom: activity.availableFrom ?? null,
+    availableUntil: activity.availableUntil ?? null,
     questionCount: questions.length,
     questions: questions.map((question) => publicQuestion(question, activity)),
     /**
@@ -54,6 +56,35 @@ export function publicActivity(activity, questions) {
      */
     mathToolsOpen: mathToolsOpen(activity, questions),
   }
+}
+
+/**
+ * Refuses a published activity outside its availability range, down the same
+ * two doors that refuse a draft — the class code lookup and starting a session
+ * — and with the same status. Callers check the draft first, so a draft is
+ * "not open yet" whatever its dates say.
+ *
+ * `details.code` is what the client translates from; the English message is
+ * for anything that only reads `message`. Both dates travel so the client can
+ * say which day in the student's own timezone. A session that is already
+ * running is never checked against this — see sessionPayload in
+ * routes/sessions.js — the same way it outlives unpublishing.
+ */
+export function assertWithinAvailability(activity, now = Date.now()) {
+  const state = availabilityState(activity, now)
+  if (state === 'open') return
+
+  const details = {
+    code: state === 'upcoming' ? 'activity_not_started' : 'activity_ended',
+    availableFrom: activity.availableFrom ?? null,
+    availableUntil: activity.availableUntil ?? null,
+  }
+  throw badRequest(
+    state === 'upcoming'
+      ? `That activity opens on ${activity.availableFrom}`
+      : 'That activity has closed',
+    details,
+  )
 }
 
 /**
@@ -125,11 +156,19 @@ export async function resolveQuestion(store, session, questionId) {
  * not having one.
  */
 export async function studentActivities(store, user) {
-  const activities = await store.activities.list(
-    user?.teacherId
-      ? { ownerId: user.teacherId, status: 'published' }
-      : { status: 'published' },
-  )
+  /**
+   * Published and inside its availability range — see availabilityState in
+   * shared/activity.js. Filtered here rather than in the store query, so the
+   * memory and Mongo stores do not each have to learn date comparisons.
+   */
+  const at = Date.now()
+  const activities = (
+    await store.activities.list(
+      user?.teacherId
+        ? { ownerId: user.teacherId, status: 'published' }
+        : { status: 'published' },
+    )
+  ).filter((activity) => availabilityState(activity, at) === 'open')
 
   /**
    * Which of these a signed-in student already has work in, so the list can say
@@ -154,6 +193,8 @@ export async function studentActivities(store, user) {
        */
       topic: activity.topic ?? null,
       level: activity.level ?? '',
+      availableFrom: activity.availableFrom ?? null,
+      availableUntil: activity.availableUntil ?? null,
       questionCount: await store.questions.count({ activityId: activity.id }),
     })),
   )

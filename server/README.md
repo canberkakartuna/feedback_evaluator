@@ -210,10 +210,10 @@ from another's list.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/activities` | Everything in scope, each with a `questionCount` |
-| `POST` | `/api/activities` | `{ title, blurb? }` → 201. Created as a **draft**, invisible to students until published |
+| `POST` | `/api/activities` | `{ title, blurb?, availableFrom?, availableUntil? }` → 201. Created as a **draft**, invisible to students until published |
 | `GET` | `/api/activities/:id` | The authoring view: full questions, **mark scheme and hints included** |
 | `GET` | `/api/activities/:id/preview` | The same activity exactly as a student receives it |
-| `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status? }`. Publishing an activity with no questions is a 400 |
+| `PATCH` | `/api/activities/:id` | `{ title?, blurb?, status?, availableFrom?, availableUntil? }`. Each date is `null` or an ISO timestamp; the end must be after the start. Outside the range a published activity is closed to new students. Publishing an activity with no questions is a 400 |
 | `DELETE` | `/api/activities/:id` | 409 once any student has worked on it — unpublish instead |
 | `POST` | `/api/activities/:id/questions` | `{ prompt?, image?, answer?, answerImage?, kind?, workingExpected?, stimulus?, rubric?, tutor? }`. **A prompt or an image — at least one** |
 | `PATCH` | `/api/activities/:id/questions/:qid` | Same fields, all optional |

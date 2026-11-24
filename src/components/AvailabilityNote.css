@@ -1,0 +1,31 @@
+/* The one-line form of components/AvailabilityNote: under a tile's name, under
+   an activity in the student's list, beside the title in the workspace header.
+   Quiet by default; ochre when the end is close, red once it has passed — the
+   same tones as .cs-note in routes/console.css, as text rather than a box. */
+.av-inline {
+  display: block;
+  font-family: var(--f-mono);
+  font-size: var(--t-11);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--graphite);
+}
+
+.av-inline[data-tone='warn'] {
+  color: var(--stamp);
+  font-weight: 600;
+}
+
+.av-inline[data-tone='bad'] {
+  color: var(--margin);
+}
+
+/* In the workspace header (routes/student/Session), beside the title: it gives
+   way before the title does, like the nickname next to it. */
+.av-inline.ws-head-due {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

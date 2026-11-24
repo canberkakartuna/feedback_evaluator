@@ -389,6 +389,26 @@ export function parseActivityInput(body, { forCreate } = {}) {
     } else patch.mathTools = body.mathTools
   }
 
+  /**
+   * When a published activity is open — see availabilityState in
+   * shared/activity.js. Each side is optional: `null` or `''` clears it, and a
+   * date is stored as an ISO instant. Whether the end is after the start
+   * depends on what is already stored when only one side is sent, so that is
+   * checked on the merge — see assertAvailabilityRange.
+   */
+  for (const field of ['availableFrom', 'availableUntil']) {
+    const value = body?.[field]
+    if (value === undefined) continue
+    if (value === null || value === '') {
+      patch[field] = null
+    } else if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+      throw badRequest(`"${field}" must be null or a date`)
+    } else {
+      patch[field] = new Date(value).toISOString()
+    }
+  }
+  if (forCreate) assertAvailabilityRange(patch)
+
   if (body?.status !== undefined) {
     if (!isActivityStatus(body.status)) throw badRequest('"status" must be "draft" or "published"')
     patch.status = body.status
@@ -411,6 +431,18 @@ export function parseActivityInput(body, { forCreate } = {}) {
   }
 
   return patch
+}
+
+/**
+ * An availability range has to end after it starts. Takes the activity as it
+ * will be stored — on a patch, what was there merged with what was sent — so
+ * moving one side past the other is caught whichever side moved.
+ */
+export function assertAvailabilityRange(activity) {
+  const { availableFrom, availableUntil } = activity ?? {}
+  if (availableFrom && availableUntil && Date.parse(availableUntil) <= Date.parse(availableFrom)) {
+    throw badRequest('"availableUntil" must be after "availableFrom"')
+  }
 }
 
 /* ------------------------------------------------------------- class codes */
@@ -460,7 +492,7 @@ export async function ensureClassCode(store, activity) {
 
 /* ----------------------------------------------------------------- documents */
 
-export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', tutorPrompt = '', mathTools = 'auto', code, ownerId, status = 'draft' }) {
+export function newActivity({ title, titleByLang = {}, blurb = '', topic = null, level = '', tutorPrompt = '', mathTools = 'auto', availableFrom = null, availableUntil = null, code, ownerId, status = 'draft' }) {
   const at = now()
   return {
     id: id('act'),
@@ -472,6 +504,8 @@ export function newActivity({ title, titleByLang = {}, blurb = '', topic = null,
     level,
     tutorPrompt,
     mathTools,
+    availableFrom,
+    availableUntil,
     ownerId,
     status,
     createdAt: at,

@@ -1,12 +1,25 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LIMITS, TOPICS, titleFor } from '../../../shared/activity'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import BilingualField from '../../components/BilingualField'
 import { api } from '../../lib/api'
+import { liveState } from '../../lib/availability'
 import { translate, useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import TopicFilter from '../../components/TopicFilter'
 import { matchesTopic } from '../../lib/topics'
+
+/**
+ * The tile's pill for each liveState (src/lib/availability.js): a published
+ * activity outside its dates is closed to students, so it is not shown as Open.
+ */
+const LIVE_PILL = {
+  draft: { key: 'activities.draft', tone: 'draft' },
+  open: { key: 'activities.open', tone: 'live' },
+  upcoming: { key: 'activities.scheduled', tone: 'quiet' },
+  ended: { key: 'activities.ended', tone: 'quiet' },
+}
 
 /**
  * Every activity this teacher can reach, and the form that makes another.
@@ -179,36 +192,40 @@ export default function Activities() {
               <p className="cs-empty">{t('activities.noneInTopic')}</p>
             ) : (
               <div className="cs-grid">
-                {shown.map((activity) => (
-                  <Link
-                    key={activity.id}
-                    className="cs-tile"
-                    to={`/teacher/activities/${activity.id}`}
-                  >
-                    <div className="cs-tile-top">
-                      <span
-                        className="cs-pill"
-                        data-tone={activity.status === 'published' ? 'live' : 'draft'}
-                      >
-                        {activity.status === 'published'
-                          ? t('activities.open')
-                          : t('activities.draft')}
-                      </span>
-                      <span className="cs-tile-meta mono">
-                        {t('common.questions', { count: activity.questionCount })}
-                      </span>
-                    </div>
+                {shown.map((activity) => {
+                  const pill = LIVE_PILL[liveState(activity)]
+                  return (
+                    <Link
+                      key={activity.id}
+                      className="cs-tile"
+                      to={`/teacher/activities/${activity.id}`}
+                    >
+                      <div className="cs-tile-top">
+                        <span className="cs-pill" data-tone={pill.tone}>
+                          {t(pill.key)}
+                        </span>
+                        <span className="cs-tile-meta mono">
+                          {t('common.questions', { count: activity.questionCount })}
+                        </span>
+                      </div>
 
-                    <h3 className="cs-tile-name">{titleFor(activity, lang)}</h3>
-                    {activity.blurb ? <p className="cs-tile-meta">{activity.blurb}</p> : null}
+                      <h3 className="cs-tile-name">{titleFor(activity, lang)}</h3>
+                      {activity.blurb ? <p className="cs-tile-meta">{activity.blurb}</p> : null}
 
-                    <p className="cs-tile-meta mono">
-                      {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
-                      {activity.level ? `${activity.level} · ` : ''}
-                      {activity.code}
-                    </p>
-                  </Link>
-                ))}
+                      <p className="cs-tile-meta mono">
+                        {activity.topic ? `${t(`topics.${activity.topic}`)} · ` : ''}
+                        {activity.level ? `${activity.level} · ` : ''}
+                        {activity.code}
+                      </p>
+                      <AvailabilityNote
+                        activity={activity}
+                        audience="teacher"
+                        variant="inline"
+                        style={{ marginTop: 'var(--s-1)' }}
+                      />
+                    </Link>
+                  )
+                })}
               </div>
             )}
           </>

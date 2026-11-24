@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { LIMITS, PROMPT_LANGS, TOPICS, isMathTools, promptFor, titleFor } from '../../../shared/activity'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import BilingualField from '../../components/BilingualField'
 import MathText from '../../components/MathText'
 import { api } from '../../lib/api'
+import { fromInputToIso, isoToInput, liveState, untilInputToIso } from '../../lib/availability'
 import { useI18n } from '../../lib/i18n'
 import { useAsync } from '../../lib/useAsync'
 import { initialNames } from '../../lib/wording'
@@ -57,6 +59,50 @@ function ActivityName({ activity, busy, onSave }) {
   )
 }
 
+/** The pill/eyebrow word for each liveState — see src/lib/availability.js. */
+const LIVE_LABEL = {
+  draft: 'activities.draft',
+  open: 'activities.open',
+  upcoming: 'activities.scheduled',
+  ended: 'activities.ended',
+}
+
+/**
+ * One end of the availability range: a native date input, saved when it loses
+ * focus rather than on every change. Typing a date fires a change per digit in
+ * some browsers (year 0002, 0020, 0202, 2026), and each of those is a valid
+ * date the server would store. Keyed by the stored value where it is used, so
+ * a reload after saving shows what the server kept; an empty box clears it.
+ */
+function DateField({ id, label, hint, stored, toIso, min, max, busy, onSave }) {
+  const [value, setValue] = useState(() => isoToInput(stored))
+
+  return (
+    // alignContent: a longer hint beside it must not stretch this box taller.
+    <div className="cs-field" style={{ maxWidth: '320px', alignContent: 'start' }}>
+      <label className="cs-label" htmlFor={id}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type="date"
+        className="cs-input"
+        disabled={busy}
+        min={min || undefined}
+        max={max || undefined}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={() => {
+          const next = toIso(value)
+          if (value === isoToInput(stored) || (value && !next)) return
+          onSave(next)
+        }}
+      />
+      <p className="cs-hint">{hint}</p>
+    </div>
+  )
+}
+
 /**
  * One activity: its settings, how students reach it, and its questions.
  *
@@ -93,6 +139,11 @@ export default function ActivityEditor() {
 
   const { activity, questions } = data
   const published = activity.status === 'published'
+  // Published but outside its dates is closed to students — the explainer
+  // below must not call that open. Draft still comes first.
+  const live = liveState(activity)
+  const availableFrom = activity.availableFrom ?? null
+  const availableUntil = activity.availableUntil ?? null
 
   const act = async (work) => {
     setBusy(true)
@@ -134,7 +185,7 @@ export default function ActivityEditor() {
         <div>
           <p className="eyebrow">
             <Link to="/teacher">{t('editor.breadcrumb')}</Link> ·{' '}
-            {published ? t('activities.open') : t('activities.draft')}
+            {t(LIVE_LABEL[live])}
           </p>
           <h1 className="cs-title">{titleFor(activity, lang)}</h1>
           {activity.blurb ? <p className="cs-lede">{activity.blurb}</p> : null}
@@ -168,7 +219,16 @@ export default function ActivityEditor() {
       ) : null}
 
       <section className="cs-card">
-        {published ? (
+        {live === 'upcoming' || live === 'ended' ? (
+          <>
+            <p className="eyebrow">
+              {live === 'upcoming' ? t('editor.scheduledHead') : t('editor.endedHead')}
+            </p>
+            <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
+              {live === 'upcoming' ? t('editor.scheduledHint') : t('editor.endedHint')}
+            </p>
+          </>
+        ) : published ? (
           <>
             <p className="eyebrow">{t('editor.openHead')}</p>
             <p className="cs-hint" style={{ marginTop: 'var(--s-1)' }}>
@@ -265,6 +325,39 @@ export default function ActivityEditor() {
           <p className="cs-hint">{t('editor.mathToolsHint')}</p>
         </div>
         </div>
+
+        {/* When a published activity is open — availabilityState in
+            shared/activity.js. Each end saves on its own; the server refuses
+            an end before the start, and that refusal shows in the notice above. */}
+        <div className="cs-row" style={{ marginTop: 'var(--s-4)' }}>
+          <DateField
+            key={`from-${availableFrom ?? ''}`}
+            id="activity-available-from"
+            label={t('editor.availableFromLabel')}
+            hint={t('editor.availableFromHint')}
+            stored={availableFrom}
+            toIso={fromInputToIso}
+            max={isoToInput(availableUntil)}
+            busy={busy}
+            onSave={(next) =>
+              act(() => api.updateActivity(activity.id, { availableFrom: next })).catch(() => {})
+            }
+          />
+          <DateField
+            key={`until-${availableUntil ?? ''}`}
+            id="activity-available-until"
+            label={t('editor.availableUntilLabel')}
+            hint={t('editor.availableUntilHint')}
+            stored={availableUntil}
+            toIso={untilInputToIso}
+            min={isoToInput(availableFrom)}
+            busy={busy}
+            onSave={(next) =>
+              act(() => api.updateActivity(activity.id, { availableUntil: next })).catch(() => {})
+            }
+          />
+        </div>
+        <AvailabilityNote activity={activity} audience="teacher" style={{ marginTop: 'var(--s-3)' }} />
 
         <TutorGuidance
           key={activity.tutorPrompt ?? ''}

@@ -434,6 +434,19 @@ const en = {
     labellingOff: 'off',
   },
 
+  /** The availability range of an activity — components/AvailabilityNote and src/lib/availability.js. */
+  availability: {
+    untilDays_one: 'Available until {date} · {count} day left',
+    untilDays_other: 'Available until {date} · {count} days left',
+    untilLastDay: 'Available until {date} · last day',
+    opensOn: 'Opens on {date}',
+    endedOn: 'Ended on {date}',
+    refusedNotStarted: 'This activity opens on {date}.',
+    refusedNotStartedNoDate: 'This activity is not open yet.',
+    refusedEnded: 'This activity closed on {date}.',
+    refusedEndedNoDate: 'This activity has closed.',
+  },
+
   activities: {
     eyebrow: 'Authoring',
     title: 'Activities',
@@ -456,6 +469,9 @@ const en = {
     noneInTopic: 'Nothing on that topic yet.',
     open: 'Open',
     draft: 'Draft',
+    /** Published, but outside its availability range — see liveState in src/lib/availability.js. */
+    scheduled: 'Scheduled',
+    ended: 'Ended',
     filterLabel: 'Filter by topic',
   },
 
@@ -471,6 +487,14 @@ const en = {
     draftHead: 'Not open yet',
     draftHintEmpty: 'Students cannot see this. Add at least one question, then publish it.',
     draftHint: 'Students cannot see this yet. Publish it and it appears in their list.',
+    scheduledHead: 'Published, opens later',
+    scheduledHint: 'Students cannot see it or use its class code before its start date. It opens by itself on that day.',
+    endedHead: 'Published, but its dates are over',
+    endedHint: 'Its end date has passed, so it is gone from the students’ list and its class code is refused. Move or clear the end date to open it again.',
+    availableFromLabel: 'Available from',
+    availableFromHint: 'Optional. Empty means open as soon as it is published.',
+    availableUntilLabel: 'Available until',
+    availableUntilHint: 'Optional, and the whole last day counts. Empty means open until you close it.',
     topicLabel: 'Topic',
     topicHint: 'What students and teachers filter the list by.',
     topicSaving: 'Saving…',
@@ -1335,6 +1359,18 @@ const tr = {
     labellingOff: 'kapalı',
   },
 
+  availability: {
+    untilDays_one: '{date} tarihine kadar açık · {count} gün kaldı',
+    untilDays_other: '{date} tarihine kadar açık · {count} gün kaldı',
+    untilLastDay: '{date} tarihine kadar açık · son gün',
+    opensOn: '{date} tarihinde açılıyor',
+    endedOn: '{date} tarihinde sona erdi',
+    refusedNotStarted: 'Bu etkinlik {date} tarihinde açılıyor.',
+    refusedNotStartedNoDate: 'Bu etkinlik henüz açık değil.',
+    refusedEnded: 'Bu etkinlik {date} tarihinde kapandı.',
+    refusedEndedNoDate: 'Bu etkinlik kapandı.',
+  },
+
   activities: {
     eyebrow: 'Hazırlama',
     title: 'Etkinlikler',
@@ -1357,6 +1393,8 @@ const tr = {
     noneInTopic: 'Bu konuda henüz etkinlik yok.',
     open: 'Açık',
     draft: 'Taslak',
+    scheduled: 'Zamanlandı',
+    ended: 'Sona erdi',
     filterLabel: 'Konuya göre süz',
   },
 
@@ -1372,6 +1410,14 @@ const tr = {
     draftHead: 'Henüz açık değil',
     draftHintEmpty: 'Öğrenciler bunu göremez. En az bir soru ekleyin, sonra yayımlayın.',
     draftHint: 'Öğrenciler bunu henüz göremez. Yayımlayın ve listelerinde görünsün.',
+    scheduledHead: 'Yayımlandı, daha sonra açılacak',
+    scheduledHint: 'Başlangıç tarihinden önce öğrenciler bunu göremez ve sınıf kodunu kullanamaz. O gün kendiliğinden açılır.',
+    endedHead: 'Yayımlandı, ancak tarihleri geçti',
+    endedHint: 'Bitiş tarihi geçtiği için öğrencilerin listesinden kalktı ve sınıf kodu reddediliyor. Yeniden açmak için bitiş tarihini ileri alın ya da silin.',
+    availableFromLabel: 'Açılış tarihi',
+    availableFromHint: 'İsteğe bağlı. Boş bırakılırsa yayımlandığı anda açılır.',
+    availableUntilLabel: 'Kapanış tarihi',
+    availableUntilHint: 'İsteğe bağlı; son günün tamamı dahildir. Boş bırakılırsa siz kapatana kadar açık kalır.',
     topicLabel: 'Konu',
     topicHint: 'Öğrencilerin ve öğretmenlerin listeyi süzdüğü ölçüt.',
     topicSaving: 'Kaydediliyor…',

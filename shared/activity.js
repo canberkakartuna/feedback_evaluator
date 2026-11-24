@@ -7,7 +7,8 @@
  * has to take.
  *
  *   activity  { id, code, title, titleByLang{}, blurb, topic, level, ownerId,
- *               status, tutorPrompt, mathTools, createdAt, updatedAt }
+ *               status, tutorPrompt, mathTools, availableFrom, availableUntil,
+ *               createdAt, updatedAt }
  *   question  { id, activityId, code, kind, prompt, promptByLang{}, image,
  *               stimulus, answer, answerImage, workingExpected, rubric[],
  *               tutor{}, position, ... }
@@ -53,6 +54,44 @@ import { hasMath } from './latex.js'
 export const ACTIVITY_STATUSES = ['draft', 'published']
 
 export const isActivityStatus = (value) => ACTIVITY_STATUSES.includes(value)
+
+/**
+ * When a published activity is open to students. `availableFrom` and
+ * `availableUntil` are each `null` or an ISO timestamp, and either may be set
+ * alone; a missing side is unbounded. The authoring form sends the start and
+ * end of the chosen days in the teacher's timezone, so these are plain
+ * instants and nothing here needs to know about timezones. Both boundary
+ * instants count as open.
+ *
+ * Status is not read here: a draft is closed whatever its dates say, and the
+ * callers check that first. Activities saved before the range existed have
+ * neither field and are always open, so nothing has to be migrated.
+ */
+export function availabilityState(activity, now = Date.now()) {
+  const at = now instanceof Date ? now.getTime() : now
+  const from = activity?.availableFrom ? Date.parse(activity.availableFrom) : NaN
+  const until = activity?.availableUntil ? Date.parse(activity.availableUntil) : NaN
+  if (!Number.isNaN(from) && at < from) return 'upcoming'
+  if (!Number.isNaN(until) && at > until) return 'ended'
+  return 'open'
+}
+
+/**
+ * Calendar days from `now` to `availableUntil`, in the runtime's timezone: 0
+ * on the last day, 1 the day before, negative once it has passed, `null` with
+ * no end date. Counted from the local dates rather than from milliseconds, so
+ * late evening against an end-of-day close is still 0 and a 23- or 25-hour
+ * day across a clock change counts as one day.
+ */
+export function daysLeft(availableUntil, now = Date.now()) {
+  if (!availableUntil) return null
+  const end = new Date(availableUntil)
+  if (Number.isNaN(end.getTime())) return null
+  const start = new Date(now)
+  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate())
+  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())
+  return Math.round((endDay - startDay) / 86_400_000)
+}
 
 /**
  * Whether the maths row over a student's text boxes (src/components/MathTools.jsx)

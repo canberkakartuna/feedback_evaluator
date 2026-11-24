@@ -5,6 +5,7 @@ import { objectKey, storage } from '../lib/storage.js'
 import { removeBytes } from './uploads.js'
 import {
   activityScope,
+  assertAvailabilityRange,
   assertCanAuthor,
   createActivity,
   displayCode,
@@ -15,7 +16,7 @@ import {
   parseActivityInput,
   parseQuestionInput,
 } from '../services/activities.js'
-import { studentActivities } from '../services/delivery.js'
+import { assertWithinAvailability, studentActivities } from '../services/delivery.js'
 import { requireAuth, requireRole } from '../lib/auth.js'
 import { ApiError, badRequest, id, notFound, now, route } from '../lib/http.js'
 
@@ -186,6 +187,7 @@ export function activityRoutes(store) {
       const activity = await store.activities.findByCode(req.params.code)
       if (!activity) throw notFound('No activity has that class code')
       if (activity.status !== 'published') throw badRequest('That activity is not open yet')
+      assertWithinAvailability(activity)
 
       res.json({
         activity: {
@@ -196,6 +198,8 @@ export function activityRoutes(store) {
           blurb: activity.blurb,
           topic: activity.topic ?? null,
           level: activity.level ?? '',
+          availableFrom: activity.availableFrom ?? null,
+          availableUntil: activity.availableUntil ?? null,
           questionCount: await store.questions.count({ activityId: activity.id }),
         },
       })
@@ -284,6 +288,8 @@ export function activityRoutes(store) {
           blurb: activity.blurb,
           topic: activity.topic ?? null,
           status: activity.status,
+          availableFrom: activity.availableFrom ?? null,
+          availableUntil: activity.availableUntil ?? null,
           questionCount: questions.length,
           questions: questions.map((question, index) =>
             publicQuestion({ ...question, code: displayCode(question, index) }, activity),
@@ -302,6 +308,7 @@ export function activityRoutes(store) {
 
       const patch = parseActivityInput(req.body)
       if (!Object.keys(patch).length) throw badRequest('Nothing to update')
+      assertAvailabilityRange({ ...activity, ...patch })
 
       /**
        * Publishing an empty activity is refused rather than allowed and left to

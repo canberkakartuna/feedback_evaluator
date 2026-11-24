@@ -4,7 +4,7 @@ import { isStaff } from '../../shared/roles.js'
 import { cleanNickname } from '../../shared/session.js'
 import { canWithdrawConsent, hasCurrentConsent, hasWithdrawnConsent } from '../services/users.js'
 import { removeSessionData } from '../services/withdrawal.js'
-import { activityQuestions, publicActivity } from '../services/delivery.js'
+import { activityQuestions, assertWithinAvailability, publicActivity } from '../services/delivery.js'
 import {
   ApiError,
   badRequest,
@@ -53,6 +53,7 @@ export function sessionRoutes(store) {
 
     if (!activity) throw notFound(code ? 'No activity has that class code' : 'No such activity')
     if (activity.status !== 'published') throw badRequest('That activity is not open yet')
+    assertWithinAvailability(activity)
 
     return activity
   }

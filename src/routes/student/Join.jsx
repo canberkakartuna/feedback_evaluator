@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import AvailabilityNote from '../../components/AvailabilityNote'
 import { api } from '../../lib/api'
+import { availabilityRefusal } from '../../lib/availability'
 import { useI18n } from '../../lib/i18n'
 import { titleFor } from '../../../shared/activity'
 
@@ -38,6 +40,11 @@ export default function Join() {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
+  // The failure itself is kept, not its message, so a refusal for being
+  // outside the activity's dates is said in the student's language — and
+  // follows the EN/TR switch. Anything else reads exactly as the server put it.
+  const errorText = error ? (availabilityRefusal(error, t, lang) ?? error.message) : null
+
   const look = useCallback(async (candidate) => {
     const wanted = candidate.trim()
     if (!wanted) return
@@ -50,7 +57,7 @@ export default function Join() {
       setActivity(found)
       setPhase('found')
     } catch (failure) {
-      setError(failure.message)
+      setError(failure)
       setPhase('ask')
     } finally {
       setBusy(false)
@@ -75,7 +82,7 @@ export default function Join() {
       })
       navigate(`/work/${session.id}`, { replace: true })
     } catch (failure) {
-      setError(failure.message)
+      setError(failure)
       setBusy(false)
       // The usual cause is a teacher closing the activity between the lookup and
       // the press, and the code is the thing they will want to try again.
@@ -102,9 +109,15 @@ export default function Join() {
           </p>
         </div>
 
-        {error ? (
+        <AvailabilityNote
+          activity={activity}
+          audience="student"
+          style={{ marginTop: 'var(--s-3)' }}
+        />
+
+        {errorText ? (
           <p className="cs-note" data-tone="bad" role="alert">
-            {error}
+            {errorText}
           </p>
         ) : null}
 
@@ -166,9 +179,9 @@ export default function Join() {
           />
         </div>
 
-        {error ? (
+        {errorText ? (
           <p className="cs-note" data-tone="bad" role="alert">
-            {error}
+            {errorText}
           </p>
         ) : null}
 

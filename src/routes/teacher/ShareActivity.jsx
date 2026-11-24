@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import AvailabilityNote from '../../components/AvailabilityNote'
+import { liveState } from '../../lib/availability'
 import { useT } from '../../lib/i18n'
 
 /**
@@ -93,6 +95,12 @@ export default function ShareActivity({ activity, published }) {
       <p className="cs-hint" style={{ marginTop: 'var(--s-3)', marginBottom: 0 }}>
         {published ? t('editor.shareHint') : t('editor.shareDraft')}
       </p>
+      {/* A code handed out for an activity that has not opened, or has closed,
+          is refused — worth knowing before reading it out. Only then: the end
+          date of an open one is already under the date fields above. */}
+      {published && ['upcoming', 'ended'].includes(liveState(activity)) ? (
+        <AvailabilityNote activity={activity} audience="teacher" style={{ marginTop: 'var(--s-3)' }} />
+      ) : null}
     </section>
   )
 }
