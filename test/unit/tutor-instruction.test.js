@@ -23,13 +23,13 @@ const base = { question, answer: null, action: null, lang: 'en' }
 
 test('with no system prompt the default one leads', () => {
   const text = systemInstruction({ ...base, systemPrompt: null })
-  assert.match(text, /^You are a patient secondary-school tutor/)
+  assert.match(text, /^Sen, üniversite düzeyinde Matematik I dersi veren/)
 })
 
 test('a written system prompt replaces the default and comes first', () => {
   const text = systemInstruction({ ...base, systemPrompt: '  Be brief and kind.  ' })
   assert.ok(text.startsWith('Be brief and kind.\n\nRules for this reply'))
-  assert.doesNotMatch(text, /You are a patient secondary-school tutor/)
+  assert.doesNotMatch(text, /Sen, üniversite düzeyinde Matematik I dersi veren/)
 })
 
 test('house rules, the question and the task all follow, in that order', () => {
@@ -82,6 +82,6 @@ test('an activity prompt is added after the global prompt and before the house r
 
 test('an activity prompt does not displace the default prompt either', () => {
   const text = systemInstruction({ ...base, systemPrompt: null, activityPrompt: 'Use metric units.' })
-  assert.match(text, /^You are a patient secondary-school tutor/)
+  assert.match(text, /^Sen, üniversite düzeyinde Matematik I dersi veren/)
   assert.match(text, /Use metric units\./)
 })

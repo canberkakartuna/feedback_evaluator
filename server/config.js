@@ -79,13 +79,14 @@ export const envFile = (() => {
  */
 function openaiConfig() {
   /**
-   * `gpt-5-mini`: a reasoning model — noticeably better tutoring than the
+   * `gpt-5.4-mini`: a reasoning model — noticeably better tutoring than the
    * gpt-4o-mini this ran on before, reads the question images well, and still
    * cheap enough for a classroom. `gpt-5` is the premium step up. Pin an exact
    * dated snapshot while a study is running and the replies have to stay
    * comparable; the bare name is an alias that moves to the newest snapshot.
    */
-  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-5-mini'
+  // gpt-5.4-mini-2026-03-17 — in use since 2026-11-24
+  const model = process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini'
   const reasoningModel = /^(o\d|gpt-5)/.test(model)
 
   const temperatureEnv = process.env.OPENAI_TEMPERATURE?.trim()
