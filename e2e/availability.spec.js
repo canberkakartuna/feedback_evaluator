@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { seedClass } from './support/seed.mjs'
+import { api, seedClass } from './support/seed.mjs'
 import { signInFirstTime } from './support/student.mjs'
 
 /**
@@ -16,34 +16,41 @@ import { signInFirstTime } from './support/student.mjs'
  * days the date inputs speak.
  */
 
-/** `YYYY-MM-DD` for today plus `offset` days, from local date parts. */
-function inputDay(offset) {
-  const date = new Date()
-  date.setDate(date.getDate() + offset)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+/**
+ * Availability dates are days in Turkey time (AVAILABILITY_TIME_ZONE in
+ * shared/activity.js), whatever zone this machine or the browser is in, so
+ * every expected day and count below is worked out in Istanbul.
+ */
+const ZONE = 'Europe/Istanbul'
+const DAY_MS = 86_400_000
+
+/** Today's date in Istanbul as a UTC-midnight timestamp, read now. */
+function istanbulToday() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', { timeZone: ZONE, year: 'numeric', month: 'numeric', day: 'numeric' })
+      .formatToParts(new Date())
+      .map((part) => [part.type, Number(part.value)]),
+  )
+  return Date.UTC(parts.year, parts.month - 1, parts.day)
 }
 
-/** The local Date a `YYYY-MM-DD` value names. */
-const dayOf = (value) => {
-  const [y, m, d] = value.split('-').map(Number)
-  return new Date(y, m - 1, d)
-}
+/** `YYYY-MM-DD` for today in Istanbul plus `offset` days. */
+const inputDay = (offset) => new Date(istanbulToday() + offset * DAY_MS).toISOString().slice(0, 10)
+
+/** A `YYYY-MM-DD` value as a UTC-midnight timestamp. */
+const dayOf = (value) => Date.parse(`${value}T00:00:00Z`)
 
 /** What src/lib/availability.js formatDay shows in English for that day. */
 const shownDay = (value) =>
-  dayOf(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  new Date(dayOf(value)).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
 /**
  * The line the note should read for an end date typed as `value`, worked out
  * now — at assertion time — rather than when the test started, so a run that
- * crosses midnight expects the count the page will actually show.
+ * crosses midnight in Istanbul expects the count the page will actually show.
  */
 function untilLine(value) {
-  const today = new Date()
-  const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
-  const end = dayOf(value)
-  const days = Math.round((Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()) - start) / 86_400_000)
+  const days = Math.round((dayOf(value) - istanbulToday()) / DAY_MS)
   const tail = days <= 0 ? 'last day' : `${days} ${days === 1 ? 'day' : 'days'} left`
   return `Due date ${shownDay(value)} · ${tail}`
 }
@@ -172,4 +179,36 @@ test('an emptied date box is put back, never saved as no date', async ({ page })
   await page.reload()
   await expect(page.getByLabel('Available until', { exact: true })).toHaveValue(end)
   expect(patches).toBe(0)
+})
+
+test('a teacher in London and a reader in Istanbul see the same day', async ({ browser }) => {
+  // The report: an end date of 1 Dec picked in London showed as 2 Dec in Turkey.
+  const { teacher, activity } = await seedClass()
+  const end = inputDay(6)
+
+  const london = await browser.newContext({ timezoneId: 'Europe/London' })
+  await london.addInitScript((token) => localStorage.setItem('feedback-evaluator.token', token), teacher.token)
+  const editor = await london.newPage()
+  await editor.goto(`/teacher/activities/${activity.id}`)
+  await expect(editor.getByText('Dates follow Turkey time (GMT+3).')).toBeVisible()
+  await setDate(editor, 'Available until', end)
+
+  // Stored as the end of that day in Istanbul, not in London.
+  const { activity: stored } = await api('GET', `/api/activities/${activity.id}`, { token: teacher.token })
+  expect(stored.availableUntil).toBe(new Date(`${end}T23:59:59.999+03:00`).toISOString())
+
+  // The London teacher's own editor: the same day in the box and the note.
+  await editor.reload()
+  await expect(editor.getByLabel('Available until', { exact: true })).toHaveValue(end)
+  await expectUntil(editor.getByRole('status'), end)
+
+  // Istanbul: the same day on the teacher's tiles.
+  const istanbul = await browser.newContext({ timezoneId: 'Europe/Istanbul' })
+  await istanbul.addInitScript((token) => localStorage.setItem('feedback-evaluator.token', token), teacher.token)
+  const tiles = await istanbul.newPage()
+  await tiles.goto('/teacher')
+  await expectUntil(tiles.getByRole('link', { name: /Ratio practice/ }), end)
+
+  await london.close()
+  await istanbul.close()
 })

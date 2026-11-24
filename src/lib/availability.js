@@ -1,29 +1,37 @@
-import { availabilityState } from '../../shared/activity.js'
+import {
+  AVAILABILITY_TIME_ZONE,
+  availabilityDay,
+  availabilityInstant,
+  availabilityState,
+} from '../../shared/activity.js'
 
 /**
  * The date half of an activity's availability range, on the client.
  *
  * The teacher picks days with a native `<input type="date">`, which speaks
  * `YYYY-MM-DD` and nothing else; the API stores instants. These convert between
- * the two in the browser's own timezone — the start of the chosen first day and
- * the end of the chosen last day — so the last day a teacher picks is a day
- * students still have, all of it. What the instants mean (open, upcoming,
- * ended) is availabilityState in shared/activity.js, not here.
+ * the two as days in AVAILABILITY_TIME_ZONE (Turkey time, shared/activity.js) —
+ * the start of the chosen first day and the end of the chosen last day there —
+ * never in the browser's own zone. A teacher abroad picking 1 December stores
+ * the same instant as one in Istanbul, and every reader sees 1 December. What
+ * the instants mean (open, upcoming, ended) is availabilityState, not here.
  *
  * Pure and free of React, so test/unit/ can import it under plain Node.
  */
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
 
-/** `'2026-11-30'` → a local Date at that day's start, or null. */
-function localDay(value) {
+/** `'2026-11-30'` → `{ year, month, day }` (month 1–12), or null for anything that is not a real day. */
+function parseDay(value) {
   const match = DAY.exec(value ?? '')
   if (!match) return null
-  const [, y, m, d] = match.map(Number)
-  const date = new Date(y, m - 1, d)
-  // new Date(2026, 1, 31) quietly becomes 3 March; a day that does not exist is no day.
-  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null
-  return date
+  const [year, month, day] = match.slice(1).map(Number)
+  // 31 February would quietly become 3 March; a day that does not exist is no day.
+  const check = new Date(Date.UTC(year, month - 1, day))
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+    return null
+  }
+  return { year, month, day }
 }
 
 /**
@@ -33,41 +41,39 @@ function localDay(value) {
  * each of those is a real day; this is what keeps them from being sent.
  */
 export function isSavableDay(value) {
-  const date = localDay(value)
-  return Boolean(date) && date.getFullYear() >= 2000 && date.getFullYear() <= 2100
+  const day = parseDay(value)
+  return Boolean(day) && day.year >= 2000 && day.year <= 2100
 }
 
-/** A date input's value → the ISO instant `availableFrom` stores: 00:00:00.000 local. */
+/** A date input's value → the ISO instant `availableFrom` stores: 00:00:00.000 of that day in Turkey. */
 export function fromInputToIso(value) {
-  const date = localDay(value)
-  return date ? date.toISOString() : null
+  const day = parseDay(value)
+  return day ? availabilityInstant(day.year, day.month, day.day).toISOString() : null
 }
 
-/** A date input's value → the ISO instant `availableUntil` stores: 23:59:59.999 local. */
+/** A date input's value → the ISO instant `availableUntil` stores: 23:59:59.999 of that day in Turkey. */
 export function untilInputToIso(value) {
-  const date = localDay(value)
-  if (!date) return null
-  date.setHours(23, 59, 59, 999)
-  return date.toISOString()
+  const day = parseDay(value)
+  return day ? availabilityInstant(day.year, day.month, day.day, 23, 59, 59, 999).toISOString() : null
 }
 
 /**
- * An ISO instant → the `YYYY-MM-DD` a date input shows, from the local date
- * parts. `toISOString().slice(0, 10)` would be the UTC day, which is the day
- * before for anyone east of Greenwich looking at a start of day.
+ * An ISO instant → the `YYYY-MM-DD` a date input shows: its calendar day in
+ * Turkey, whatever the browser's zone. Also what the inputs' min/max are.
  */
 export function isoToInput(iso) {
   if (!iso) return ''
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
+  const { year, month, day } = availabilityDay(date)
   const pad = (n) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  return `${year}-${pad(month)}-${pad(day)}`
 }
 
 /**
- * "30 Nov 2026" / "30 Kas 2026" — the day as the reader's language writes it.
- * English is the British form, day first, like the rest of the interface's
- * spelling; plain `en` would give the American "Nov 30, 2026".
+ * "30 Nov 2026" / "30 Kas 2026" — the instant's day in Turkey, as the reader's
+ * language writes it. English is the British form, day first, like the rest of
+ * the interface's spelling; plain `en` would give the American "Nov 30, 2026".
  */
 export function formatDay(iso, lang) {
   if (!iso) return ''
@@ -77,6 +83,7 @@ export function formatDay(iso, lang) {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
+    timeZone: AVAILABILITY_TIME_ZONE,
   })
 }
 

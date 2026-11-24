@@ -13,39 +13,51 @@ import {
 /**
  * The date input ↔ stored instant conversions in src/lib/availability.js.
  *
- * Pinned to a zone east of Greenwich, where the bug these exist to avoid shows:
- * the start of a local day is the previous day in UTC, so reading the date
- * back with toISOString().slice(0, 10) would be off by one. Node reads TZ on
- * change, and node --test runs each file in its own process, so this stays here.
+ * Availability dates are days in Turkey time (AVAILABILITY_TIME_ZONE in
+ * shared/activity.js) for everyone. The runtime is pinned to London here on
+ * purpose — the zone of the teacher whose 1 December showed as 2 December in
+ * Istanbul — so every result below must be the Istanbul one, not the local
+ * one. Node reads TZ on change, and node --test runs each file in its own
+ * process, so this stays here.
  */
-process.env.TZ = 'Europe/Istanbul' // UTC+3, no daylight saving
+process.env.TZ = 'Europe/London'
 
-test('a from-date is the start of that local day', () => {
-  assert.equal(fromInputToIso('2026-11-30'), '2026-11-29T21:00:00.000Z')
+test('the runtime really is London, an hour or none from UTC', () => {
+  assert.equal(new Date('2026-12-01T12:00:00Z').getHours(), 12)
+  assert.equal(new Date('2026-07-01T12:00:00Z').getHours(), 13)
 })
 
-test('an until-date is the end of that local day, so the last day is inclusive', () => {
-  const iso = untilInputToIso('2026-11-30')
-  assert.equal(iso, '2026-11-30T20:59:59.999Z')
-  const end = new Date(iso)
-  assert.equal(end.getDate(), 30)
-  assert.equal(end.getHours(), 23)
-  assert.equal(end.getMinutes(), 59)
-  assert.equal(end.getMilliseconds(), 999)
-  // One millisecond later is the next local day.
-  assert.equal(new Date(end.getTime() + 1).getDate(), 1)
+test('a from-date is 00:00 of that day in Istanbul, not in London', () => {
+  assert.equal(fromInputToIso('2026-12-01'), '2026-11-30T21:00:00.000Z')
+  // Summer: London is on BST, Istanbul is still +03:00.
+  assert.equal(fromInputToIso('2026-07-01'), '2026-06-30T21:00:00.000Z')
+})
+
+test('an until-date is 23:59:59.999 of that day in Istanbul, so the last day is inclusive', () => {
+  assert.equal(untilInputToIso('2026-12-01'), '2026-12-01T20:59:59.999Z')
+  // One millisecond later is the next Istanbul day.
+  assert.equal(isoToInput(new Date(Date.parse('2026-12-01T20:59:59.999Z') + 1).toISOString()), '2026-12-02')
+})
+
+test('the offset is read from the zone, not assumed: Istanbul was +02:00 in winter 2010', () => {
+  assert.equal(fromInputToIso('2010-01-15'), '2010-01-14T22:00:00.000Z')
+  assert.equal(fromInputToIso('2010-07-15'), '2010-07-14T21:00:00.000Z')
+  assert.equal(untilInputToIso('2010-01-15'), '2010-01-15T21:59:59.999Z')
 })
 
 test('both conversions round-trip through the input value', () => {
-  for (const day of ['2026-11-30', '2026-01-01', '2026-12-31', '2028-02-29']) {
+  for (const day of ['2026-12-01', '2026-11-30', '2026-01-01', '2026-03-29', '2026-10-25', '2026-12-31', '2028-02-29', '2000-01-01', '2100-12-31']) {
     assert.equal(isoToInput(fromInputToIso(day)), day)
     assert.equal(isoToInput(untilInputToIso(day)), day)
   }
 })
 
-test('isoToInput uses the local date, not the UTC one', () => {
-  // 00:30 on 1 Dec in Istanbul is still 30 Nov in UTC.
+test('isoToInput is the Istanbul day, not the London or UTC one', () => {
+  // 00:30 on 1 Dec in Istanbul is 21:30 on 30 Nov in London and UTC.
   assert.equal(isoToInput('2026-11-30T21:30:00.000Z'), '2026-12-01')
+  // The instant a London teacher stored before the fix: 23:59 on 1 Dec London
+  // is 02:59 on 2 Dec in Istanbul, and that is what it now reads as.
+  assert.equal(isoToInput('2026-12-01T23:59:59.999Z'), '2026-12-02')
 })
 
 test('empty and null read as no date', () => {
@@ -70,10 +82,12 @@ test('isSavableDay: a whole real day from 2000 to 2100, not a year still being t
   }
 })
 
-test('formatDay writes the day in the reader’s language', () => {
-  const iso = untilInputToIso('2026-11-30')
-  assert.match(formatDay(iso, 'en'), /^30 Nov 2026$/)
-  assert.match(formatDay(iso, 'tr'), /^30 Kas 2026$/)
+test('formatDay writes the Istanbul day in the reader’s language', () => {
+  const iso = untilInputToIso('2026-12-01')
+  assert.equal(formatDay(iso, 'en'), '1 Dec 2026')
+  assert.equal(formatDay(iso, 'tr'), '1 Ara 2026')
+  // The legacy London-saved end shows as the day it is in Istanbul.
+  assert.equal(formatDay('2026-12-01T23:59:59.999Z', 'en'), '2 Dec 2026')
 })
 
 test('liveState: draft wins, then the dates; missing keys read as open', () => {

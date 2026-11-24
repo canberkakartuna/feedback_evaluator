@@ -1,13 +1,20 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { availabilityState, daysLeft } from '../../shared/activity.js'
+import {
+  AVAILABILITY_TIME_ZONE,
+  availabilityDay,
+  availabilityInstant,
+  availabilityState,
+  daysLeft,
+} from '../../shared/activity.js'
 
 /**
- * daysLeft counts calendar days in the runtime's timezone, so the clock is
- * pinned to one with daylight saving: the results below do not depend on the
- * machine the tests run on, and the DST case is a real one (in New York the
- * clocks went forward on 2026-03-08, a 23-hour day). Node reads TZ on change,
- * and node --test runs each file in its own process, so this stays here.
+ * availabilityState compares instants, so any zone does for it. daysLeft
+ * counts calendar days in Turkey time (AVAILABILITY_TIME_ZONE), whatever the
+ * runtime's zone: the clock is pinned to New York, which has daylight saving
+ * and is seven or eight hours behind Istanbul, so a result that leaked the
+ * local zone would show. Node reads TZ on change, and node --test runs each
+ * file in its own process, so this stays here.
  */
 process.env.TZ = 'America/New_York'
 
@@ -73,23 +80,47 @@ test('daysLeft is null without an end date', () => {
   assert.equal(daysLeft('', NOW), null)
 })
 
-test('daysLeft counts calendar days', () => {
-  assert.equal(daysLeft(at(2026, 11, 24, 23, 59, 59, 999).toISOString(), NOW), 0)
-  assert.equal(daysLeft(at(2026, 11, 25, 0, 30).toISOString(), at(2026, 11, 24, 23, 30)), 1)
-  assert.equal(daysLeft(at(2026, 11, 30, 23, 59, 59, 999).toISOString(), NOW), 6)
-  assert.equal(daysLeft(at(2026, 11, 20, 23, 59, 59, 999).toISOString(), NOW), -4)
+test('the zone is Turkey time', () => {
+  assert.equal(AVAILABILITY_TIME_ZONE, 'Europe/Istanbul')
 })
 
-test('a late evening now and an end-of-day until on the same date is 0', () => {
-  const until = at(2026, 11, 24, 23, 59, 59, 999).toISOString()
-  assert.equal(daysLeft(until, at(2026, 11, 24, 23, 45)), 0)
-  assert.equal(daysLeft(until, at(2026, 11, 24, 0, 0).getTime()), 0)
+/** The end of 1 December 2026 in Istanbul, as the editor stores it. */
+const END_1_DEC = '2026-12-01T20:59:59.999Z'
+
+test('daysLeft counts Istanbul calendar days, not New York ones', () => {
+  // 23:59 on 30 Nov in Istanbul: one day left. 00:01 on 1 Dec: the last day.
+  assert.equal(daysLeft(END_1_DEC, Date.parse('2026-11-30T20:59:00Z')), 1)
+  assert.equal(daysLeft(END_1_DEC, Date.parse('2026-11-30T21:01:00Z')), 0)
+  // Both of those are still 30 Nov in New York, where a local count would say 1 twice.
+  assert.equal(new Date('2026-11-30T21:01:00Z').getDate(), 30)
+  assert.equal(daysLeft(END_1_DEC, new Date('2026-12-01T20:59:59.999Z')), 0)
+  assert.equal(daysLeft(END_1_DEC, Date.parse('2026-12-01T21:00:00Z')), -1)
+  assert.equal(daysLeft(END_1_DEC, Date.parse('2026-11-25T09:00:00Z')), 6)
 })
 
-test('daysLeft is DST safe', () => {
-  // Across the spring-forward day (23 hours long) and the fall-back day (25).
-  assert.equal(daysLeft(at(2026, 3, 9, 0, 0).toISOString(), at(2026, 3, 7, 23, 59)), 2)
-  assert.equal(daysLeft(at(2026, 3, 10, 23, 59).toISOString(), at(2026, 3, 7, 0, 0)), 3)
-  assert.equal(daysLeft(at(2026, 11, 2, 0, 0).toISOString(), at(2026, 10, 31, 23, 59)), 2)
-  assert.equal(daysLeft(at(2026, 11, 3, 23, 59).toISOString(), at(2026, 10, 31, 0, 0)), 3)
+test('the end instant a London teacher stored before the fix counts to 2 December', () => {
+  // 23:59:59.999 on 1 Dec in London is 02:59 on 2 Dec in Istanbul.
+  assert.deepEqual(availabilityDay('2026-12-01T23:59:59.999Z'), { year: 2026, month: 12, day: 2 })
+  assert.equal(daysLeft('2026-12-01T23:59:59.999Z', Date.parse('2026-12-01T12:00:00Z')), 1)
+})
+
+test('availabilityInstant and availabilityDay agree with Intl across 2000–2100', () => {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', dateStyle: 'short', timeStyle: 'medium', hourCycle: 'h23' })
+  for (let year = 2000; year <= 2100; year += 1) {
+    for (const [month, day] of [[1, 15], [3, 31], [7, 1], [10, 31]]) {
+      const start = availabilityInstant(year, month, day)
+      const end = availabilityInstant(year, month, day, 23, 59, 59, 999)
+      const pad = (n) => String(n).padStart(2, '0')
+      assert.equal(fmt.format(start), `${year}-${pad(month)}-${pad(day)}, 00:00:00`, `${year}-${month}-${day} start`)
+      assert.equal(fmt.format(end), `${year}-${pad(month)}-${pad(day)}, 23:59:59`, `${year}-${month}-${day} end`)
+      assert.equal(end.getTime() - start.getTime() + 1 >= 23 * 3_600_000, true)
+      assert.deepEqual(availabilityDay(end), { year, month, day })
+    }
+  }
+})
+
+test('daysLeft is the same whatever the runtime clock change does', () => {
+  // New York's spring-forward (8 Mar 2026) and fall-back (1 Nov 2026) days.
+  assert.equal(daysLeft(availabilityInstant(2026, 3, 9, 23, 59, 59, 999).toISOString(), availabilityInstant(2026, 3, 7, 12)), 2)
+  assert.equal(daysLeft(availabilityInstant(2026, 11, 2, 23, 59, 59, 999).toISOString(), availabilityInstant(2026, 10, 31, 12)), 2)
 })

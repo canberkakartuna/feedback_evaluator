@@ -413,6 +413,10 @@ export default function ActivityEditor() {
             onSave={(next) => act(() => api.updateActivity(activity.id, { availableUntil: next }))}
           />
         </div>
+        {/* AVAILABILITY_TIME_ZONE: a teacher abroad picks days in Turkey time. */}
+        <p className="cs-hint" style={{ marginTop: 'var(--s-2)', marginBottom: 0 }}>
+          {t('editor.availabilityZoneHint')}
+        </p>
         <AvailabilityNote activity={activity} audience="teacher" style={{ marginTop: 'var(--s-3)' }} />
 
         <TutorGuidance

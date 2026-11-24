@@ -59,9 +59,9 @@ export const isActivityStatus = (value) => ACTIVITY_STATUSES.includes(value)
  * When a published activity is open to students. `availableFrom` and
  * `availableUntil` are each `null` or an ISO timestamp, and either may be set
  * alone; a missing side is unbounded. The authoring form sends the start and
- * end of the chosen days in the teacher's timezone, so these are plain
- * instants and nothing here needs to know about timezones. Both boundary
- * instants count as open.
+ * end of the chosen days in AVAILABILITY_TIME_ZONE (below), so these are plain
+ * instants and this comparison needs no timezone. Both boundary instants
+ * count as open.
  *
  * Status is not read here: a draft is closed whatever its dates say, and the
  * callers check that first. Activities saved before the range existed have
@@ -77,20 +77,76 @@ export function availabilityState(activity, now = Date.now()) {
 }
 
 /**
- * Calendar days from `now` to `availableUntil`, in the runtime's timezone: 0
- * on the last day, 1 the day before, negative once it has passed, `null` with
- * no end date. Counted from the local dates rather than from milliseconds, so
- * late evening against an end-of-day close is still 0 and a 23- or 25-hour
- * day across a clock change counts as one day.
+ * The timezone an availability date is a day in — for everyone, wherever their
+ * browser or the server is. A teacher in London who picks 1 December as the
+ * last day means 1 December in the school's calendar, and a student in Istanbul
+ * must read 1 December, not the 2nd that London's midnight is there. Every
+ * conversion between a picked day and a stored instant, every displayed date
+ * and every day count goes through the helpers below with this zone; the
+ * instants themselves are compared as instants (availabilityState).
+ */
+export const AVAILABILITY_TIME_ZONE = 'Europe/Istanbul'
+
+const zoneParts = new Intl.DateTimeFormat('en-US', {
+  timeZone: AVAILABILITY_TIME_ZONE,
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hourCycle: 'h23',
+})
+
+/** The wall-clock fields of an instant (ms) in AVAILABILITY_TIME_ZONE. */
+function wallClock(ms) {
+  const fields = {}
+  for (const part of zoneParts.formatToParts(new Date(ms))) {
+    if (part.type !== 'literal') fields[part.type] = Number(part.value)
+  }
+  return fields
+}
+
+/** How far AVAILABILITY_TIME_ZONE is ahead of UTC at an instant, in ms — from Intl, never hard-coded. */
+function zoneOffset(ms) {
+  const wall = wallClock(ms)
+  const asUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second)
+  return asUtc - (ms - (((ms % 1000) + 1000) % 1000))
+}
+
+/**
+ * The instant at which AVAILABILITY_TIME_ZONE's clock reads this wall time.
+ * Corrected once with the offset at the first guess, which settles it for any
+ * zone whose offset does not change within the hours involved.
+ */
+export function availabilityInstant(year, month, day, hour = 0, minute = 0, second = 0, ms = 0) {
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second, ms)
+  let instant = wall - zoneOffset(wall)
+  instant = wall - zoneOffset(instant)
+  return new Date(instant)
+}
+
+/** `{ year, month, day }` (month 1–12) of an instant's calendar day in AVAILABILITY_TIME_ZONE. */
+export function availabilityDay(instant) {
+  const { year, month, day } = wallClock(new Date(instant).getTime())
+  return { year, month, day }
+}
+
+/**
+ * Calendar days from `now` to `availableUntil`, both read as days in
+ * AVAILABILITY_TIME_ZONE: 0 on the last day, 1 the day before, negative once it
+ * has passed, `null` with no end date (or one that does not parse). Counted
+ * from the two Istanbul dates rather than from milliseconds, so late evening
+ * against an end-of-day close is still 0 — and the answer is the same in every
+ * browser and on the server, whatever their own timezone.
  */
 export function daysLeft(availableUntil, now = Date.now()) {
   if (!availableUntil) return null
   const end = new Date(availableUntil)
   if (Number.isNaN(end.getTime())) return null
-  const start = new Date(now)
-  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate())
-  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())
-  return Math.round((endDay - startDay) / 86_400_000)
+  const a = availabilityDay(end)
+  const b = availabilityDay(now instanceof Date ? now : new Date(now))
+  return Math.round((Date.UTC(a.year, a.month - 1, a.day) - Date.UTC(b.year, b.month - 1, b.day)) / 86_400_000)
 }
 
 /**
